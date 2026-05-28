@@ -37,11 +37,10 @@ DATA_URL_RE = re.compile(
     r"data:(?P<mime>(?:image|video)/[A-Za-z0-9.+-]+);base64,(?P<data>[^\s)'\">]+)"
 )
 MARKDOWN_MEDIA_RE = re.compile(r"!\[[^\]]*\]\((?P<path>[^)]+)\)")
-ABSOLUTE_MEDIA_PATH_RE = re.compile(
-    r"(?P<path>/[^\n\r`'\"<>]*(?:"
-    + "|".join(re.escape(ext) for ext in sorted(LOCAL_MEDIA_EXTENSIONS, key=len, reverse=True))
-    + r"))"
-)
+# Bare absolute paths are scanned as bounded tokens. Do not use a greedy
+# "slash to extension" regex here: Codex records often contain long code,
+# logs, or URLs with many "/" characters and no media extension.
+ABSOLUTE_PATH_TOKEN_RE = re.compile(r"(?P<path>/[^\s`'\"<>)]{1,4096})")
 REMOTE_MEDIA_RE = re.compile(
     r"https?://[^\s)'\">]+(?:"
     + "|".join(re.escape(ext) for ext in sorted(LOCAL_MEDIA_EXTENSIONS, key=len, reverse=True))
@@ -198,11 +197,11 @@ def update_string_visual_metrics(value: str, metrics: dict[str, int]) -> None:
             metrics["visual_artifact_skipped"] += 1
             if video_ref(match.group(0)):
                 metrics["visual_video_artifacts"] += 1
-    for match in ABSOLUTE_MEDIA_PATH_RE.finditer(value):
-        if not span_is_occupied(match.span(), occupied_spans) and not relative_path_fragment(value, match.start()):
+    for start, _ref in iter_absolute_media_path_refs(value, occupied_spans):
+        if not relative_path_fragment(value, start):
             metrics["visual_artifacts"] += 1
             metrics["visual_local_references"] += 1
-            if video_ref(match.group("path")):
+            if video_ref(_ref):
                 metrics["visual_video_artifacts"] += 1
 
 
@@ -242,10 +241,27 @@ def scan_string(
         ref = match.group(0)
         if not span_is_occupied(match.span(), occupied_spans):
             add_remote(ref, payload_path, source_base, artifacts)
-    for match in ABSOLUTE_MEDIA_PATH_RE.finditer(value):
-        ref = match.group("path").strip()
-        if not span_is_occupied(match.span(), occupied_spans) and not relative_path_fragment(value, match.start()):
+    for start, ref in iter_absolute_media_path_refs(value, occupied_spans):
+        if not relative_path_fragment(value, start):
             add_path_or_url(ref, payload_path, source_base, allow_roots, artifacts, "local_path")
+
+
+def iter_absolute_media_path_refs(
+    value: str,
+    occupied_spans: list[tuple[int, int]],
+) -> list[tuple[int, str]]:
+    matches: list[tuple[int, str]] = []
+    for match in ABSOLUTE_PATH_TOKEN_RE.finditer(value):
+        if span_is_occupied(match.span(), occupied_spans):
+            continue
+        ref = trim_path_trailing_punctuation(match.group("path"))
+        if Path(ref).suffix.lower() in LOCAL_MEDIA_EXTENSIONS:
+            matches.append((match.start(), ref))
+    return matches
+
+
+def trim_path_trailing_punctuation(value: str) -> str:
+    return value.rstrip(".,;:!?]}")
 
 
 def span_is_occupied(span: tuple[int, int], occupied_spans: list[tuple[int, int]]) -> bool:

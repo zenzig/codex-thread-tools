@@ -188,6 +188,7 @@ def check_command(args: argparse.Namespace) -> int:
         assert_safe_test_root(source)
     ensure_file(source)
 
+    progress(args, f"Analyzing session: {source} ({source.stat().st_size} bytes)")
     result = analyze_session_file(source, apply_threshold_overrides(args))
     print(maybe_pretty(result, args.format))
     return exit_code_for_status(result["status"])
@@ -203,9 +204,12 @@ def projects_command(args: argparse.Namespace) -> int:
         die(f"session root is not a directory: {session_root}")
 
     thresholds = apply_threshold_overrides(args)
+    progress(args, f"Finding active sessions under: {session_root}")
+    paths = active_sessions_by_project(session_root)
+    progress(args, f"Analyzing {len(paths)} active project session(s)")
     projects = [
-        analyze_session_file(path, thresholds)
-        for path in active_sessions_by_project(session_root)
+        analyze_with_progress(args, path, index, len(paths), thresholds)
+        for index, path in enumerate(paths, 1)
     ]
     summary = aggregate_project_results(projects)
     result = {"session_root": str(session_root), "summary": summary, "projects": projects}
@@ -227,9 +231,12 @@ def tokens_command(args: argparse.Namespace) -> int:
         die(f"session root is not a directory: {session_root}")
 
     thresholds = apply_threshold_overrides(args)
+    progress(args, f"Finding session files under: {session_root}")
+    paths = session_files(session_root)
+    progress(args, f"Analyzing {len(paths)} session file(s) for token usage")
     project_results = [
-        analyze_session_file(path, thresholds)
-        for path in session_files(session_root)
+        analyze_with_progress(args, path, index, len(paths), thresholds)
+        for index, path in enumerate(paths, 1)
     ]
     result = project_token_usage_report(project_results)
     result["report_type"] = "token_usage"
@@ -257,6 +264,32 @@ def add_threshold_args(parser: argparse.ArgumentParser) -> None:
         dest="format",
         help="print machine-readable JSON instead of the beginner-friendly report",
     )
+    parser.add_argument(
+        "--progress",
+        choices=("auto", "always", "never"),
+        default="auto",
+        help="print progress to stderr while large session files are scanned",
+    )
+
+
+def analyze_with_progress(
+    args: argparse.Namespace,
+    path: Path,
+    index: int,
+    total: int,
+    thresholds: HealthThresholds,
+) -> dict[str, Any]:
+    progress(args, f"[{index}/{total}] {path} ({path.stat().st_size} bytes)")
+    return analyze_session_file(path, thresholds)
+
+
+def progress(args: argparse.Namespace, message: str) -> None:
+    mode = getattr(args, "progress", "auto")
+    if mode == "never":
+        return
+    if mode == "auto" and not sys.stderr.isatty():
+        return
+    print(message, file=sys.stderr, flush=True)
 
 
 def build_parser() -> argparse.ArgumentParser:

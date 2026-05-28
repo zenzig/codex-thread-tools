@@ -185,6 +185,14 @@ You will see one of three statuses:
 The health check is read-only. It does not edit, delete, trim, or repair any
 Codex thread.
 
+Large screenshot-heavy sessions can take a while to parse. In an interactive
+terminal, the tool prints progress as it scans each session file. If your
+terminal or editor hides stderr, force progress output with:
+
+```bash
+python3 tools/codex-thread-health.py --progress always
+```
+
 It looks at:
 
 - session file size

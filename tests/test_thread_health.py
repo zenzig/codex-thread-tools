@@ -184,6 +184,28 @@ def test_options_only_defaults_to_projects_scan() -> None:
     assert "Session folder:" in result.stdout
 
 
+def test_projects_progress_can_be_forced_to_stderr() -> None:
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(FIXTURES),
+        "--safe-test-mode",
+        "--json",
+        "--progress",
+        "always",
+        "--warn-items",
+        "20",
+        "--danger-items",
+        "40",
+    )
+
+    assert result.returncode == 3
+    json.loads(result.stdout)
+    assert "Finding active sessions under:" in result.stderr
+    assert "Analyzing 11 active project session(s)" in result.stderr
+    assert "[1/11]" in result.stderr
+
+
 def test_discussion_of_compaction_failure_is_not_a_failure_signal() -> None:
     result = run_health(
         "check",

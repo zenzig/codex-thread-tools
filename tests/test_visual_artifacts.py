@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from time import perf_counter
 from pathlib import Path
+
+from codex_thread_tools.visual_artifacts import scan_record_visual_metrics
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -241,3 +244,24 @@ def test_wizard_defaults_to_no_write(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "No archive written" in result.stdout
     assert not any(tmp_path.iterdir())
+
+
+def test_visual_metrics_do_not_backtrack_on_slash_heavy_text() -> None:
+    record = {
+        "type": "response_item",
+        "payload": {
+            "type": "message",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "/not/a/media/path " * 5000,
+                }
+            ],
+        },
+    }
+
+    started = perf_counter()
+    metrics = scan_record_visual_metrics(record)
+
+    assert perf_counter() - started < 0.5
+    assert metrics["visual_artifacts"] == 0
