@@ -1,0 +1,18 @@
+{"timestamp":"2026-05-24T12:00:00Z","type":"session_meta","payload":{"id":"compaction-failed","cwd":"/work/project-c"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"turn_context","payload":{"cwd":"/work/project-c","model":"gpt-5.5"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 0"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 1"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 2"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 3"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 4"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 5"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 6"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 7"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 8"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 9"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 10"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"large task 11"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"compaction_trigger"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"warning","message":"remote compaction v2 expected exactly one compaction output item, got 0"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"error","message":"maximum length 16384, got 30351"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"turn_aborted","message":"turn aborted"}}

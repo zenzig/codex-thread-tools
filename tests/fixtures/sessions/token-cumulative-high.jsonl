@@ -1,0 +1,6 @@
+{"timestamp":"2026-05-24T12:00:00Z","type":"session_meta","payload":{"id":"token-cumulative-high","cwd":"/work/project-f"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"turn_context","payload":{"cwd":"/work/project-f","model":"gpt-5.5"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Continue the task."}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Still healthy."}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":2000000,"cached_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"total_tokens":2000000},"last_token_usage":{"input_tokens":40000,"cached_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"total_tokens":40000},"model_context_window":258400}}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"turn_complete","message":"turn complete"}}

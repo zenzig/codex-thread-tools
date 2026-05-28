@@ -1,0 +1,70 @@
+# macOS / editor noise
+.DS_Store
+**/.DS_Store
+*.swp
+*.swo
+*~
+
+# Python runtime and tooling
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+
+# Local analysis/tool caches
+.codegraph/
+
+# Build and scratch output
+*.log
+tmp/
+temp/
+dist/
+build/
+*.egg-info/
+
+# Local Codex usage artifacts. Keep these out of the public repo because they
+# can include project paths, thread notes, handoffs, screenshots, or session
+# investigation output from this machine.
+.codex/
+docs/
+documentation/
+notes/
+handoffs/
+agent-handoffs/
+codex-visual-artifacts/
+session_quarantine/
+.codex/sessions/
+codex-sessions/
+*.handoff.md
+*-handoff.md
+handoff-*.md
+
+# Local skill incubation that does not belong in this focused thread-tools repo.
+skills/*
+!skills/
+!skills/codex-thread-handoff/
+!skills/codex-thread-handoff/**
+skills/codex-thread-handoff/.DS_Store
+skills/codex-thread-handoff/**/.DS_Store
+
+# Generated visual archive test fixtures. They are rebuilt by pytest from
+# tests/fixtures/build_fixtures.py so committed files do not capture local paths.
+tests/fixtures/visual_assets/
+tests/fixtures/outside-visual.png
+tests/fixtures/sessions/visual-*.jsonl
+
+# Local environment/config overrides
+.env
+.env.*
+*.local
+*.local.*

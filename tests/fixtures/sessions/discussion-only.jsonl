@@ -1,0 +1,6 @@
+{"timestamp":"2026-05-24T12:00:00Z","type":"session_meta","payload":{"id":"discussion-only","cwd":"/work/project-e"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"turn_context","payload":{"cwd":"/work/project-e","model":"gpt-5.5"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Please write an article about remote compaction failed errors."}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"The phrase maximum length 16384 is only article text here."}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"turn_complete","message":"turn complete"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":250000,"cached_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"total_tokens":250000},"last_token_usage":{"input_tokens":20000,"cached_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"total_tokens":20000},"model_context_window":258400}}}

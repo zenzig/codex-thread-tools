@@ -1,0 +1,6 @@
+{"timestamp":"2026-05-24T12:00:00Z","type":"session_meta","payload":{"id":"event-aliases","cwd":"/work/project-h"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"turn_context","payload":{"cwd":"/work/project-h","model":"gpt-5.5"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"task_started","message":"turn started"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Do a small task."}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done."}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"task_complete","message":"turn complete"}}

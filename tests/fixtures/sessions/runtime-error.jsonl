@@ -1,0 +1,5 @@
+{"timestamp":"2026-05-24T12:00:00Z","type":"session_meta","payload":{"id":"runtime-error","cwd":"/work/project-i"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"turn_context","payload":{"cwd":"/work/project-i","model":"gpt-5.5"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Run the shell command."}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"error","message":"subprocess exited with code 1"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"turn_aborted","message":"turn aborted"}}

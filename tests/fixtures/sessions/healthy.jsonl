@@ -1,0 +1,18 @@
+{"timestamp":"2026-05-24T12:00:00Z","type":"session_meta","payload":{"id":"healthy","cwd":"/work/project-a"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"turn_context","payload":{"cwd":"/work/project-a","model":"gpt-5.5"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"request 0"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"answer 0"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"user_message","message":"request 0"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"agent_message","message":"answer 0"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"request 1"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"answer 1"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"user_message","message":"request 1"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"agent_message","message":"answer 1"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"request 2"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"answer 2"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"user_message","message":"request 2"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"agent_message","message":"answer 2"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"request 3"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"answer 3"}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"user_message","message":"request 3"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"agent_message","message":"answer 3"}}

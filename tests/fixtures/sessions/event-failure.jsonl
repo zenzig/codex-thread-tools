@@ -1,0 +1,6 @@
+{"timestamp":"2026-05-24T12:00:00Z","type":"session_meta","payload":{"id":"event-failure","cwd":"/work/project-g"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"turn_context","payload":{"cwd":"/work/project-g","model":"gpt-5.5"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Start a large task."}]}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"response_item","payload":{"type":"compaction_trigger"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"error","message":"remote compaction failed before installing replacement history"}}
+{"timestamp":"2026-05-24T12:00:00Z","type":"event_msg","payload":{"type":"turn_aborted","message":"turn aborted"}}
