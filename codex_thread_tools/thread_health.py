@@ -197,8 +197,11 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
 
         text = record_text(record)
         if rtype == "event_msg" and text:
+            event_type = canonical_event_type(record)
             lowered = text.lower()
-            if any(term in lowered for term in COMPACTION_FAILURE_TERMS):
+            if event_type in {"error", "warning"} and any(
+                term in lowered for term in COMPACTION_FAILURE_TERMS
+            ):
                 metrics["compaction_failures"].append(text[:200])
             if any(term in lowered for term in LONG_THREAD_TERMS):
                 metrics["long_thread_warnings"].append(text[:200])
@@ -217,10 +220,12 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
         "project": project,
         "session_id": session_id,
         "status": decision["status"],
+        "continuation_status": decision["status"],
         "recommendation": decision["recommendation"],
         "overall_assessment": decision["overall_assessment"],
         "reasons": decision["reasons"],
         "risk_domains": risk_domains,
+        "handoff_readiness": handoff_readiness(metrics, decision),
         "metrics": metrics,
     }
 
@@ -293,9 +298,6 @@ def compaction_risk(metrics: dict[str, Any], thresholds: HealthThresholds) -> di
 
     if metrics["legacy_compacted_records"] > 0:
         warn.append("legacy compacted records without replacement_history exist")
-
-    if metrics["compaction_items"] > thresholds.max_healthy_compactions:
-        warn.append("multiple compaction items recorded; watch for quality drift")
 
     if danger:
         return domain("danger", danger + warn)
@@ -414,6 +416,45 @@ def decide_health(
         "overall_assessment": "continue",
         "reasons": [],
     }
+
+
+def handoff_readiness(
+    metrics: dict[str, Any],
+    decision: dict[str, Any],
+) -> dict[str, Any]:
+    status = "not-needed"
+    recommendation = "continue"
+    reasons = list(decision["reasons"])
+
+    if decision["status"] == "danger":
+        status = "needed"
+        recommendation = "handoff-now"
+    elif decision["status"] == "warn":
+        status = "recommended"
+        recommendation = "prepare-handoff"
+
+    visual_archive = "not-needed"
+    if metrics["visual_artifacts"] > 0:
+        visual_archive = "recommended"
+        reasons.append("visual references should be archived before retiring this thread")
+
+    return {
+        "status": status,
+        "recommendation": recommendation,
+        "visual_archive": visual_archive,
+        "reasons": dedupe(reasons),
+    }
+
+
+def dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
 
 
 def extract_project(record: dict[str, Any]) -> str:

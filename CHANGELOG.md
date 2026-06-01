@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add separate continuation health and handoff readiness fields to thread health reports.
+- Treat opaque compaction items as normal continuation state unless persisted failure events or malformed local compacted records are present.
+- Require explicit visual archive decisions in handoff guidance when visual references exist.
+- Move detailed handoff workflow instructions into a deferred reference file to reduce the active skill prompt.
+
 ## 0.4.0 - 2026-05-28
 
 - Rename and reposition the project as `codex-thread-tools`.

@@ -1,71 +1,29 @@
 # Handoff Template
 
-Use this structure when creating a handoff. Keep sections concise and delete sections that do not apply.
-
-```markdown
-# <Project/Task> Handoff - <YYYY-MM-DD>
+# `<Task>` Handoff - `<YYYY-MM-DD>`
 
 ## Resume Context
+Project: `<path>`; Branch: `<branch>`; Status: `<one sentence>`
 
-- Project: `<absolute project path>`
-- Branch: `<branch name>`
-- Thread/task: `<short description>`
-- Current status: `<one sentence>`
-
-## Goal
-
-<What the next thread should accomplish next.>
-
-## Decisions Made
-
-- <Decision and rationale>
-- <Decision and rationale>
+## Goal / Next Action
+<Next outcome and first action.>
 
 ## Current State
+Done: <item>; Current: <item>; Next: <item>
 
-- Completed:
-  - <completed item>
-- In progress:
-  - <current item>
-- Not started:
-  - <next item>
+## Decisions / Files
+- <Decision or file path>: <why it matters>
 
-## Relevant Files
+## Verification / Risks
+Ran: `<command>` -> <result>; Not run: `<command>` -> <reason>; Risk: <specific issue>
 
-- `<path>`: <why it matters>
-- `<path>`: <why it matters>
+## Visual Archive Decision
+- <Archived: manifest paths and important files, or Not archived: concrete reason>
 
-## Verification
-
-- Ran: `<command>` -> <result>
-- Not run: `<command>` -> <reason>
-
-## Known Issues / Risks
-
-- <specific risk, bug, failing test, or uncertainty>
-
-## Assets / References
-
-- `<path or URL>`: <why it matters>
-- Archived visual manifest: `<absolute path to manifest.md>`: <why it matters>
-- Archived visual JSON: `<absolute path to manifest.json>`: machine-readable archive inventory
-- Archived visual file: `<absolute path to image/video>`: <visual context it preserves>
+## Codex Thread Notes
+Add for compaction/context failure. Use handoff, git, tests, and files as source of truth.
 
 ## Next Thread Prompt
-
-Continue work in `<absolute project path>`.
-
-Read this handoff first: `<absolute path to this file>`.
-
+Continue work in `<project path>`.
+Read this handoff first: `<handoff path>`.
 Then proceed with: <specific next action>.
-```
-
-If the prior thread had a crash, compaction failure, or context-window issue, add:
-
-```markdown
-## Codex Thread Notes
-
-- Prior thread became too large to continue safely.
-- Do not depend on loading the prior chat transcript.
-- Use this handoff, git history, tests, and repo files as the source of truth.
-```

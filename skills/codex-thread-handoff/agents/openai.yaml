@@ -1,9 +1,3 @@
 interface:
   display_name: "Codex Thread Handoff"
-  short_description: "Create clean handoff files for new threads."
-  description: >
-    Inspects the current git state, writes a structured handoff document into the
-    repository, and generates a ready-to-paste resume prompt for a fresh Codex thread.
-    Use when a thread has been compacted more than once, a major implementation slice
-    is complete, or Codex reports any context-window or compaction error.
   default_prompt: "Use codex-thread-handoff."

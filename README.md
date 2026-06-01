@@ -110,10 +110,11 @@ There are several paths:
   persists it into the session JSONL.
 - **Remote compaction**: Codex asks the remote compaction system to produce a
   smaller context window.
-- **Remote compaction v2**: a newer remote flow that expects a specific
-  compaction output item and has stricter success/failure behavior.
+- **Remote compaction v2 / standalone compaction**: a newer flow that carries
+  forward state with an opaque compaction output item from `/responses/compact`.
 - **Server-side compaction**: the Responses API can compact during normal
-  response generation when configured to do so.
+  response generation when configured with `context_management` and
+  `compact_threshold`.
 
 In a local Codex session file, the strongest sign that compaction succeeded is a
 JSONL record like:
@@ -142,9 +143,10 @@ Step 2 by itself is not enough. A request can complete without becoming the
 actual live conversation state. The important boundary is when the replacement
 history is installed.
 
-Server-side compaction can emit opaque encrypted compaction items. Those items
-can carry prior state forward, but they are intentionally not human-readable.
-They are useful to Codex, not useful as durable project notes for you.
+Server-side and standalone compaction can emit opaque encrypted compaction
+items. Those items carry prior state forward with fewer tokens, but they are
+intentionally not human-readable. They are useful to Codex, not useful as
+durable project notes for you.
 
 ---
 
@@ -157,7 +159,8 @@ A thread can still become unhealthy because:
 
 - the session JSONL can keep growing on disk
 - response and item counts can still approach API or app limits
-- repeated compaction can reduce model accuracy
+- opaque compaction can preserve model-facing state without producing
+  human-readable project notes
 - failed compaction can leave a thread unable to continue cleanly
 - legacy or malformed compacted records may not reconstruct well
 - the desktop app may still struggle to load a very large session file
@@ -184,6 +187,10 @@ You will see one of three statuses:
 
 The health check is read-only. It does not edit, delete, trim, or repair any
 Codex thread.
+
+Reports separate active continuation health from handoff readiness. A thread can
+be healthy enough to keep using while still needing visual archive notes before
+it is retired.
 
 Large screenshot-heavy sessions can take a while to parse. In an interactive
 terminal, the tool prints progress as it scans each session file. If your
@@ -219,8 +226,9 @@ still report on screenshot-heavy threads without turning the health check into
 an archive operation.
 
 A single successful compaction is normal. The health check looks for evidence
-that compaction failed, failed to install replacement history, repeated enough
-to become a quality risk, or did not let the thread continue cleanly. It also
+that compaction failed, a local compacted checkpoint lacks replacement history,
+or compaction did not let the thread continue cleanly. Opaque compaction items
+alone are not treated as a failure signal. It also
 ignores normal user or assistant text that merely talks about compaction errors;
 only persisted event records count as failure signals.
 
@@ -364,6 +372,7 @@ codex-thread-tools/
 │   └── codex-thread-handoff/
 │       ├── SKILL.md
 │       ├── agents/openai.yaml
+│       ├── references/handoff-workflow.md
 │       └── references/handoff-template.md
 ├── tests/
 │   ├── fixtures/

@@ -57,6 +57,15 @@ def next_step(status: str) -> str:
     return "Continue in the current thread."
 
 
+def handoff_label(value: str) -> str:
+    labels = {
+        "needed": "Needed",
+        "recommended": "Recommended",
+        "not-needed": "Not needed",
+    }
+    return labels.get(value, status_label(value))
+
+
 def domain_lines(risk_domains: dict[str, dict[str, Any]], indent: str = "") -> list[str]:
     lines = [f"{indent}Domain risks:"]
     for name in ("load", "visuals", "compaction", "limits", "continuity"):
@@ -99,6 +108,11 @@ def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
                 f"{status_label(item['status'])}: {item['project']}"
             )
             lines.append(f"  Recommendation: {item['recommendation']}")
+            lines.append(f"  Continuation health: {status_label(item.get('continuation_status', item['status']))}")
+            lines.append(
+                "  Handoff readiness: "
+                f"{handoff_label(item.get('handoff_readiness', {}).get('status', ''))}"
+            )
             lines.append(
                 "  Size: "
                 f"{item['metrics']['bytes']} bytes, "
@@ -116,6 +130,11 @@ def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
         f"Overall: {status_label(result['status'])}",
         f"Recommendation: {result['recommendation']}",
         f"Next step: {next_step(result['status'])}",
+        f"Continuation health: {status_label(result.get('continuation_status', result['status']))}",
+        (
+            "Handoff readiness: "
+            f"{handoff_label(result.get('handoff_readiness', {}).get('status', ''))}"
+        ),
         f"Project: {result['project']}",
         f"File: {result['file']}",
         (

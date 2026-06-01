@@ -62,6 +62,8 @@ def test_check_compaction_success_is_ok_not_handoff() -> None:
     assert payload["metrics"]["compaction_items"] == 2
     assert not payload["metrics"]["compaction_failures"]
     assert payload["risk_domains"]["compaction"]["status"] == "ok"
+    assert payload["continuation_status"] == "ok"
+    assert payload["handoff_readiness"]["status"] == "not-needed"
 
 
 def test_check_compaction_failure_recommends_handoff() -> None:
@@ -101,6 +103,51 @@ def test_check_many_compactions_warns_about_quality() -> None:
     assert payload["recommendation"] == "handoff-now"
     assert payload["metrics"]["compaction_items"] == 6
     assert any("multiple compactions" in reason for reason in payload["reasons"])
+    assert payload["handoff_readiness"]["status"] == "needed"
+
+
+def test_opaque_compaction_items_alone_are_not_health_risk(tmp_path: Path) -> None:
+    session = tmp_path / "opaque-compaction-items.jsonl"
+    records = [
+        {
+            "timestamp": "2026-05-24T12:00:00Z",
+            "type": "session_meta",
+            "payload": {"id": "opaque-compactions", "cwd": "/work/opaque"},
+        },
+        {
+            "timestamp": "2026-05-24T12:00:00Z",
+            "type": "turn_context",
+            "payload": {"cwd": "/work/opaque", "model": "gpt-5.5"},
+        },
+    ]
+    for index in range(6):
+        records.append(
+            {
+                "timestamp": "2026-05-24T12:00:00Z",
+                "type": "response_item",
+                "payload": {"type": "compaction", "encrypted_content": f"opaque-{index}"},
+            }
+        )
+    records.append(
+        {
+            "timestamp": "2026-05-24T12:00:00Z",
+            "type": "event_msg",
+            "payload": {"type": "turn_complete", "message": "turn complete"},
+        }
+    )
+    session.write_text(
+        "\n".join(json.dumps(record, separators=(",", ":")) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_health("check", str(session), "--json")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["continuation_status"] == "ok"
+    assert payload["risk_domains"]["compaction"]["status"] == "ok"
+    assert payload["handoff_readiness"]["status"] == "not-needed"
 
 
 def test_projects_uses_latest_session_per_project_without_live_root() -> None:
@@ -226,6 +273,46 @@ def test_discussion_of_compaction_failure_is_not_a_failure_signal() -> None:
     assert payload["risk_domains"]["compaction"]["status"] == "ok"
 
 
+def test_event_message_discussion_of_compaction_failure_is_not_signal(tmp_path: Path) -> None:
+    session = tmp_path / "event-discussion.jsonl"
+    records = [
+        {
+            "timestamp": "2026-05-24T12:00:00Z",
+            "type": "session_meta",
+            "payload": {"id": "event-discussion", "cwd": "/work/event-discussion"},
+        },
+        {
+            "timestamp": "2026-05-24T12:00:00Z",
+            "type": "turn_context",
+            "payload": {"cwd": "/work/event-discussion", "model": "gpt-5.5"},
+        },
+        {
+            "timestamp": "2026-05-24T12:00:00Z",
+            "type": "event_msg",
+            "payload": {
+                "type": "agent_message",
+                "message": "I read about remote compaction failed messages in docs.",
+            },
+        },
+        {
+            "timestamp": "2026-05-24T12:00:00Z",
+            "type": "event_msg",
+            "payload": {"type": "turn_complete", "message": "turn complete"},
+        },
+    ]
+    session.write_text(
+        "\n".join(json.dumps(record, separators=(",", ":")) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_health("check", str(session), "--json")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["metrics"]["compaction_failures"] == []
+    assert payload["risk_domains"]["compaction"]["status"] == "ok"
+
+
 def test_cumulative_token_total_does_not_drive_active_context_danger() -> None:
     result = run_health(
         "check",
@@ -319,6 +406,10 @@ def test_check_visual_embedded_fixture_reports_visual_metrics() -> None:
     assert payload["metrics"]["visual_embedded_bytes"] > 0
     assert payload["metrics"]["visual_video_artifacts"] == 0
     assert payload["risk_domains"]["visuals"]["status"] == "ok"
+    assert payload["continuation_status"] == "ok"
+    assert payload["handoff_readiness"]["status"] == "not-needed"
+    assert payload["handoff_readiness"]["visual_archive"] == "recommended"
+    assert any("visual" in reason for reason in payload["handoff_readiness"]["reasons"])
 
 
 def test_check_visual_compacted_fixture_warns_about_visuals_inside_compaction() -> None:
@@ -379,6 +470,8 @@ def test_pretty_output_includes_domain_breakdown() -> None:
 
     assert result.returncode == 3
     assert "Domain risks:" in result.stdout
+    assert "Continuation health: DANGER" in result.stdout
+    assert "Handoff readiness: Needed" in result.stdout
     assert "Visuals: OK" in result.stdout
     assert "Compaction: DANGER" in result.stdout
     assert "Continuity: DANGER" in result.stdout
