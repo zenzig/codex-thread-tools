@@ -5,7 +5,7 @@
 **Small tools and a Codex skill for keeping long Codex threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.2-blue)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-1-brightgreen)](#skill)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](#testing)
 
@@ -15,7 +15,7 @@
 
 ## What This Is
 
-Current version: `0.4.1`
+Current version: `0.4.2`
 
 Codex can now keep long conversations alive with several compaction systems. That
 is good, but it does not mean a single thread should be treated as the only
@@ -192,6 +192,11 @@ Reports separate active continuation health from handoff readiness. A thread can
 be healthy enough to keep using while still needing visual archive notes before
 it is retired.
 
+Completed handoffs are tracked in a local sidecar marker file under
+`~/.codex/thread-tools/`. Project health reports use those markers to retire old
+source sessions and prioritize the new active replacement thread. Reports also
+include the running total of completed handoffs per project.
+
 Large screenshot-heavy sessions can take a while to parse. In an interactive
 terminal, the tool prints progress as it scans each session file. If your
 terminal or editor hides stderr, force progress output with:
@@ -236,6 +241,18 @@ or compaction did not let the thread continue cleanly. Opaque compaction items
 alone are not treated as a failure signal. It also
 ignores normal user or assistant text that merely talks about compaction errors;
 only persisted event records count as failure signals.
+
+To record a completed handoff marker manually:
+
+```bash
+python3 tools/codex-thread-handoff-marker.py record \
+  --source-session-file ~/.codex/sessions/YYYY/MM/DD/thread.jsonl \
+  --handoff-file /path/to/documentation/agent-handoffs/YYYY-MM-DD-topic.md
+```
+
+The command appends one local sidecar event and prints a `Codex thread handoff
+marker:` block to include in the new thread prompt. The marker file is local
+state; do not commit it.
 
 For machine-readable output:
 
@@ -325,6 +342,7 @@ the durable facts outside the chat:
 - commands/tests already run
 - known risks and failures
 - exact prompt to paste into a new Codex thread
+- sidecar and prompt markers that retire the old session and connect the new thread
 
 Compaction helps Codex continue a conversation. A handoff helps a new thread
 resume the project.
@@ -371,6 +389,7 @@ codex-thread-tools/
 ├── codex_thread_tools/
 │   ├── sessionlib.py
 │   ├── sessionpaths.py
+│   ├── handoff_markers.py
 │   ├── thread_health.py
 │   └── visual_artifacts.py
 ├── skills/
@@ -385,6 +404,7 @@ codex-thread-tools/
 │   └── test_visual_artifacts.py
 └── tools/
     ├── codex-thread-health.py
+    ├── codex-thread-handoff-marker.py
     ├── codex-visual-archive.py
     └── recover-codex-thread-starter.py
 ```

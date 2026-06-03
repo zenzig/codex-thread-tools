@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.2 - 2026-06-03
+
+- Add local sidecar handoff markers and prompt markers for connecting replacement threads to retired source sessions.
+- Make project health reports prefer the active replacement thread over retired source sessions.
+- Report per-project handoff totals in health output.
+
 ## 0.4.1 - 2026-06-03
 
 - Downgrade historical turn abort/error events from `DANGER` to `WARN` when a later persisted completion event shows the thread recovered.

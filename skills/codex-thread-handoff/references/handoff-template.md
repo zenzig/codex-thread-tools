@@ -26,4 +26,9 @@ Add for compaction/context failure. Use handoff, git, tests, and files as source
 ## Next Thread Prompt
 Continue work in `<project path>`.
 Read this handoff first: `<handoff path>`.
+Codex thread handoff marker:
+source_session_id: `<source session id>`
+handoff_file: `<handoff path>`
+project: `<project path>`
+handoff_sequence: `<sequence>`
 Then proceed with: <specific next action>.

@@ -22,6 +22,18 @@ def run_health(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def write_session(path: Path, records: list[dict], mtime: float | None = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(json.dumps(record, separators=(",", ":")) for record in records) + "\n",
+        encoding="utf-8",
+    )
+    if mtime is not None:
+        import os
+
+        os.utime(path, (mtime, mtime))
+
+
 def test_check_healthy_fixture_is_ok() -> None:
     result = run_health(
         "check",
@@ -182,6 +194,157 @@ def test_projects_uses_latest_session_per_project_without_live_root() -> None:
     assert payload["summary"]["projects"] == 11
     assert payload["summary"]["warn"] == 1
     assert payload["summary"]["danger"] == 4
+
+
+def test_projects_reports_replacement_thread_when_source_was_handed_off(tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    marker_file = tmp_path / "markers" / "handoff-markers.jsonl"
+    old_session = session_root / "2026" / "06" / "02" / "old.jsonl"
+    new_session = session_root / "2026" / "06" / "03" / "new.jsonl"
+    project = "/work/handoff-project"
+    handoff_file = "/work/handoff-project/documentation/agent-handoffs/2026-06-03.md"
+
+    write_session(
+        old_session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "old-session", "cwd": project},
+            },
+            {
+                "timestamp": "2026-06-02T12:01:00Z",
+                "type": "event_msg",
+                "payload": {"type": "turn_aborted"},
+            },
+        ],
+        mtime=200,
+    )
+    write_session(
+        new_session,
+        [
+            {
+                "timestamp": "2026-06-03T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "new-session", "cwd": project},
+            },
+            {
+                "timestamp": "2026-06-03T12:01:00Z",
+                "type": "event_msg",
+                "payload": {
+                    "type": "user_message",
+                    "message": (
+                        "Codex thread handoff marker:\n"
+                        "source_session_id: old-session\n"
+                        f"handoff_file: {handoff_file}\n"
+                        f"project: {project}\n"
+                        "handoff_sequence: 1"
+                    ),
+                },
+            },
+            {
+                "timestamp": "2026-06-03T12:02:00Z",
+                "type": "event_msg",
+                "payload": {"type": "task_complete"},
+            },
+        ],
+        mtime=100,
+    )
+    marker_file.parent.mkdir(parents=True)
+    marker_file.write_text(
+        json.dumps(
+            {
+                "type": "handoff_completed",
+                "created_at": "2026-06-03T12:00:00Z",
+                "project": project,
+                "source_session_id": "old-session",
+                "source_session_file": str(old_session),
+                "handoff_file": handoff_file,
+                "handoff_sequence": 1,
+            },
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--handoff-marker-file",
+        str(marker_file),
+        "--safe-test-mode",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["summary"]["projects"] == 1
+    assert payload["summary"]["danger"] == 0
+    project_payload = payload["projects"][0]
+    assert project_payload["session_id"] == "new-session"
+    assert project_payload["file"] == str(new_session)
+    assert project_payload["status"] == "ok"
+    assert project_payload["replaces_session_ids"] == ["old-session"]
+    assert project_payload["handoff_summary"]["total_handoffs"] == 1
+    assert project_payload["handoff_summary"]["retired_source_sessions"] == 1
+    assert project_payload["handoff_summary"]["latest_handoff_file"] == handoff_file
+
+
+def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    marker_file = tmp_path / "markers" / "handoff-markers.jsonl"
+    source_session = session_root / "2026" / "06" / "02" / "source.jsonl"
+    project = "/work/retired-project"
+    handoff_file = "/work/retired-project/documentation/agent-handoffs/2026-06-03.md"
+
+    write_session(
+        source_session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "source-session", "cwd": project},
+            },
+            {
+                "timestamp": "2026-06-02T12:01:00Z",
+                "type": "event_msg",
+                "payload": {"type": "turn_aborted"},
+            },
+        ],
+    )
+    marker_file.parent.mkdir(parents=True)
+    marker_file.write_text(
+        json.dumps(
+            {
+                "type": "handoff_completed",
+                "created_at": "2026-06-03T12:00:00Z",
+                "project": project,
+                "source_session_id": "source-session",
+                "source_session_file": str(source_session),
+                "handoff_file": handoff_file,
+                "handoff_sequence": 3,
+            },
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_health(
+        "check",
+        str(source_session),
+        "--handoff-marker-file",
+        str(marker_file),
+        "--json",
+    )
+
+    assert result.returncode == 3
+    payload = json.loads(result.stdout)
+    assert payload["retired_by_handoff"]["handoff_file"] == handoff_file
+    assert payload["retired_by_handoff"]["handoff_sequence"] == 3
+    assert payload["handoff_summary"]["total_handoffs"] == 1
 
 
 def test_safe_test_mode_refuses_live_session_root() -> None:

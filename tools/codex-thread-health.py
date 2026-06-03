@@ -15,9 +15,15 @@ if str(REPO_ROOT) not in sys.path:
 
 from codex_thread_tools.sessionlib import die, expand_path
 from codex_thread_tools.sessionpaths import default_session_root
+from codex_thread_tools.handoff_markers import (
+    annotate_result_with_handoff_context,
+    default_marker_file,
+    load_handoff_markers,
+    marker_aware_active_sessions_by_project,
+    replacement_prompt_markers,
+)
 from codex_thread_tools.thread_health import (
     HealthThresholds,
-    active_sessions_by_project,
     aggregate_project_results,
     analyze_session_file,
     assert_safe_test_root,
@@ -113,6 +119,20 @@ def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
                 "  Handoff readiness: "
                 f"{handoff_label(item.get('handoff_readiness', {}).get('status', ''))}"
             )
+            handoff_summary = item.get("handoff_summary", {})
+            if handoff_summary.get("total_handoffs", 0):
+                latest = handoff_summary.get("latest_handoff_at") or "unknown"
+                lines.append(
+                    "  Handoffs: "
+                    f"{handoff_summary['total_handoffs']} total, latest {latest}"
+                )
+            if item.get("replaces_session_ids"):
+                lines.append(
+                    "  Replacement for: "
+                    f"{', '.join(item['replaces_session_ids'])}"
+                )
+            if item.get("retired_by_handoff"):
+                lines.append("  Session role: Retired by handoff")
             lines.append(
                 "  Size: "
                 f"{item['metrics']['bytes']} bytes, "
@@ -135,6 +155,9 @@ def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
             "Handoff readiness: "
             f"{handoff_label(result.get('handoff_readiness', {}).get('status', ''))}"
         ),
+        handoff_summary_line(result),
+        replacement_line(result),
+        retired_line(result),
         f"Project: {result['project']}",
         f"File: {result['file']}",
         (
@@ -147,7 +170,28 @@ def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
     ]
     lines.extend(domain_lines(result.get("risk_domains", {})))
     lines.extend(format_reasons(result["reasons"], indent=""))
-    return "\n".join(lines)
+    return "\n".join(line for line in lines if line)
+
+
+def handoff_summary_line(result: dict[str, Any]) -> str:
+    summary = result.get("handoff_summary", {})
+    if not summary.get("total_handoffs", 0):
+        return ""
+    latest = summary.get("latest_handoff_at") or "unknown"
+    return f"Handoffs: {summary['total_handoffs']} total, latest {latest}"
+
+
+def replacement_line(result: dict[str, Any]) -> str:
+    replaces = result.get("replaces_session_ids") or []
+    if not replaces:
+        return ""
+    return f"Replacement for: {', '.join(replaces)}"
+
+
+def retired_line(result: dict[str, Any]) -> str:
+    if not result.get("retired_by_handoff"):
+        return ""
+    return "Session role: Retired by handoff"
 
 
 def token_value(value: Any) -> str:
@@ -209,6 +253,9 @@ def check_command(args: argparse.Namespace) -> int:
 
     progress(args, f"Analyzing session: {source} ({source.stat().st_size} bytes)")
     result = analyze_session_file(source, apply_threshold_overrides(args))
+    markers = handoff_markers_for_args(args)
+    replacements = replacement_prompt_markers([source])
+    annotate_result_with_handoff_context(result, markers, replacements)
     print(maybe_pretty(result, args.format))
     return exit_code_for_status(result["status"])
 
@@ -223,13 +270,17 @@ def projects_command(args: argparse.Namespace) -> int:
         die(f"session root is not a directory: {session_root}")
 
     thresholds = apply_threshold_overrides(args)
+    markers = handoff_markers_for_args(args)
     progress(args, f"Finding active sessions under: {session_root}")
-    paths = active_sessions_by_project(session_root)
+    paths = marker_aware_active_sessions_by_project(session_root, markers)
+    replacements = replacement_prompt_markers(paths)
     progress(args, f"Analyzing {len(paths)} active project session(s)")
     projects = [
         analyze_with_progress(args, path, index, len(paths), thresholds)
         for index, path in enumerate(paths, 1)
     ]
+    for project in projects:
+        annotate_result_with_handoff_context(project, markers, replacements)
     summary = aggregate_project_results(projects)
     result = {"session_root": str(session_root), "summary": summary, "projects": projects}
     print(maybe_pretty(result, args.format))
@@ -289,6 +340,19 @@ def add_threshold_args(parser: argparse.ArgumentParser) -> None:
         default="auto",
         help="print progress to stderr while large session files are scanned",
     )
+    parser.add_argument(
+        "--handoff-marker-file",
+        default=None,
+        help="local JSONL sidecar with completed handoff markers",
+    )
+
+
+def handoff_markers_for_args(args: argparse.Namespace) -> list[dict[str, Any]]:
+    if args.handoff_marker_file:
+        return load_handoff_markers(expand_path(args.handoff_marker_file))
+    if getattr(args, "safe_test_mode", False):
+        return []
+    return load_handoff_markers(default_marker_file())
 
 
 def analyze_with_progress(

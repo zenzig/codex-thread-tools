@@ -14,4 +14,6 @@ Do not silently omit visual handling when visual references exist. Do not embed 
 
 4. Write: prefer `documentation/agent-handoffs/`, `docs/handoffs/`, or `notes/handoffs/`; otherwise create `documentation/agent-handoffs/`. Use `YYYY-MM-DD-short-topic.md` and `references/handoff-template.md`. Include concrete paths, branch, next action, decisions, relevant files, verification, risks, health readiness, and visual archive decision.
 
-5. Finish: add `Next Thread Prompt` with the handoff's absolute path. Verify readability. Report the path, git state, and exact prompt.
+5. Mark: after verifying the handoff file, run `python3 tools/codex-thread-handoff-marker.py record --source-session-file <session-file> --handoff-file <handoff-file>`. Add the printed `Codex thread handoff marker:` block to `Next Thread Prompt`.
+
+6. Finish: verify readability. Report the path, git state, marker file, and exact prompt.
