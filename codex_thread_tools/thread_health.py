@@ -100,6 +100,8 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
         "turn_complete_events": 0,
         "turn_aborted_events": 0,
         "error_events": 0,
+        "recovered_turn_error_events": 0,
+        "unresolved_turn_error_events": 0,
         "token_count_events": 0,
         "first_token_timestamp": "",
         "latest_token_timestamp": "",
@@ -126,6 +128,7 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
     }
     project = ""
     session_id = ""
+    turn_error_events_since_last_success = 0
 
     for line_no, raw, record in iter_jsonl(path):
         metrics["total_records"] += 1
@@ -187,10 +190,14 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
                 metrics["turn_started_events"] += 1
             elif ptype == "turn_complete":
                 metrics["turn_complete_events"] += 1
+                metrics["recovered_turn_error_events"] += turn_error_events_since_last_success
+                turn_error_events_since_last_success = 0
             elif ptype == "turn_aborted":
                 metrics["turn_aborted_events"] += 1
+                turn_error_events_since_last_success += 1
             elif ptype == "error":
                 metrics["error_events"] += 1
+                turn_error_events_since_last_success += 1
 
         update_token_metrics(record, metrics)
         update_visual_metrics(record, line_no, metrics)
@@ -211,6 +218,7 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
             (metrics["compacted_bytes"] / metrics["bytes"]) * 100,
             2,
         )
+    metrics["unresolved_turn_error_events"] = turn_error_events_since_last_success
 
     project = project or str(path.parent)
     risk_domains = build_risk_domains(metrics, thresholds)
@@ -364,8 +372,10 @@ def continuity_risk(metrics: dict[str, Any]) -> dict[str, Any]:
     danger: list[str] = []
     warn: list[str] = []
 
-    if metrics["turn_aborted_events"] > 0 or metrics["error_events"] > 0:
-        danger.append("turn abort or error event was recorded")
+    if metrics["unresolved_turn_error_events"] > 0:
+        danger.append("unresolved turn abort or error event was recorded")
+    elif metrics["recovered_turn_error_events"] > 0:
+        warn.append("historical turn abort or error event was recovered by later completion")
     if metrics["session_meta_records"] == 0:
         danger.append("no session_meta record found")
     if (

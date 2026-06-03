@@ -5,7 +5,7 @@
 **Small tools and a Codex skill for keeping long Codex threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-1-brightgreen)](#skill)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](#testing)
 
@@ -15,7 +15,7 @@
 
 ## What This Is
 
-Current version: `0.4.0`
+Current version: `0.4.1`
 
 Codex can now keep long conversations alive with several compaction systems. That
 is good, but it does not mean a single thread should be treated as the only
@@ -207,7 +207,7 @@ It looks at:
 - number of `compacted` checkpoints
 - whether the latest compacted checkpoint has `replacement_history`
 - compaction warning/error events
-- aborted turns
+- unresolved aborted turns and error events
 - active token usage, when Codex persisted it
 - embedded screenshots, videos, and visual references
 - whether compacted records dominate the file size
@@ -218,12 +218,17 @@ The report breaks those signals into five risk areas:
 - `Visuals`: embedded screenshots/videos, missing visual files, and visuals inside compacted history
 - `Compaction`: failed, malformed, legacy, or repeatedly stressed compaction state
 - `Limits`: response item count and active context-window pressure
-- `Continuity`: missing session metadata, aborted turns, or error events
+- `Continuity`: missing session metadata, unresolved aborted turns, or error events
 
 For visual payloads, the health check uses lightweight metrics. It estimates
 embedded media size without hashing or copying the image/video bytes, so it can
 still report on screenshot-heavy threads without turning the health check into
 an archive operation.
+
+Historical abort or error events are treated differently from unresolved ones.
+If a later `turn_complete` or `task_complete` event is persisted, the health
+check reports the historical abort/error as `WARN` instead of `DANGER`. If the
+latest terminal event is still an abort or error, it remains `DANGER`.
 
 A single successful compaction is normal. The health check looks for evidence
 that compaction failed, a local compacted checkpoint lacks replacement history,

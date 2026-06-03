@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.4.1 - 2026-06-03
+
+- Downgrade historical turn abort/error events from `DANGER` to `WARN` when a later persisted completion event shows the thread recovered.
+- Keep unresolved latest turn abort/error events as `DANGER`.
 - Add separate continuation health and handoff readiness fields to thread health reports.
 - Treat opaque compaction items as normal continuation state unless persisted failure events or malformed local compacted records are present.
 - Require explicit visual archive decisions in handoff guidance when visual references exist.

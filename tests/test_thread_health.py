@@ -492,6 +492,88 @@ def test_task_started_and_task_complete_aliases_are_counted() -> None:
     assert payload["risk_domains"]["continuity"]["status"] == "ok"
 
 
+def test_historical_turn_abort_recovered_by_completion_warns(tmp_path: Path) -> None:
+    session = tmp_path / "recovered-abort.jsonl"
+    records = [
+        {
+            "timestamp": "2026-06-02T12:00:00Z",
+            "type": "session_meta",
+            "payload": {"id": "recovered-abort", "cwd": "/work/recovered"},
+        },
+        {
+            "timestamp": "2026-06-02T12:01:00Z",
+            "type": "event_msg",
+            "payload": {"type": "task_started"},
+        },
+        {
+            "timestamp": "2026-06-02T12:02:00Z",
+            "type": "event_msg",
+            "payload": {"type": "turn_aborted"},
+        },
+        {
+            "timestamp": "2026-06-02T12:03:00Z",
+            "type": "event_msg",
+            "payload": {"type": "task_started"},
+        },
+        {
+            "timestamp": "2026-06-02T12:04:00Z",
+            "type": "event_msg",
+            "payload": {"type": "task_complete"},
+        },
+    ]
+    session.write_text(
+        "\n".join(json.dumps(record, separators=(",", ":")) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_health("check", str(session), "--json")
+
+    assert result.returncode == 2, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "warn"
+    assert payload["continuation_status"] == "warn"
+    assert payload["recommendation"] == "monitor"
+    assert payload["risk_domains"]["continuity"]["status"] == "warn"
+    assert payload["metrics"]["turn_aborted_events"] == 1
+    assert payload["metrics"]["recovered_turn_error_events"] == 1
+    assert payload["metrics"]["unresolved_turn_error_events"] == 0
+    assert any("recovered" in reason for reason in payload["reasons"])
+    assert not any("turn abort or error event was recorded" == reason for reason in payload["reasons"])
+
+
+def test_latest_turn_abort_remains_danger(tmp_path: Path) -> None:
+    session = tmp_path / "unresolved-abort.jsonl"
+    records = [
+        {
+            "timestamp": "2026-06-02T12:00:00Z",
+            "type": "session_meta",
+            "payload": {"id": "unresolved-abort", "cwd": "/work/unresolved"},
+        },
+        {
+            "timestamp": "2026-06-02T12:01:00Z",
+            "type": "event_msg",
+            "payload": {"type": "task_started"},
+        },
+        {
+            "timestamp": "2026-06-02T12:02:00Z",
+            "type": "event_msg",
+            "payload": {"type": "turn_aborted"},
+        },
+    ]
+    session.write_text(
+        "\n".join(json.dumps(record, separators=(",", ":")) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_health("check", str(session), "--json")
+
+    assert result.returncode == 3
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "danger"
+    assert payload["risk_domains"]["continuity"]["status"] == "danger"
+    assert payload["metrics"]["unresolved_turn_error_events"] == 1
+
+
 def test_generic_runtime_error_is_not_a_compaction_failure() -> None:
     result = run_health(
         "check",
