@@ -59,7 +59,7 @@ def normalize_marker(record: dict[str, Any]) -> dict[str, Any] | None:
     sequence = record.get("handoff_sequence")
     if not isinstance(sequence, int):
         sequence = 0
-    return {
+    marker = {
         "type": MARKER_TYPE,
         "created_at": created_at,
         "project": project,
@@ -68,6 +68,13 @@ def normalize_marker(record: dict[str, Any]) -> dict[str, Any] | None:
         "handoff_file": handoff_file,
         "handoff_sequence": sequence,
     }
+    replacement_session_id = _string(record.get("replacement_session_id"))
+    replacement_session_file = _string(record.get("replacement_session_file"))
+    if replacement_session_id:
+        marker["replacement_session_id"] = replacement_session_id
+    if replacement_session_file:
+        marker["replacement_session_file"] = replacement_session_file
+    return marker
 
 
 def append_handoff_marker(
@@ -77,6 +84,8 @@ def append_handoff_marker(
     source_session_id: str,
     source_session_file: str,
     handoff_file: str,
+    replacement_session_id: str = "",
+    replacement_session_file: str = "",
     created_at: str | None = None,
 ) -> dict[str, Any]:
     markers = load_handoff_markers(marker_file)
@@ -96,6 +105,10 @@ def append_handoff_marker(
         "handoff_file": handoff_file,
         "handoff_sequence": sequence,
     }
+    if replacement_session_id:
+        marker["replacement_session_id"] = replacement_session_id
+    if replacement_session_file:
+        marker["replacement_session_file"] = replacement_session_file
     marker_file.parent.mkdir(parents=True, exist_ok=True)
     with marker_file.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(marker, separators=(",", ":")) + "\n")
@@ -287,10 +300,35 @@ def annotate_result_with_handoff_context(
         for marker in replacement_markers
         if marker.get("replacement_session_file") == result["file"]
     ]
+    result_path = path_key(result["file"])
+    result_id = result.get("session_id", "")
+    replaces.extend(
+        marker["source_session_id"]
+        for marker in markers
+        if marker.get("replacement_session_id") == result_id
+        or (
+            marker.get("replacement_session_file")
+            and path_key(marker["replacement_session_file"]) == result_path
+        )
+    )
     result["handoff_summary"] = handoff_summary_for_project(result["project"], markers)
     result["retired_by_handoff"] = retired
     result["replaces_session_ids"] = sorted(set(replaces))
     result["session_role"] = "retired" if retired else "active"
+    if retired:
+        result["underlying_status"] = result["status"]
+        result["underlying_recommendation"] = result["recommendation"]
+        result["underlying_reasons"] = result["reasons"]
+        result["status"] = "retired"
+        result["continuation_status"] = "retired"
+        result["recommendation"] = "use-replacement-thread"
+        result["reasons"] = ["session was retired by completed handoff"]
+        result["handoff_readiness"] = {
+            "status": "completed",
+            "recommendation": "use-replacement-thread",
+            "visual_archive": "not-needed",
+            "reasons": ["session was retired by completed handoff"],
+        }
     return result
 
 

@@ -5,7 +5,7 @@
 **Small tools and a Codex skill for keeping long Codex threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.2-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.3-blue)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-1-brightgreen)](#skill)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](#testing)
 
@@ -15,7 +15,7 @@
 
 ## What This Is
 
-Current version: `0.4.2`
+Current version: `0.4.3`
 
 Codex can now keep long conversations alive with several compaction systems. That
 is good, but it does not mean a single thread should be treated as the only
@@ -177,13 +177,14 @@ The main beginner command is:
 python3 tools/codex-thread-health.py
 ```
 
-You will see one of three statuses:
+You will see one of four statuses:
 
 | Status | Meaning | What to do |
 | --- | --- | --- |
 | `OK` | No major risk signals were found | Keep working |
 | `WARN` | One risk area needs attention | Continue, but prepare a handoff if the task will keep growing |
 | `DANGER` | The thread has strong risk signals | Make a handoff and start a fresh thread |
+| `RETIRED` | The session was already handed off and is no longer the active thread | Use the replacement thread or the handoff file |
 
 The health check is read-only. It does not edit, delete, trim, or repair any
 Codex thread.
@@ -196,6 +197,11 @@ Completed handoffs are tracked in a local sidecar marker file under
 `~/.codex/thread-tools/`. Project health reports use those markers to retire old
 source sessions and prioritize the new active replacement thread. Reports also
 include the running total of completed handoffs per project.
+
+If you check a retired source session directly, the top-level report is
+`RETIRED` and exits successfully. The original health result is preserved as
+underlying health for audit, but the pretty report does not present the retired
+source as an active `WARN` or `DANGER` thread.
 
 Large screenshot-heavy sessions can take a while to parse. In an interactive
 terminal, the tool prints progress as it scans each session file. If your
@@ -247,12 +253,19 @@ To record a completed handoff marker manually:
 ```bash
 python3 tools/codex-thread-handoff-marker.py record \
   --source-session-file ~/.codex/sessions/YYYY/MM/DD/thread.jsonl \
+  --replacement-session-file ~/.codex/sessions/YYYY/MM/DD/new-thread.jsonl \
   --handoff-file /path/to/documentation/agent-handoffs/YYYY-MM-DD-topic.md
 ```
 
 The command appends one local sidecar event and prints a `Codex thread handoff
 marker:` block to include in the new thread prompt. The marker file is local
 state; do not commit it.
+
+You can also run this command after an older handoff to backfill the local
+sidecar marker. Backfilling records local state only; it does not modify the
+Codex session JSONL. For older handoffs that did not include the prompt marker
+in the new thread, pass `--replacement-session-file` so health reports can show
+which active session replaced the retired source.
 
 For machine-readable output:
 

@@ -631,7 +631,7 @@ def assert_safe_test_root(path: Path) -> None:
 
 
 def exit_code_for_status(status: str) -> int:
-    if status == "ok":
+    if status in {"ok", "retired"}:
         return 0
     if status == "warn":
         return 2
@@ -646,6 +646,7 @@ def aggregate_project_results(results: list[dict[str, Any]]) -> dict[str, int]:
         "ok": sum(1 for result in results if result["status"] == "ok"),
         "warn": sum(1 for result in results if result["status"] == "warn"),
         "danger": sum(1 for result in results if result["status"] == "danger"),
+        "retired": sum(1 for result in results if result["status"] == "retired"),
     }
 
 

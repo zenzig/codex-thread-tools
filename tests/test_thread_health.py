@@ -292,6 +292,85 @@ def test_projects_reports_replacement_thread_when_source_was_handed_off(tmp_path
     assert project_payload["handoff_summary"]["latest_handoff_file"] == handoff_file
 
 
+def test_projects_reports_backfilled_sidecar_replacement_thread(tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    marker_file = tmp_path / "markers" / "handoff-markers.jsonl"
+    old_session = session_root / "2026" / "06" / "02" / "old.jsonl"
+    new_session = session_root / "2026" / "06" / "03" / "new.jsonl"
+    project = "/work/backfilled-handoff-project"
+    handoff_file = "/work/backfilled-handoff-project/documentation/agent-handoffs/2026-06-03.md"
+
+    write_session(
+        old_session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "old-session", "cwd": project},
+            },
+            {
+                "timestamp": "2026-06-02T12:01:00Z",
+                "type": "event_msg",
+                "payload": {"type": "turn_aborted"},
+            },
+        ],
+        mtime=200,
+    )
+    write_session(
+        new_session,
+        [
+            {
+                "timestamp": "2026-06-03T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "new-session", "cwd": project},
+            },
+            {
+                "timestamp": "2026-06-03T12:02:00Z",
+                "type": "event_msg",
+                "payload": {"type": "task_complete"},
+            },
+        ],
+        mtime=100,
+    )
+    marker_file.parent.mkdir(parents=True)
+    marker_file.write_text(
+        json.dumps(
+            {
+                "type": "handoff_completed",
+                "created_at": "2026-06-03T12:00:00Z",
+                "project": project,
+                "source_session_id": "old-session",
+                "source_session_file": str(old_session),
+                "replacement_session_id": "new-session",
+                "replacement_session_file": str(new_session),
+                "handoff_file": handoff_file,
+                "handoff_sequence": 1,
+            },
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--handoff-marker-file",
+        str(marker_file),
+        "--safe-test-mode",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    project_payload = payload["projects"][0]
+    assert project_payload["session_id"] == "new-session"
+    assert project_payload["file"] == str(new_session)
+    assert project_payload["status"] == "ok"
+    assert project_payload["replaces_session_ids"] == ["old-session"]
+
+
 def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -> None:
     session_root = tmp_path / "sessions"
     marker_file = tmp_path / "markers" / "handoff-markers.jsonl"
@@ -340,11 +419,101 @@ def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -
         "--json",
     )
 
-    assert result.returncode == 3
+    assert result.returncode == 0
     payload = json.loads(result.stdout)
+    assert payload["status"] == "retired"
+    assert payload["continuation_status"] == "retired"
+    assert payload["recommendation"] == "use-replacement-thread"
+    assert payload["underlying_status"] == "danger"
+    assert payload["handoff_readiness"]["status"] == "completed"
     assert payload["retired_by_handoff"]["handoff_file"] == handoff_file
     assert payload["retired_by_handoff"]["handoff_sequence"] == 3
     assert payload["handoff_summary"]["total_handoffs"] == 1
+
+    pretty = run_health(
+        "check",
+        str(source_session),
+        "--handoff-marker-file",
+        str(marker_file),
+    )
+
+    assert pretty.returncode == 0
+    assert "Overall: RETIRED" in pretty.stdout
+    assert "Underlying health: DANGER" in pretty.stdout
+    assert "Domain risks:" not in pretty.stdout
+    assert "Why: session was retired by completed handoff" in pretty.stdout
+
+
+def test_projects_with_only_retired_sessions_exit_ok(tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    marker_file = tmp_path / "markers" / "handoff-markers.jsonl"
+    source_session = session_root / "2026" / "06" / "02" / "source.jsonl"
+    project = "/work/retired-only-project"
+
+    write_session(
+        source_session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "source-session", "cwd": project},
+            },
+            {
+                "timestamp": "2026-06-02T12:01:00Z",
+                "type": "event_msg",
+                "payload": {"type": "turn_aborted"},
+            },
+        ],
+    )
+    marker_file.parent.mkdir(parents=True)
+    marker_file.write_text(
+        json.dumps(
+            {
+                "type": "handoff_completed",
+                "created_at": "2026-06-03T12:00:00Z",
+                "project": project,
+                "source_session_id": "source-session",
+                "source_session_file": str(source_session),
+                "handoff_file": "/work/retired-only-project/handoff.md",
+                "handoff_sequence": 1,
+            },
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--handoff-marker-file",
+        str(marker_file),
+        "--safe-test-mode",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["summary"]["retired"] == 1
+    assert payload["summary"]["warn"] == 0
+    assert payload["summary"]["danger"] == 0
+    assert payload["projects"][0]["status"] == "retired"
+
+    pretty = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--handoff-marker-file",
+        str(marker_file),
+        "--safe-test-mode",
+    )
+
+    assert pretty.returncode == 0, pretty.stderr
+    assert "Overall: RETIRED (0 ok, 0 warn, 0 danger, 1 retired)" in pretty.stdout
+    assert "RETIRED: /work/retired-only-project" in pretty.stdout
+    assert "  Underlying health: DANGER" in pretty.stdout
+    assert "  Domain risks:" not in pretty.stdout
 
 
 def test_safe_test_mode_refuses_live_session_root() -> None:

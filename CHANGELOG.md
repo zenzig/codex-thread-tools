@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.3 - 2026-06-03
+
+- Report sidecar-marked source sessions as top-level `RETIRED` instead of active `WARN` or `DANGER`.
+- Keep retired source session diagnostics as underlying health while returning a successful exit code.
+- Allow sidecar markers to record replacement session files for older handoffs that lack prompt markers.
+- Clarify that older handoffs can be backfilled with a local sidecar marker without editing Codex session JSONL.
+
 ## 0.4.2 - 2026-06-03
 
 - Add local sidecar handoff markers and prompt markers for connecting replacement threads to retired source sessions.

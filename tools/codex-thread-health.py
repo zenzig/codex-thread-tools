@@ -60,6 +60,8 @@ def next_step(status: str) -> str:
         return "Create a handoff and start a fresh Codex thread before continuing."
     if status == "warn":
         return "You can continue, but make a handoff soon if this task will keep growing."
+    if status == "retired":
+        return "Use the active replacement thread or the handoff file."
     return "Continue in the current thread."
 
 
@@ -68,6 +70,7 @@ def handoff_label(value: str) -> str:
         "needed": "Needed",
         "recommended": "Recommended",
         "not-needed": "Not needed",
+        "completed": "Completed",
     }
     return labels.get(value, status_label(value))
 
@@ -98,13 +101,14 @@ def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
         return tokens_pretty(result)
     if "projects" in result:
         summary = result["summary"]
-        status = "danger" if summary["danger"] else "warn" if summary["warn"] else "ok"
+        status = summary_status(summary)
         lines = [
             "Codex Thread Health",
             f"Session folder: {result['session_root']}",
             (
                 f"Overall: {status_label(status)} "
-                f"({summary['ok']} ok, {summary['warn']} warn, {summary['danger']} danger)"
+                f"({summary['ok']} ok, {summary['warn']} warn, "
+                f"{summary['danger']} danger, {summary.get('retired', 0)} retired)"
             ),
             f"Next step: {next_step(status)}",
             "",
@@ -133,6 +137,8 @@ def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
                 )
             if item.get("retired_by_handoff"):
                 lines.append("  Session role: Retired by handoff")
+            if item.get("underlying_status"):
+                lines.append(f"  Underlying health: {status_label(item['underlying_status'])}")
             lines.append(
                 "  Size: "
                 f"{item['metrics']['bytes']} bytes, "
@@ -140,7 +146,8 @@ def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
                 f"{item['metrics']['compacted_records']} compacted checkpoints, "
                 f"{item['metrics']['visual_artifacts']} visual refs"
             )
-            lines.extend(domain_lines(item.get("risk_domains", {}), indent="  "))
+            if item["status"] != "retired":
+                lines.extend(domain_lines(item.get("risk_domains", {}), indent="  "))
             lines.extend(format_reasons(item["reasons"]))
             lines.append(f"  File: {item['file']}")
             lines.append("")
@@ -158,6 +165,7 @@ def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
         handoff_summary_line(result),
         replacement_line(result),
         retired_line(result),
+        underlying_health_line(result),
         f"Project: {result['project']}",
         f"File: {result['file']}",
         (
@@ -168,9 +176,22 @@ def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
             f"{result['metrics']['visual_artifacts']} visual refs"
         ),
     ]
-    lines.extend(domain_lines(result.get("risk_domains", {})))
+    if result["status"] != "retired":
+        lines.extend(domain_lines(result.get("risk_domains", {})))
     lines.extend(format_reasons(result["reasons"], indent=""))
     return "\n".join(line for line in lines if line)
+
+
+def summary_status(summary: dict[str, int]) -> str:
+    if summary["danger"]:
+        return "danger"
+    if summary["warn"]:
+        return "warn"
+    if summary.get("ok", 0):
+        return "ok"
+    if summary.get("retired", 0):
+        return "retired"
+    return "ok"
 
 
 def handoff_summary_line(result: dict[str, Any]) -> str:
@@ -192,6 +213,12 @@ def retired_line(result: dict[str, Any]) -> str:
     if not result.get("retired_by_handoff"):
         return ""
     return "Session role: Retired by handoff"
+
+
+def underlying_health_line(result: dict[str, Any]) -> str:
+    if "underlying_status" not in result:
+        return ""
+    return f"Underlying health: {status_label(result['underlying_status'])}"
 
 
 def token_value(value: Any) -> str:

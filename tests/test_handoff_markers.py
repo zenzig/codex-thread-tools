@@ -23,6 +23,7 @@ def run_marker(*args: str) -> subprocess.CompletedProcess[str]:
 def test_record_handoff_marker_increments_project_sequence(tmp_path: Path) -> None:
     marker_file = tmp_path / "markers" / "handoff-markers.jsonl"
     session_file = tmp_path / "session.jsonl"
+    replacement_file = tmp_path / "replacement.jsonl"
     handoff_one = tmp_path / "handoff-one.md"
     handoff_two = tmp_path / "handoff-two.md"
     project = "/work/project"
@@ -38,6 +39,18 @@ def test_record_handoff_marker_increments_project_sequence(tmp_path: Path) -> No
         + "\n",
         encoding="utf-8",
     )
+    replacement_file.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-06-03T12:30:00Z",
+                "type": "session_meta",
+                "payload": {"id": "replacement-one", "cwd": project},
+            },
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
     first = run_marker(
         "record",
@@ -45,6 +58,8 @@ def test_record_handoff_marker_increments_project_sequence(tmp_path: Path) -> No
         str(marker_file),
         "--source-session-file",
         str(session_file),
+        "--replacement-session-file",
+        str(replacement_file),
         "--handoff-file",
         str(handoff_one),
         "--created-at",
@@ -78,4 +93,6 @@ def test_record_handoff_marker_increments_project_sequence(tmp_path: Path) -> No
     assert [record["handoff_sequence"] for record in records] == [1, 2]
     assert records[0]["project"] == project
     assert records[0]["source_session_id"] == "source-one"
+    assert records[0]["replacement_session_id"] == "replacement-one"
+    assert records[0]["replacement_session_file"] == str(replacement_file)
     assert records[1]["handoff_file"] == str(handoff_two)

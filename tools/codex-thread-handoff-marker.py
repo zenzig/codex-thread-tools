@@ -34,12 +34,23 @@ def record_command(args: argparse.Namespace) -> int:
         die("project could not be determined; pass --project")
     if not source_session_id:
         die("source session id could not be determined; pass --source-session-id")
+    replacement_session_file = ""
+    replacement_session_id = args.replacement_session_id or ""
+    if args.replacement_session_file:
+        replacement_path = expand_path(args.replacement_session_file)
+        if not replacement_path.exists():
+            die(f"replacement session file does not exist: {replacement_path}")
+        replacement_identity = session_identity(replacement_path)
+        replacement_session_file = str(replacement_path)
+        replacement_session_id = replacement_session_id or replacement_identity["session_id"]
 
     marker = append_handoff_marker(
         marker_file,
         project=project,
         source_session_id=source_session_id,
         source_session_file=str(source_session_file),
+        replacement_session_id=replacement_session_id,
+        replacement_session_file=replacement_session_file,
         handoff_file=str(handoff_file),
         created_at=args.created_at,
     )
@@ -66,6 +77,14 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--project", help="project path; defaults from source session")
     record.add_argument("--source-session-id", help="source session id; defaults from source session")
     record.add_argument("--source-session-file", required=True)
+    record.add_argument(
+        "--replacement-session-id",
+        help="replacement session id; defaults from replacement session",
+    )
+    record.add_argument(
+        "--replacement-session-file",
+        help="replacement session file for older handoffs without a prompt marker",
+    )
     record.add_argument("--handoff-file", required=True)
     record.add_argument("--created-at", help="ISO timestamp; defaults to current UTC time")
     record.add_argument("--format", choices=("pretty", "json"), default="pretty")
