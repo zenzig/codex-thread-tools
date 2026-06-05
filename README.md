@@ -25,7 +25,7 @@ JSONL files it writes under `~/.codex/sessions/`. Throughout this README,
 name.
 
 Codex can now keep long conversations alive with several compaction systems.
-That is good, but it does not mean a single thread should be treated as the
+That's good, but it doesn't mean a single thread should be treated as the
 only place your project memory lives.
 
 This repo gives you four practical things:
@@ -38,7 +38,7 @@ This repo gives you four practical things:
   before starting a fresh Codex thread
 - a **recovery starter** for damaged or oversized session files
 
-You only need basic terminal knowledge and Python. You do not need to understand
+You only need basic terminal knowledge and Python. You don't need to understand
 the internal Codex session format to use the main commands.
 
 ---
@@ -147,7 +147,7 @@ JSONL record like:
 }
 ```
 
-The important part is `payload.replacement_history`. That is the replacement
+The important part is `payload.replacement_history`. That's the replacement
 history Codex can use when rebuilding the live conversation. A `compacted`
 record without a valid `replacement_history` is weaker and may be legacy or
 malformed.
@@ -158,21 +158,21 @@ Remote compaction has a lifecycle:
 2. The request completes or fails.
 3. The compacted result is installed as the live replacement history.
 
-Step 2 by itself is not enough. A request can complete without becoming the
+Step 2 by itself isn't enough. A request can complete without becoming the
 actual live conversation state. The important boundary is when the replacement
 history is installed.
 
 Server-side and standalone compaction can emit opaque encrypted compaction
-items. Those items carry prior state forward with fewer tokens, but they are
-intentionally not human-readable. They are useful to Codex, not useful as
-durable project notes for you.
+items. Those items carry prior state forward with fewer tokens, but they're
+intentionally not human-readable. They help Codex, but they aren't durable
+project notes for you.
 
 ---
 
 ## What Compaction Does Not Solve
 
-Compaction reduces the context the model needs to see on later turns. It does
-not solve every local thread failure mode.
+Compaction reduces the context the model needs to see on later turns. It
+doesn't solve every local thread failure mode.
 
 A thread can still become unhealthy because:
 
@@ -184,7 +184,7 @@ A thread can still become unhealthy because:
 - legacy or malformed compacted records may not reconstruct well
 - the desktop app may still struggle to load a very large session file
 
-That is why this repo uses both health checks and handoffs.
+That's why this repo uses both health checks and handoffs.
 
 ---
 
@@ -196,7 +196,7 @@ The main beginner command is:
 python3 tools/codex-thread-health.py
 ```
 
-You will see one of four statuses:
+You'll see one of four statuses:
 
 | Status | Meaning | What to do |
 | --- | --- | --- |
@@ -205,12 +205,12 @@ You will see one of four statuses:
 | `DANGER` | The thread has strong risk signals | Make a handoff and start a fresh thread |
 | `RETIRED` | The session was already handed off and is no longer the active thread | Use the replacement thread or the handoff file |
 
-The health check is read-only. It does not edit, delete, trim, or repair any
+The health check is read-only. It doesn't edit, delete, trim, or repair any
 Codex thread.
 
 Reports separate active continuation health from handoff readiness. A thread can
 be healthy enough to keep using while still needing visual archive notes before
-it is retired.
+it's retired.
 
 Completed handoffs are tracked in a local sidecar marker file under
 `~/.codex/thread-tools/`. Project health reports use those markers to retire old
@@ -219,7 +219,7 @@ include the running total of completed handoffs per project.
 
 If you check a retired source session directly, the top-level report is
 `RETIRED` and exits successfully. The original health result is preserved as
-underlying health for audit, but the pretty report does not present the retired
+underlying health for audit, but the pretty report doesn't present the retired
 source as an active `WARN` or `DANGER` thread.
 
 Large screenshot-heavy sessions can take a while to parse. In an interactive
@@ -262,8 +262,8 @@ latest terminal event is still an abort or error, it remains `DANGER`.
 
 A single successful compaction is normal. The health check looks for evidence
 that compaction failed, a local compacted checkpoint lacks replacement history,
-or compaction did not let the thread continue cleanly. Opaque compaction items
-alone are not treated as a failure signal. It also
+or compaction didn't let the thread continue cleanly. Opaque compaction items
+alone aren't treated as a failure signal. It also
 ignores normal user or assistant text that merely talks about compaction errors;
 only persisted event records count as failure signals.
 
@@ -278,11 +278,11 @@ python3 tools/codex-thread-handoff-marker.py record \
 
 The command appends one local sidecar event and prints a `Codex thread handoff
 marker:` block to include in the new thread prompt. The marker file is local
-state; do not commit it.
+state; don't commit it.
 
 You can also run this command after an older handoff to backfill the local
-sidecar marker. Backfilling records local state only; it does not modify the
-Codex session JSONL. For older handoffs that did not include the prompt marker
+sidecar marker. Backfilling records local state only; it doesn't modify the
+Codex session JSONL. For older handoffs that didn't include the prompt marker
 in the new thread, pass `--replacement-session-file` so health reports can show
 which active session replaced the retired source.
 
@@ -457,13 +457,13 @@ Rebuild the fixture session files:
 python3 tests/fixtures/build_fixtures.py
 ```
 
-The tests do not depend on your real `~/.codex/sessions` folder.
+The tests don't depend on your real `~/.codex/sessions` folder.
 
 ---
 
 ## Public Repo Hygiene
 
-This repository intentionally does not track local Codex usage artifacts. The
+This repository intentionally doesn't track local Codex usage artifacts. The
 `.gitignore` excludes handoff files, local planning notes, generated visual
 fixtures, archive output, and common tool caches.
 
@@ -478,9 +478,9 @@ opening issues or pull requests that involve session data.
 
 ## Visual Archive Tool
 
-Screenshots and screen recordings can make a Codex thread grow quickly. They are
+Screenshots and screen recordings can make a Codex thread grow quickly. They're
 also important context. If a future thread needs to understand what a design
-looked like, you should not simply strip that data away and hope the next thread
+looked like, you shouldn't simply strip that data away and hope the next thread
 remembers it.
 
 Use the visual archive tool to copy visual references to storage you control.
@@ -541,7 +541,7 @@ The archive command writes:
 
 Local visual files are copied only when they resolve under an explicit
 `--allow-local-root`. This prevents the tool from following arbitrary paths out
-of a session file and copying files you did not intend to archive.
+of a session file and copying files you didn't intend to archive.
 
 Verify an archive later:
 
@@ -552,7 +552,7 @@ python3 tools/codex-visual-archive.py verify /Volumes/CodexArchive/codex-visual-
 Verification checks that archived files still exist and that their byte size and
 SHA-256 hash match the manifest.
 
-The visual archive tool does not edit, delete, trim, or rewrite Codex session
+The visual archive tool doesn't edit, delete, trim, or rewrite Codex session
 files. It only scans a session and copies visual files into the archive location
 you choose.
 
