@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.5 - 2026-06-05
+
+- Prepare the project for npm publishing as `codex-thread-tools`.
+- Add the `codex-thread-tools` npm CLI wrapper for health checks, handoff markers, visual archives, recovery, and skill installation.
+- Document `npx codex-thread-tools health` and `npm install -g codex-thread-tools` usage.
+- Add package metadata and packaging tests for npm publish readiness.
+
 ## 0.4.4 - 2026-06-05
 
 - Remove the macOS app-path assumption from Codex process detection.

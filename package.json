@@ -1,0 +1,53 @@
+{
+  "name": "codex-thread-tools",
+  "version": "0.4.5",
+  "description": "Health checks, handoffs, visual archives, and recovery tools for OpenAI Codex session threads.",
+  "license": "MIT",
+  "type": "commonjs",
+  "bin": {
+    "codex-thread-tools": "bin/codex-thread-tools.js"
+  },
+  "files": [
+    "bin/codex-thread-tools.js",
+    "codex_thread_tools/*.py",
+    "tools/*.py",
+    "skills/codex-thread-handoff/SKILL.md",
+    "skills/codex-thread-handoff/agents/*.yaml",
+    "skills/codex-thread-handoff/references/*.md",
+    "assets/codex-thread-tools-header.png",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "VERSION",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "python3 -m pytest",
+    "pack:dry-run": "npm pack --dry-run"
+  },
+  "keywords": [
+    "codex",
+    "openai-codex",
+    "openai",
+    "codex-thread",
+    "codex-session",
+    "session-health",
+    "thread-health",
+    "handoff",
+    "compaction",
+    "session-jsonl",
+    "developer-tools",
+    "cli"
+  ],
+  "homepage": "https://github.com/zenzig/codex-thread-tools#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zenzig/codex-thread-tools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zenzig/codex-thread-tools/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

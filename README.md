@@ -5,7 +5,7 @@
 **Small tools and a Codex skill for keeping long OpenAI Codex threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.4-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.5-blue)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-1-brightgreen)](#skill)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](#testing)
 
@@ -17,7 +17,7 @@
 
 ## What This Is
 
-Current version: `0.4.4`
+Current version: `0.4.5`
 
 `codex-thread-tools` works with local session JSONL files under
 `~/.codex/sessions/`.
@@ -36,14 +36,27 @@ This repo gives you four practical things:
   before starting a fresh Codex thread
 - a **recovery starter** for damaged or oversized session files
 
-You only need basic terminal knowledge and Python. You don't need to understand
-the internal Codex session format to use the main commands.
+You only need basic terminal knowledge, Node.js, and Python. You don't need to
+understand the internal Codex session format to use the main commands.
 
 ---
 
 ## Quick Start
 
-Clone the repo:
+Run the thread health check without cloning the repo:
+
+```bash
+npx codex-thread-tools health
+```
+
+Or install the tools globally:
+
+```bash
+npm install -g codex-thread-tools
+codex-thread-tools health
+```
+
+To work from source, clone the repo:
 
 ```bash
 git clone https://github.com/zenzig/codex-thread-tools.git
@@ -73,7 +86,14 @@ Codex creates `~/.codex/` when it runs. This repo assumes that directory already
 exists on the machine where you use these tools.
 
 Codex skills live in `~/.codex/skills/`. Only the `skills` subfolder may need to
-be created. You can copy the bundled handoff skill there:
+be created. If you installed the npm package, install the bundled handoff skill
+with:
+
+```bash
+codex-thread-tools install-skill
+```
+
+If you're working from a source checkout, you can copy the skill manually:
 
 ```bash
 if ! test -d ~/.codex; then
@@ -411,9 +431,12 @@ live session file.
 
 ```text
 codex-thread-tools/
+├── bin/
+│   └── codex-thread-tools.js
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── LICENSE
+├── package.json
 ├── SECURITY.md
 ├── VERSION
 ├── codex_thread_tools/
@@ -430,6 +453,7 @@ codex-thread-tools/
 │       └── references/handoff-template.md
 ├── tests/
 │   ├── fixtures/
+│   ├── test_npm_package.py
 │   ├── test_thread_health.py
 │   └── test_visual_artifacts.py
 └── tools/
@@ -447,6 +471,12 @@ Run the tests:
 
 ```bash
 python3 -m pytest
+```
+
+Check the npm package contents without publishing:
+
+```bash
+npm pack --dry-run
 ```
 
 Rebuild the fixture session files:
