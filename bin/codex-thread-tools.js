@@ -54,16 +54,14 @@ function main(argv) {
 
 function runPythonTool(toolName, args) {
   const script = path.join(ROOT, "tools", toolName);
-  const attempts = pythonCommands().map((python) => {
+  for (const python of pythonCommands()) {
     const command = python.command;
     const pythonArgs = [...python.args, script, ...args];
-    return spawnSync(command, pythonArgs, {
+    const result = spawnSync(command, pythonArgs, {
       cwd: ROOT,
       stdio: "inherit",
       env: process.env,
     });
-  });
-  for (const result of attempts) {
     if (result.error && result.error.code === "ENOENT") {
       continue;
     }

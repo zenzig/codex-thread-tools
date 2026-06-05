@@ -1,7 +1,7 @@
 {
   "name": "codex-thread-tools",
   "version": "0.4.5",
-  "description": "Health checks, handoffs, visual archives, and recovery tools for OpenAI Codex session threads.",
+  "description": "CLI health checks, handoffs, visual archives, and recovery tools for OpenAI Codex session threads.",
   "license": "MIT",
   "type": "commonjs",
   "bin": {

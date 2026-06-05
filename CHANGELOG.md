@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Improve README command guidance so `npx`, global npm install, and source
+  checkout workflows are all documented clearly.
+- Reformat README sections with GitHub-supported tables, alerts, a Mermaid
+  workflow diagram, and collapsed source-only details for easier scanning.
+- Fix the npm CLI wrapper so a command runs with only the first available
+  Python interpreter instead of running once per detected interpreter.
+- Clarify the npm package description shown in npm search and package listings.
+
 ## 0.4.5 - 2026-06-05
 
 - Prepare the project for npm publishing as `codex-thread-tools`.

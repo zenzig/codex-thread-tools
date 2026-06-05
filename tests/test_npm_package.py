@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -15,6 +16,10 @@ def test_package_metadata_is_publish_ready() -> None:
     assert package["version"] == (ROOT / "VERSION").read_text(
         encoding="utf-8"
     ).strip()
+    assert (
+        package["description"]
+        == "CLI health checks, handoffs, visual archives, and recovery tools for OpenAI Codex session threads."
+    )
     assert package["bin"]["codex-thread-tools"] == "bin/codex-thread-tools.js"
     assert package["license"] == "MIT"
     assert "codex" in package["keywords"]
@@ -70,6 +75,42 @@ def test_npm_cli_dispatches_health_tool() -> None:
     assert result.returncode == 0, result.stderr
     assert "codex-thread-health.py check" in result.stdout
     assert "session_file" in result.stdout
+
+
+def test_npm_cli_uses_only_first_available_python(tmp_path: Path) -> None:
+    call_log = tmp_path / "python-calls.log"
+    for name in ("python3", "python"):
+        executable = tmp_path / name
+        executable.write_text(
+            "\n".join(
+                [
+                    "#!/bin/sh",
+                    f"printf '%s\\n' '{name}' >> \"$CALL_LOG\"",
+                    f"printf '%s\\n' '{name} invoked'",
+                    "exit 0",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        executable.chmod(0o755)
+
+    env = os.environ.copy()
+    env["CALL_LOG"] = str(call_log)
+    env["PATH"] = f"{tmp_path}{os.pathsep}{env['PATH']}"
+    result = subprocess.run(
+        ["node", str(ROOT / "bin" / "codex-thread-tools.js"), "health"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "python3 invoked\n"
+    assert call_log.read_text(encoding="utf-8").splitlines() == ["python3"]
 
 
 def test_npm_pack_excludes_generated_and_local_artifacts() -> None:
