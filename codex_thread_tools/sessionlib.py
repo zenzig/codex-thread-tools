@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import json
+import platform
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
 
-CODEX_PROCESS_PATTERN = r"/Applications/Codex.app|Codex Helper|Codex.app/Contents"
+CODEX_PROCESS_NAME_PATTERN = re.compile(
+    r'(^|[\\/"\s,])Codex(?: Helper)?(?:\.exe)?($|[\\/"\s,])'
+)
+PROCESS_LIST_TIMEOUT_SECONDS = 2
 KEEP_EVENT_TYPES = {"user_message", "agent_message", "task_complete"}
 
 
@@ -29,17 +34,37 @@ def expand_path(value: str | Path) -> Path:
     return Path(value).expanduser().resolve()
 
 
+def process_listing_command(system: str | None = None) -> list[str]:
+    current = system or platform.system()
+    if current == "Windows":
+        return ["tasklist", "/FO", "CSV", "/NH"]
+    if current == "Darwin":
+        return ["ps", "-axo", "comm,args"]
+    return ["ps", "-eo", "comm,args"]
+
+
+def process_line_looks_like_codex(line: str) -> bool:
+    return bool(CODEX_PROCESS_NAME_PATTERN.search(line))
+
+
 def is_codex_running() -> bool:
     try:
         result = subprocess.run(
-            ["pgrep", "-f", CODEX_PROCESS_PATTERN],
-            stdout=subprocess.DEVNULL,
+            process_listing_command(),
+            stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=PROCESS_LIST_TIMEOUT_SECONDS,
             check=False,
         )
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return False
-    return result.returncode == 0
+    if result.returncode != 0:
+        return False
+    return any(
+        process_line_looks_like_codex(line)
+        for line in result.stdout.splitlines()
+    )
 
 
 def iter_jsonl(path: Path) -> Iterable[tuple[int, bytes, dict[str, Any]]]:

@@ -2,7 +2,12 @@
 
 ## Unreleased
 
+## 0.4.4 - 2026-06-05
+
+- Remove the macOS app-path assumption from Codex process detection.
+- Read the package version from `VERSION` and point security policy version text at the same file.
 - Add README header artwork and clarify the target Codex app.
+- Polish README prose and simplify Codex naming after the first OpenAI Codex mention.
 
 ## 0.4.3 - 2026-06-03
 

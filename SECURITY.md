@@ -4,7 +4,7 @@
 
 Only the latest release is supported.
 
-Current version: `0.4.0`
+Current version: see [VERSION](VERSION).
 
 ## Reporting A Vulnerability
 

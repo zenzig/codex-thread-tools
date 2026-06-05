@@ -1,6 +1,18 @@
 """Shared helpers for codex-thread-tools tools."""
 
-__version__ = "0.4.0"
+from pathlib import Path
+
+
+def _read_version() -> str:
+    try:
+        return (Path(__file__).resolve().parents[1] / "VERSION").read_text(
+            encoding="utf-8"
+        ).strip()
+    except OSError:
+        return "0.0.0"
+
+
+__version__ = _read_version()
 
 from codex_thread_tools.sessionlib import (
     KEEP_EVENT_TYPES,

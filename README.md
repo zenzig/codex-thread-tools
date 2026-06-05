@@ -5,7 +5,7 @@
 **Small tools and a Codex skill for keeping long OpenAI Codex threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.3-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.4-blue)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-1-brightgreen)](#skill)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](#testing)
 
@@ -17,7 +17,7 @@
 
 ## What This Is
 
-Current version: `0.4.3`
+Current version: `0.4.4`
 
 `codex-thread-tools` works with local session JSONL files under
 `~/.codex/sessions/`.

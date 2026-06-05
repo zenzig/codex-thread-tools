@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent / "sessions"
 VISUAL_ROOT = Path(__file__).resolve().parent / "visual_assets"
+# Fixed timestamps keep generated session fixtures deterministic.
 TS = "2026-05-24T12:00:00Z"
 TINY_PNG_BASE64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
