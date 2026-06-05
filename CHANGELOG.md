@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Add README header artwork and clarify that the tools target OpenAI Codex Desktop.
+- Add README header artwork and clarify the target Codex app.
 
 ## 0.4.3 - 2026-06-03
 

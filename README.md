@@ -2,7 +2,7 @@
 
 # codex-thread-tools
 
-**Small tools and a Codex skill for keeping long OpenAI Codex Desktop app threads healthy.**
+**Small tools and a Codex skill for keeping long OpenAI Codex threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.4.3-blue)](CHANGELOG.md)
@@ -19,10 +19,8 @@
 
 Current version: `0.4.3`
 
-`codex-thread-tools` is for the OpenAI Codex Desktop app and the local session
-JSONL files it writes under `~/.codex/sessions/`. Throughout this README,
-`Codex` means OpenAI Codex Desktop, not another app or project with the same
-name.
+`codex-thread-tools` works with local session JSONL files under
+`~/.codex/sessions/`.
 
 Codex can now keep long conversations alive with several compaction systems.
 That's good, but it doesn't mean a single thread should be treated as the
@@ -71,15 +69,15 @@ Use codex-thread-handoff to create a handoff before I start a new thread.
 
 ## Install The Skill
 
-OpenAI Codex Desktop creates `~/.codex/` when it runs. This repo assumes that
-directory already exists on the machine where you use these tools.
+Codex creates `~/.codex/` when it runs. This repo assumes that directory already
+exists on the machine where you use these tools.
 
 Codex skills live in `~/.codex/skills/`. Only the `skills` subfolder may need to
 be created. You can copy the bundled handoff skill there:
 
 ```bash
 if ! test -d ~/.codex; then
-  echo "Open OpenAI Codex Desktop once so ~/.codex exists, then retry."
+  echo "Open Codex once so ~/.codex exists, then retry."
   exit 1
 fi
 test -d ~/.codex/skills || mkdir ~/.codex/skills
@@ -91,7 +89,7 @@ immediately:
 
 ```bash
 if ! test -d ~/.codex; then
-  echo "Open OpenAI Codex Desktop once so ~/.codex exists, then retry."
+  echo "Open Codex once so ~/.codex exists, then retry."
   exit 1
 fi
 test -d ~/.codex/skills || mkdir ~/.codex/skills
@@ -182,7 +180,7 @@ A thread can still become unhealthy because:
   human-readable project notes
 - failed compaction can leave a thread unable to continue cleanly
 - legacy or malformed compacted records may not reconstruct well
-- the desktop app may still struggle to load a very large session file
+- Codex may still struggle to load a very large session file
 
 That's why this repo uses both health checks and handoffs.
 
