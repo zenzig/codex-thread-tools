@@ -2,12 +2,14 @@
 
 # codex-thread-tools
 
-**Small tools and a Codex skill for keeping long Codex threads healthy.**
+**Small tools and a Codex skill for keeping long OpenAI Codex Desktop app threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.4.3-blue)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-1-brightgreen)](#skill)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](#testing)
+
+<img src="assets/codex-thread-tools-header.png" alt="codex-thread-tools turns tangled Codex session threads into an organized spool" width="100%">
 
 </div>
 
@@ -17,9 +19,14 @@
 
 Current version: `0.4.3`
 
-Codex can now keep long conversations alive with several compaction systems. That
-is good, but it does not mean a single thread should be treated as the only
-place your project memory lives.
+`codex-thread-tools` is for the OpenAI Codex Desktop app and the local session
+JSONL files it writes under `~/.codex/sessions/`. Throughout this README,
+`Codex` means OpenAI Codex Desktop, not another app or project with the same
+name.
+
+Codex can now keep long conversations alive with several compaction systems.
+That is good, but it does not mean a single thread should be treated as the
+only place your project memory lives.
 
 This repo gives you four practical things:
 
@@ -64,10 +71,18 @@ Use codex-thread-handoff to create a handoff before I start a new thread.
 
 ## Install The Skill
 
-Codex skills live in `~/.codex/skills/`. You can copy the bundled handoff skill there:
+OpenAI Codex Desktop creates `~/.codex/` when it runs. This repo assumes that
+directory already exists on the machine where you use these tools.
+
+Codex skills live in `~/.codex/skills/`. Only the `skills` subfolder may need to
+be created. You can copy the bundled handoff skill there:
 
 ```bash
-mkdir -p ~/.codex/skills
+if ! test -d ~/.codex; then
+  echo "Open OpenAI Codex Desktop once so ~/.codex exists, then retry."
+  exit 1
+fi
+test -d ~/.codex/skills || mkdir ~/.codex/skills
 cp -R skills/codex-thread-handoff ~/.codex/skills/
 ```
 
@@ -75,7 +90,11 @@ For development, a symlink is easier because updates in this repo are used
 immediately:
 
 ```bash
-mkdir -p ~/.codex/skills
+if ! test -d ~/.codex; then
+  echo "Open OpenAI Codex Desktop once so ~/.codex exists, then retry."
+  exit 1
+fi
+test -d ~/.codex/skills || mkdir ~/.codex/skills
 ln -s "$(pwd)/skills/codex-thread-handoff" ~/.codex/skills/codex-thread-handoff
 ```
 

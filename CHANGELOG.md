@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add README header artwork and clarify that the tools target OpenAI Codex Desktop.
+
 ## 0.4.3 - 2026-06-03
 
 - Report sidecar-marked source sessions as top-level `RETIRED` instead of active `WARN` or `DANGER`.
