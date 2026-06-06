@@ -3,6 +3,7 @@
   "version": "0.4.5",
   "description": "CLI health checks, handoffs, visual archives, and recovery tools for OpenAI Codex session threads.",
   "license": "MIT",
+  "author": "Rich Olson",
   "type": "commonjs",
   "bin": {
     "codex-thread-tools": "bin/codex-thread-tools.js"

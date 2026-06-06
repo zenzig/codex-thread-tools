@@ -20,6 +20,7 @@ def test_package_metadata_is_publish_ready() -> None:
         package["description"]
         == "CLI health checks, handoffs, visual archives, and recovery tools for OpenAI Codex session threads."
     )
+    assert package["author"] == "Rich Olson"
     assert package["bin"]["codex-thread-tools"] == "bin/codex-thread-tools.js"
     assert package["license"] == "MIT"
     assert "codex" in package["keywords"]

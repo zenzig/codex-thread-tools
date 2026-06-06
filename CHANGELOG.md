@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add package author metadata for Rich Olson.
 - Improve README command guidance so `npx`, global npm install, and source
   checkout workflows are all documented clearly.
 - Reformat README sections with GitHub-supported tables, alerts, a Mermaid
