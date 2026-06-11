@@ -32,6 +32,9 @@ jobs:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
+      - name: Update npm
+        run: npm install -g npm@latest
+
       - name: Install test dependencies
         run: python -m pip install pytest
 
@@ -69,9 +72,7 @@ jobs:
           fi
 
       - name: Check package contents
-        run: npm publish --dry-run
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm pack --dry-run
 
       - name: Publish to npm
         shell: bash
@@ -79,5 +80,3 @@ jobs:
           set -euo pipefail
           npm_tag="${{ github.event.inputs.npm_tag || 'latest' }}"
           npm publish --provenance --access public --tag "$npm_tag"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

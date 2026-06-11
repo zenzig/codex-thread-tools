@@ -588,17 +588,27 @@ The tests don't depend on your real `~/.codex/sessions` folder.
 
 ## Publishing
 
-Publishing is handled through GitHub Actions so GitHub and npm releases stay in
-sync. Add an npm automation token as the repository secret `NPM_TOKEN`, then
-publish a GitHub release whose tag matches the package version, for example
+Publishing is handled through GitHub Actions and npm Trusted Publishing so
+GitHub and npm releases stay in sync without a long-lived npm token. Configure
+the `codex-thread-tools` package on npm with this trusted publisher:
+
+| Field | Value |
+| --- | --- |
+| Publisher | GitHub Actions |
+| Organization/user | `zenzig` |
+| Repository | `codex-thread-tools` |
+| Workflow filename | `publish-npm.yml` |
+
+Then publish a GitHub release whose tag matches the package version, for example
 `v0.4.6`. The `Publish npm package` workflow will:
 
 - verify `VERSION` and `package.json` match
 - verify the GitHub release tag matches the package version
 - run `python3 -m pytest`
 - check that the npm version has not already been published
-- run `npm publish --dry-run`
-- publish to npm with provenance
+- update npm to the latest CLI
+- run `npm pack --dry-run`
+- publish to npm with Trusted Publishing and provenance
 
 The workflow can also be run manually from the GitHub Actions tab. Ordinary
 pushes to `main` do not publish npm.
