@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -27,10 +27,11 @@ jobs:
           python-version: "3.11"
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
       - name: Update npm
         run: npm install -g npm@latest
@@ -75,15 +76,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          unset NODE_AUTH_TOKEN
-          unset NPM_CONFIG_USERCONFIG
           npm pack --dry-run
 
       - name: Publish to npm
         shell: bash
         run: |
           set -euo pipefail
-          unset NODE_AUTH_TOKEN
-          unset NPM_CONFIG_USERCONFIG
           npm_tag="${{ github.event.inputs.npm_tag || 'latest' }}"
           npm publish --provenance --access public --tag "$npm_tag"
