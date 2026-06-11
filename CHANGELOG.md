@@ -7,6 +7,8 @@
 - Improve `codex-thread-tools health` and `health tokens` human output with
   table-first display modes, readable standard-mode action summaries, and
   human-readable size formatting.
+- Add a GitHub Actions workflow for release-gated npm publishing with version
+  checks, tests, dry-run packaging, and npm provenance.
 - Add package author metadata for Rich Olson.
 - Improve README command guidance so `npx`, global npm install, and source
   checkout workflows are all documented clearly.

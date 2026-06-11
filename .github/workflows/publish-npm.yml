@@ -1,0 +1,83 @@
+name: Publish npm package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "npm dist-tag to publish"
+        required: true
+        default: "latest"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install test dependencies
+        run: python -m pip install pytest
+
+      - name: Verify package version
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          file_version="$(cat VERSION)"
+          if [[ "$package_version" != "$file_version" ]]; then
+            echo "package.json version ($package_version) does not match VERSION ($file_version)" >&2
+            exit 1
+          fi
+
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            release_tag="${{ github.event.release.tag_name }}"
+            release_version="${release_tag#v}"
+            if [[ "$release_version" != "$package_version" ]]; then
+              echo "GitHub release tag ($release_tag) does not match package version ($package_version)" >&2
+              exit 1
+            fi
+          fi
+
+      - name: Run tests
+        run: python3 -m pytest
+
+      - name: Check npm version availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          if npm view "codex-thread-tools@$package_version" version >/dev/null 2>&1; then
+            echo "codex-thread-tools@$package_version is already published" >&2
+            exit 1
+          fi
+
+      - name: Check package contents
+        run: npm publish --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_tag="${{ github.event.inputs.npm_tag || 'latest' }}"
+          npm publish --provenance --access public --tag "$npm_tag"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

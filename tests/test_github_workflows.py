@@ -1,0 +1,29 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github" / "workflows" / "publish-npm.yml"
+
+
+def test_npm_publish_workflow_is_release_gated() -> None:
+    workflow_text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "  release:\n    types: [published]" in workflow_text
+    assert "  workflow_dispatch:" in workflow_text
+    assert "  push:" not in workflow_text
+    assert "permissions:\n  contents: read\n  id-token: write" in workflow_text
+
+
+def test_npm_publish_workflow_verifies_and_publishes_package() -> None:
+    workflow_text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "publish-npm:" in workflow_text
+    assert "python3 -m pytest" in workflow_text
+    assert "npm publish --dry-run" in workflow_text
+    assert "npm publish --provenance --access public" in workflow_text
+    assert "secrets.NPM_TOKEN" in workflow_text
+    assert "VERSION" in workflow_text
+    assert "package.json" in workflow_text
+    assert "github.event.release.tag_name" in workflow_text

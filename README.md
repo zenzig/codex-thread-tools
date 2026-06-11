@@ -522,6 +522,9 @@ live session file.
 
 ```text
 codex-thread-tools/
+├── .github/
+│   └── workflows/
+│       └── publish-npm.yml
 ├── bin/
 │   └── codex-thread-tools.js
 ├── CHANGELOG.md
@@ -531,6 +534,7 @@ codex-thread-tools/
 ├── SECURITY.md
 ├── VERSION
 ├── codex_thread_tools/
+│   ├── display.py
 │   ├── sessionlib.py
 │   ├── sessionpaths.py
 │   ├── handoff_markers.py
@@ -544,6 +548,8 @@ codex-thread-tools/
 │       └── references/handoff-template.md
 ├── tests/
 │   ├── fixtures/
+│   ├── test_display.py
+│   ├── test_github_workflows.py
 │   ├── test_npm_package.py
 │   ├── test_thread_health.py
 │   └── test_visual_artifacts.py
@@ -579,6 +585,23 @@ python3 tests/fixtures/build_fixtures.py
 ```
 
 The tests don't depend on your real `~/.codex/sessions` folder.
+
+## Publishing
+
+Publishing is handled through GitHub Actions so GitHub and npm releases stay in
+sync. Add an npm automation token as the repository secret `NPM_TOKEN`, then
+publish a GitHub release whose tag matches the package version, for example
+`v0.4.6`. The `Publish npm package` workflow will:
+
+- verify `VERSION` and `package.json` match
+- verify the GitHub release tag matches the package version
+- run `python3 -m pytest`
+- check that the npm version has not already been published
+- run `npm publish --dry-run`
+- publish to npm with provenance
+
+The workflow can also be run manually from the GitHub Actions tab. Ordinary
+pushes to `main` do not publish npm.
 
 ---
 
