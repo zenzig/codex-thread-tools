@@ -72,11 +72,16 @@ jobs:
           fi
 
       - name: Check package contents
-        run: npm pack --dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset NODE_AUTH_TOKEN
+          npm pack --dry-run
 
       - name: Publish to npm
         shell: bash
         run: |
           set -euo pipefail
+          unset NODE_AUTH_TOKEN
           npm_tag="${{ github.event.inputs.npm_tag || 'latest' }}"
           npm publish --provenance --access public --tag "$npm_tag"

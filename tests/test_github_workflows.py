@@ -22,10 +22,11 @@ def test_npm_publish_workflow_verifies_and_publishes_package() -> None:
     assert "publish-npm:" in workflow_text
     assert "npm install -g npm@latest" in workflow_text
     assert "python3 -m pytest" in workflow_text
+    assert "unset NODE_AUTH_TOKEN" in workflow_text
     assert "npm pack --dry-run" in workflow_text
     assert "npm publish --provenance --access public" in workflow_text
     assert "secrets.NPM_TOKEN" not in workflow_text
-    assert "NODE_AUTH_TOKEN" not in workflow_text
+    assert "NODE_AUTH_TOKEN:" not in workflow_text
     assert "VERSION" in workflow_text
     assert "package.json" in workflow_text
     assert "github.event.release.tag_name" in workflow_text
