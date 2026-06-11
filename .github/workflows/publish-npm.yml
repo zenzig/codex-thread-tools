@@ -76,6 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           unset NODE_AUTH_TOKEN
+          unset NPM_CONFIG_USERCONFIG
           npm pack --dry-run
 
       - name: Publish to npm
@@ -83,5 +84,6 @@ jobs:
         run: |
           set -euo pipefail
           unset NODE_AUTH_TOKEN
+          unset NPM_CONFIG_USERCONFIG
           npm_tag="${{ github.event.inputs.npm_tag || 'latest' }}"
           npm publish --provenance --access public --tag "$npm_tag"

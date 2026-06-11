@@ -23,6 +23,7 @@ def test_npm_publish_workflow_verifies_and_publishes_package() -> None:
     assert "npm install -g npm@latest" in workflow_text
     assert "python3 -m pytest" in workflow_text
     assert "unset NODE_AUTH_TOKEN" in workflow_text
+    assert "unset NPM_CONFIG_USERCONFIG" in workflow_text
     assert "npm pack --dry-run" in workflow_text
     assert "npm publish --provenance --access public" in workflow_text
     assert "secrets.NPM_TOKEN" not in workflow_text
