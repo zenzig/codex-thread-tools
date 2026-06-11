@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,13 @@ if str(REPO_ROOT) not in sys.path:
 
 from codex_thread_tools.sessionlib import die, expand_path
 from codex_thread_tools.sessionpaths import default_session_root
+from codex_thread_tools.display import (
+    format_bytes,
+    format_count,
+    format_project,
+    render_table,
+    truncate_middle,
+)
 from codex_thread_tools.handoff_markers import (
     annotate_result_with_handoff_context,
     default_marker_file,
@@ -94,64 +102,99 @@ def format_reasons(reasons: list[str], indent: str = "  ") -> list[str]:
     return [f"{indent}Why: {reason}" for reason in reasons[:3]]
 
 
-def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
+def maybe_pretty(
+    result: dict[str, Any],
+    fmt: str,
+    mode: str = "standard",
+    size_format: str = "bytes",
+) -> str:
     if fmt == "json":
         return json.dumps(result, indent=2)
     if result.get("report_type") == "token_usage":
-        return tokens_pretty(result)
+        return tokens_pretty(result, mode=mode, size_format=size_format)
     if "projects" in result:
-        summary = result["summary"]
-        status = summary_status(summary)
-        lines = [
-            "Codex Thread Health",
-            f"Session folder: {result['session_root']}",
-            (
-                f"Overall: {status_label(status)} "
-                f"({summary['ok']} ok, {summary['warn']} warn, "
-                f"{summary['danger']} danger, {summary.get('retired', 0)} retired)"
-            ),
-            f"Next step: {next_step(status)}",
-            "",
-        ]
-        for item in result["projects"]:
-            lines.append(
-                f"{status_label(item['status'])}: {item['project']}"
-            )
-            lines.append(f"  Recommendation: {item['recommendation']}")
-            lines.append(f"  Continuation health: {status_label(item.get('continuation_status', item['status']))}")
-            lines.append(
-                "  Handoff readiness: "
-                f"{handoff_label(item.get('handoff_readiness', {}).get('status', ''))}"
-            )
-            handoff_summary = item.get("handoff_summary", {})
-            if handoff_summary.get("total_handoffs", 0):
-                latest = handoff_summary.get("latest_handoff_at") or "unknown"
-                lines.append(
-                    "  Handoffs: "
-                    f"{handoff_summary['total_handoffs']} total, latest {latest}"
-                )
-            if item.get("replaces_session_ids"):
-                lines.append(
-                    "  Replacement for: "
-                    f"{', '.join(item['replaces_session_ids'])}"
-                )
-            if item.get("retired_by_handoff"):
-                lines.append("  Session role: Retired by handoff")
-            if item.get("underlying_status"):
-                lines.append(f"  Underlying health: {status_label(item['underlying_status'])}")
-            lines.append(
-                "  Size: "
-                f"{item['metrics']['bytes']} bytes, "
-                f"{item['metrics']['response_items']} response items, "
-                f"{item['metrics']['compacted_records']} compacted checkpoints, "
-                f"{item['metrics']['visual_artifacts']} visual refs"
-            )
-            if item["status"] != "retired":
-                lines.extend(domain_lines(item.get("risk_domains", {}), indent="  "))
-            lines.extend(format_reasons(item["reasons"]))
-            lines.append(f"  File: {item['file']}")
-            lines.append("")
+        return projects_pretty(result, mode=mode, size_format=size_format)
+    return check_pretty(result, mode=mode, size_format=size_format)
+
+
+def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
+    summary = result["summary"]
+    status = summary_status(summary)
+    lines = [
+        "Codex Thread Health",
+        f"Session folder: {result['session_root']}",
+        (
+            f"Overall: {status_label(status)} "
+            f"({summary['ok']} ok, {summary['warn']} warn, "
+            f"{summary['danger']} danger, {summary.get('retired', 0)} retired)"
+        ),
+        f"Projects: {format_count(summary['projects'])}",
+        f"Next step: {next_step(status)}",
+    ]
+    if mode == "verbose":
+        if result["projects"]:
+            lines.extend(["", "Attention Required"])
+            for item in result["projects"]:
+                lines.extend(project_detail_lines(item, size_format=size_format))
+                lines.append("")
+        return "\n".join(lines).rstrip()
+
+    lines.extend(["", "Project Summary"])
+    lines.extend(render_project_table(result["projects"], size_format))
+    if mode == "compact":
         return "\n".join(lines)
+
+    detail_items = [
+        item
+        for item in result["projects"]
+        if item["status"] != "ok" or has_handoff_metadata(item)
+    ]
+    if detail_items:
+        lines.extend(["", "Action Summary"])
+        lines.extend(render_action_summary(detail_items))
+    return "\n".join(lines).rstrip()
+
+
+def check_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
+    if mode == "verbose":
+        return check_verbose(result, size_format=size_format)
+
+    lines = [
+        "Codex Thread Health",
+        f"Overall: {status_label(result['status'])}",
+        f"Next step: {next_step(result['status'])}",
+    ]
+    if mode != "compact" and result["status"] != "retired":
+        lines.extend(["", "Domain Risks"])
+        lines.extend(render_domain_table(result.get("risk_domains", {})))
+    key_facts = [
+        f"Recommendation: {result['recommendation']}",
+        f"Continuation health: {status_label(result.get('continuation_status', result['status']))}",
+        (
+            "Handoff readiness: "
+            f"{handoff_label(result.get('handoff_readiness', {}).get('status', ''))}"
+        ),
+        handoff_summary_line(result),
+        replacement_line(result),
+        retired_line(result),
+        underlying_health_line(result),
+        f"Project: {result['project']}",
+        f"File: {result['file']}",
+        f"Size: {size_summary(result['metrics'], size_format)}",
+    ]
+    lines.extend(
+        [
+            "",
+            "Key Facts",
+            *[line for line in key_facts if line],
+        ]
+    )
+    if mode != "compact":
+        lines.extend(["", *format_reasons(result["reasons"], indent="")])
+    return "\n".join(lines)
+
+
+def check_verbose(result: dict[str, Any], size_format: str) -> str:
     lines = [
         "Codex Thread Health",
         f"Overall: {status_label(result['status'])}",
@@ -168,18 +211,165 @@ def maybe_pretty(result: dict[str, Any], fmt: str) -> str:
         underlying_health_line(result),
         f"Project: {result['project']}",
         f"File: {result['file']}",
-        (
-            "Size: "
-            f"{result['metrics']['bytes']} bytes, "
-            f"{result['metrics']['response_items']} response items, "
-            f"{result['metrics']['compacted_records']} compacted checkpoints, "
-            f"{result['metrics']['visual_artifacts']} visual refs"
-        ),
+        f"Size: {size_summary(result['metrics'], size_format)}",
     ]
     if result["status"] != "retired":
         lines.extend(domain_lines(result.get("risk_domains", {})))
     lines.extend(format_reasons(result["reasons"], indent=""))
     return "\n".join(line for line in lines if line)
+
+
+def render_project_table(projects: list[dict[str, Any]], size_format: str) -> list[str]:
+    rows = []
+    for item in projects:
+        rows.append(
+            [
+                status_label(item["status"]),
+                format_project(item["project"], 24),
+                format_bytes(item["metrics"]["bytes"], size_format),
+                format_count(item["metrics"]["response_items"]),
+                format_count(item["metrics"]["compacted_records"]),
+                format_count(item["metrics"]["visual_artifacts"]),
+                handoff_label(item.get("handoff_readiness", {}).get("status", "")),
+            ]
+        )
+    return render_table(
+        (
+            "Status",
+            "Project",
+            "Size",
+            "Items",
+            "Compactions",
+            "Visuals",
+            "Handoff",
+        ),
+        rows,
+    )
+
+
+def project_detail_lines(item: dict[str, Any], *, size_format: str) -> list[str]:
+    lines = [
+        f"{status_label(item['status'])}: {item['project']}",
+        f"  Recommendation: {item['recommendation']}",
+        f"  Continuation health: {status_label(item.get('continuation_status', item['status']))}",
+        (
+            "  Handoff readiness: "
+            f"{handoff_label(item.get('handoff_readiness', {}).get('status', ''))}"
+        ),
+    ]
+    handoff_summary = item.get("handoff_summary", {})
+    if handoff_summary.get("total_handoffs", 0):
+        latest = handoff_summary.get("latest_handoff_at") or "unknown"
+        lines.append(
+            "  Handoffs: "
+            f"{handoff_summary['total_handoffs']} total, latest {latest}"
+        )
+    if item.get("replaces_session_ids"):
+        lines.append(f"  Replacement for: {', '.join(item['replaces_session_ids'])}")
+    if item.get("retired_by_handoff"):
+        lines.append("  Session role: Retired by handoff")
+    if item.get("underlying_status"):
+        lines.append(f"  Underlying health: {status_label(item['underlying_status'])}")
+    lines.append(f"  Size: {size_summary(item['metrics'], size_format)}")
+    if item["status"] != "retired":
+        lines.extend(domain_lines(item.get("risk_domains", {}), indent="  "))
+    lines.extend(format_reasons(item["reasons"]))
+    lines.append(f"  File: {item['file']}")
+    return lines
+
+
+def render_action_summary(projects: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for item in projects:
+        if lines:
+            lines.append("")
+        lines.append(f"{status_label(item['status'])}: {format_project(item['project'], 56)}")
+        lines.append(f"  Action: {action_for_item(item)}")
+        lines.append("  Why:")
+        for reason in action_reasons(item):
+            lines.extend(wrap_bullet(reason, width=100, initial_indent="    - ", subsequent_indent="      "))
+    return lines
+
+
+def action_for_item(item: dict[str, Any]) -> str:
+    status = item["status"]
+    if status == "danger":
+        return "Handoff now"
+    if status == "warn":
+        return "Monitor"
+    if status == "retired":
+        return "Use replacement"
+    if has_handoff_metadata(item):
+        return "Continue"
+    return "Continue"
+
+
+def action_reasons(item: dict[str, Any]) -> list[str]:
+    pieces: list[str] = []
+    summary = item.get("handoff_summary", {})
+    if summary.get("total_handoffs", 0):
+        pieces.append(f"Handoffs: {summary['total_handoffs']} total")
+    if item.get("replaces_session_ids"):
+        pieces.append(f"Replacement for: {', '.join(item['replaces_session_ids'])}")
+    if item.get("retired_by_handoff"):
+        pieces.append("Retired by handoff")
+    if item.get("underlying_status"):
+        pieces.append(f"Underlying health: {status_label(item['underlying_status'])}")
+    pieces.extend(item.get("reasons") or [])
+    return pieces or ["none"]
+
+
+def wrap_bullet(
+    value: str,
+    *,
+    width: int,
+    initial_indent: str,
+    subsequent_indent: str,
+) -> list[str]:
+    return textwrap.wrap(
+        value,
+        width=width,
+        initial_indent=initial_indent,
+        subsequent_indent=subsequent_indent,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+
+
+def has_handoff_metadata(item: dict[str, Any]) -> bool:
+    summary = item.get("handoff_summary", {})
+    return bool(
+        summary.get("total_handoffs", 0)
+        or item.get("replaces_session_ids")
+        or item.get("retired_by_handoff")
+        or item.get("underlying_status")
+    )
+
+
+def render_domain_table(risk_domains: dict[str, dict[str, Any]]) -> list[str]:
+    rows = []
+    for name in ("load", "visuals", "compaction", "limits", "continuity"):
+        details = risk_domains.get(name)
+        if not details:
+            continue
+        evidence = "; ".join(details.get("evidence", [])[:2]) or "none"
+        rows.append([name.replace("_", " ").title(), status_label(details["status"]), evidence])
+    return render_table(("Domain", "Status", "Evidence"), rows)
+
+
+def reason_bullets(reasons: list[str]) -> list[str]:
+    if not reasons:
+        return ["- no risk signals found"]
+    return [f"- {reason}" for reason in reasons[:3]]
+
+
+def size_summary(metrics: dict[str, Any], size_format: str) -> str:
+    return (
+        f"{format_bytes(metrics['bytes'], size_format)}, "
+        f"{format_count(metrics['response_items'])} response items, "
+        f"{format_count(metrics['compacted_records'])} compacted checkpoints, "
+        f"{format_count(metrics['visual_artifacts'])} visual refs"
+    )
 
 
 def summary_status(summary: dict[str, int]) -> str:
@@ -222,28 +412,36 @@ def underlying_health_line(result: dict[str, Any]) -> str:
 
 
 def token_value(value: Any) -> str:
-    if value is None:
-        return "not recorded"
-    return str(value)
+    return format_count(value)
 
 
-def tokens_pretty(result: dict[str, Any]) -> str:
+def tokens_pretty(
+    result: dict[str, Any],
+    mode: str = "standard",
+    size_format: str = "bytes",
+) -> str:
+    del size_format
     summary = result["summary"]
     lines = [
         "Codex Project Token Usage",
         f"Session folder: {result['session_root']}",
         (
-            f"Projects: {summary['projects']} "
-            f"({summary['projects_with_token_usage']} with token usage)"
+            f"Projects: {format_count(summary['projects'])} "
+            f"({format_count(summary['projects_with_token_usage'])} with token usage)"
         ),
         (
-            f"Sessions: {summary['sessions']} "
-            f"({summary['sessions_with_token_usage']} with token usage)"
+            f"Sessions: {format_count(summary['sessions'])} "
+            f"({format_count(summary['sessions_with_token_usage'])} with token usage)"
         ),
-        f"Reported lifetime tokens: {summary['reported_lifetime_tokens']}",
+        f"Reported lifetime tokens: {format_count(summary['reported_lifetime_tokens'])}",
         "Note: token totals come from Codex-persisted token_count events.",
         "",
     ]
+    if mode != "verbose":
+        lines.append("Project Token Summary")
+        lines.extend(render_token_table(result["projects"]))
+        return "\n".join(lines)
+
     for item in result["projects"]:
         active_percent = item["latest_active_context_percent"]
         active_text = (
@@ -257,12 +455,38 @@ def tokens_pretty(result: dict[str, Any]) -> str:
         lines.append(f"  Latest active tokens: {token_value(item['latest_active_tokens'])}")
         lines.append(f"  Active context: {active_text}")
         token_events = sum(source["token_count_events"] for source in item["sources"])
-        lines.append(f"  Token events: {token_events}")
+        lines.append(f"  Token events: {format_count(token_events)}")
         if item["latest_token_timestamp"]:
             lines.append(f"  Latest token event: {item['latest_token_timestamp']}")
         lines.append(f"  Latest file: {item['latest_file']}")
         lines.append("")
     return "\n".join(lines)
+
+
+def render_token_table(projects: list[dict[str, Any]]) -> list[str]:
+    rows = []
+    for item in projects:
+        active_percent = item["latest_active_context_percent"]
+        active_text = (
+            f"{active_percent}%"
+            if isinstance(active_percent, (int, float))
+            else "not recorded"
+        )
+        token_events = sum(source["token_count_events"] for source in item["sources"])
+        rows.append(
+            [
+                format_project(item["project"], 46),
+                token_value(item["lifetime_tokens"]),
+                f"{format_count(item['sessions'])} ({format_count(item['sessions_with_token_usage'])})",
+                token_value(item["latest_active_tokens"]),
+                active_text,
+                format_count(token_events),
+            ]
+        )
+    return render_table(
+        ("Project", "Lifetime", "Sessions", "Active", "Context", "Events"),
+        rows,
+    )
 
 
 def ensure_file(path: Path) -> None:
@@ -278,12 +502,12 @@ def check_command(args: argparse.Namespace) -> int:
         assert_safe_test_root(source)
     ensure_file(source)
 
-    progress(args, f"Analyzing session: {source} ({source.stat().st_size} bytes)")
+    progress(args, f"Analyzing session: {source} ({format_bytes(source.stat().st_size, args.size_format)})")
     result = analyze_session_file(source, apply_threshold_overrides(args))
     markers = handoff_markers_for_args(args)
     replacements = replacement_prompt_markers([source])
     annotate_result_with_handoff_context(result, markers, replacements)
-    print(maybe_pretty(result, args.format))
+    print(maybe_pretty(result, args.format, args.mode, args.size_format))
     return exit_code_for_status(result["status"])
 
 
@@ -310,7 +534,7 @@ def projects_command(args: argparse.Namespace) -> int:
         annotate_result_with_handoff_context(project, markers, replacements)
     summary = aggregate_project_results(projects)
     result = {"session_root": str(session_root), "summary": summary, "projects": projects}
-    print(maybe_pretty(result, args.format))
+    print(maybe_pretty(result, args.format, args.mode, args.size_format))
     if summary["danger"]:
         return 3
     if summary["warn"]:
@@ -338,7 +562,7 @@ def tokens_command(args: argparse.Namespace) -> int:
     result = project_token_usage_report(project_results)
     result["report_type"] = "token_usage"
     result["session_root"] = str(session_root)
-    print(maybe_pretty(result, args.format))
+    print(maybe_pretty(result, args.format, args.mode, args.size_format))
     return 0
 
 
@@ -354,6 +578,18 @@ def add_threshold_args(parser: argparse.ArgumentParser) -> None:
         help="refuse to read from ~/.codex/sessions; intended for fixture and scratch runs",
     )
     parser.add_argument("--format", choices=("json", "pretty"), default="pretty")
+    parser.add_argument(
+        "--mode",
+        choices=("compact", "standard", "verbose"),
+        default="standard",
+        help="pretty output detail level; ignored for JSON output",
+    )
+    parser.add_argument(
+        "--size-format",
+        choices=("bytes", "human", "both"),
+        default="bytes",
+        help="size display for pretty output and progress messages",
+    )
     parser.add_argument(
         "--json",
         action="store_const",
@@ -389,7 +625,7 @@ def analyze_with_progress(
     total: int,
     thresholds: HealthThresholds,
 ) -> dict[str, Any]:
-    progress(args, f"[{index}/{total}] {path} ({path.stat().st_size} bytes)")
+    progress(args, f"[{index}/{total}] {path} ({format_bytes(path.stat().st_size, args.size_format)})")
     return analyze_session_file(path, thresholds)
 
 

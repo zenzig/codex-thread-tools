@@ -5,7 +5,7 @@
 **Small tools and a Codex skill for keeping long OpenAI Codex threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.5-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.6-blue)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-1-brightgreen)](#skill)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](#testing)
 
@@ -17,7 +17,7 @@
 
 ## What This Is
 
-Current version: `0.4.5`
+Current version: `0.4.6`
 
 `codex-thread-tools` works with local session JSONL files under
 `~/.codex/sessions/`.
@@ -310,6 +310,25 @@ terminal or editor hides stderr, force progress output with:
 codex-thread-tools health --progress always
 ```
 
+The default human report is table-first and uses raw byte counts so exact sizes
+remain visible. Standard mode shows a project summary table plus readable action
+summaries with full reasons for sessions that need attention. Use compact mode
+when you want only the dashboard:
+
+```bash
+codex-thread-tools health --mode compact
+```
+
+Use verbose mode when you want the full diagnostic blocks, domain evidence, and
+session file paths. Add human-readable sizes when byte counts are hard to scan:
+
+```bash
+codex-thread-tools health --mode verbose --size-format both
+```
+
+`--size-format` accepts `bytes`, `human`, or `both`. JSON output ignores the
+pretty display mode and remains the stable scripting interface.
+
 It looks at:
 
 - session file size
@@ -388,6 +407,12 @@ To estimate Codex-persisted lifetime token usage by project:
 codex-thread-tools health tokens
 ```
 
+You can choose the same display modes for token reports:
+
+```bash
+codex-thread-tools health tokens --mode standard
+```
+
 The token report scans all session JSONL files under `~/.codex/sessions/`,
 groups them by project, and sums the latest cumulative `token_count` total from
 each token-bearing session. It also shows the latest active token estimate and
@@ -399,14 +424,12 @@ Example output:
 Codex Project Token Usage
 Projects: 10 (10 with token usage)
 Sessions: 278 (273 with token usage)
-Reported lifetime tokens: 6444312107
+Reported lifetime tokens: 6,444,312,107
 
-/Users/you/project
-  Lifetime tokens: 2836762422
-  Sessions: 123 (119 with token usage)
-  Latest active tokens: 122268
-  Active context: 47.32%
-  Token events: 24687
+Project Token Summary
+Project             Lifetime       Sessions   Active    Context  Events
+------------------  -------------  ---------  --------  -------  ------
+/Users/you/project  2,836,762,422  123 (119)  122,268   47.32%   24,687
 ```
 
 Use JSON when you want the per-session source records behind each project total:

@@ -22,6 +22,12 @@ def run_health(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def assert_json_stdout(result: subprocess.CompletedProcess[str]) -> dict:
+    assert "Codex Thread Health" not in result.stdout
+    assert "Codex Project Token Usage" not in result.stdout
+    return json.loads(result.stdout)
+
+
 def write_session(path: Path, records: list[dict], mtime: float | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -291,6 +297,20 @@ def test_projects_reports_replacement_thread_when_source_was_handed_off(tmp_path
     assert project_payload["handoff_summary"]["retired_source_sessions"] == 1
     assert project_payload["handoff_summary"]["latest_handoff_file"] == handoff_file
 
+    pretty = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--handoff-marker-file",
+        str(marker_file),
+        "--safe-test-mode",
+    )
+
+    assert pretty.returncode == 0, pretty.stderr
+    assert "Action Summary" in pretty.stdout
+    assert "Handoffs: 1 total" in pretty.stdout
+    assert "Replacement for: old-session" in pretty.stdout
+
 
 def test_projects_reports_backfilled_sidecar_replacement_thread(tmp_path: Path) -> None:
     session_root = tmp_path / "sessions"
@@ -440,6 +460,7 @@ def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -
     assert pretty.returncode == 0
     assert "Overall: RETIRED" in pretty.stdout
     assert "Underlying health: DANGER" in pretty.stdout
+    assert "Session role: Retired by handoff" in pretty.stdout
     assert "Domain risks:" not in pretty.stdout
     assert "Why: session was retired by completed handoff" in pretty.stdout
 
@@ -511,8 +532,10 @@ def test_projects_with_only_retired_sessions_exit_ok(tmp_path: Path) -> None:
 
     assert pretty.returncode == 0, pretty.stderr
     assert "Overall: RETIRED (0 ok, 0 warn, 0 danger, 1 retired)" in pretty.stdout
-    assert "RETIRED: /work/retired-only-project" in pretty.stdout
-    assert "  Underlying health: DANGER" in pretty.stdout
+    assert "RETIRED" in pretty.stdout
+    assert "/work/retired-only-project" in pretty.stdout
+    assert "Action Summary" in pretty.stdout
+    assert "Underlying health: DANGER" in pretty.stdout
     assert "  Domain risks:" not in pretty.stdout
 
 
@@ -543,8 +566,203 @@ def test_projects_default_output_is_human_readable() -> None:
     assert result.returncode == 3
     assert "Codex Thread Health" in result.stdout
     assert "Overall: DANGER" in result.stdout
+    assert "Projects: 11" in result.stdout
     assert "Next step: Create a handoff" in result.stdout
+    assert "Project Summary" in result.stdout
+    assert "Status" in result.stdout
+    assert "Project" in result.stdout
+    assert "Size" in result.stdout
+    assert "Items" in result.stdout
+    assert "Compactions" in result.stdout
+    assert "Visuals" in result.stdout
+    assert "Handoff" in result.stdout
+    assert "Top reason" not in result.stdout
+    assert "Action Summary" in result.stdout
+    assert "Action" in result.stdout
+    assert "Why" in result.stdout
+    assert "DANGER  /work/project-c" in result.stdout
+    assert "WARN    /work/project-visual" in result.stdout
+    assert "OK      /work/project-a" in result.stdout
+    assert "Recommendation:" not in result.stdout
+    assert "Continuation health:" not in result.stdout
+    assert "Handoff readiness:" not in result.stdout
+    assert "Domain risks:" not in result.stdout
+    assert "File:" not in result.stdout
     assert "/work/project-c" in result.stdout
+    summary_table = result.stdout.split("Project Summary\n", 1)[1].split(
+        "\n\nAction Summary",
+        1,
+    )[0]
+    assert max(len(line) for line in summary_table.splitlines()) <= 120
+
+
+def test_projects_table_prioritizes_project_name_for_long_paths(tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    session = session_root / "2026" / "06" / "10" / "long-path.jsonl"
+    project = "/Users/richolson/Documents/Atomic Mail Server"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-06-10T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "long-path", "cwd": project},
+            },
+            {
+                "timestamp": "2026-06-10T12:00:00Z",
+                "type": "turn_context",
+                "payload": {"cwd": project, "model": "gpt-5.5"},
+            },
+            {
+                "timestamp": "2026-06-10T12:00:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "ok"}],
+                },
+            },
+        ],
+    )
+
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--safe-test-mode",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert ".../Atomic Mail Server" in result.stdout
+    assert "/Users/r...Mail Server" not in result.stdout
+
+
+def test_projects_action_summary_expands_full_reasons() -> None:
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(FIXTURES),
+        "--safe-test-mode",
+        "--warn-items",
+        "20",
+        "--danger-items",
+        "40",
+    )
+
+    assert result.returncode == 3
+    action_summary = result.stdout.split("\n\nAction Summary\n", 1)[1]
+    assert "WARN: /work/project-visual" in action_summary
+    assert "  Action: Monitor" in action_summary
+    assert "  Why:" in action_summary
+    assert "- visual references exist inside compacted replacement history" in action_summary
+    assert (
+        "- compaction failure or context-window error event was recorded"
+        in action_summary
+    )
+    assert "visual references ex..." not in action_summary
+    assert "compaction failure o..." not in action_summary
+
+
+def test_projects_verbose_keeps_diagnostic_blocks() -> None:
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(FIXTURES),
+        "--safe-test-mode",
+        "--mode",
+        "verbose",
+        "--warn-items",
+        "20",
+        "--danger-items",
+        "40",
+    )
+
+    assert result.returncode == 3
+    assert "Attention Required" in result.stdout
+    assert "Project Summary" not in result.stdout
+    assert "Action Summary" not in result.stdout
+    assert "Recommendation:" in result.stdout
+    assert "Continuation health:" in result.stdout
+    assert "Handoff readiness:" in result.stdout
+    assert "Domain risks:" in result.stdout
+    assert "File:" in result.stdout
+
+
+def test_health_output_modes_parse_for_all_commands() -> None:
+    for mode in ("compact", "standard", "verbose"):
+        check = run_health(
+            "check",
+            str(FIXTURES / "healthy.jsonl"),
+            "--safe-test-mode",
+            "--mode",
+            mode,
+        )
+        assert check.returncode == 0, check.stderr
+        assert "Codex Thread Health" in check.stdout
+
+        projects = run_health(
+            "projects",
+            "--session-root",
+            str(FIXTURES),
+            "--safe-test-mode",
+            "--mode",
+            mode,
+            "--warn-items",
+            "20",
+            "--danger-items",
+            "40",
+        )
+        assert projects.returncode == 3, projects.stderr
+        assert "Codex Thread Health" in projects.stdout
+
+        tokens = run_health(
+            "tokens",
+            "--session-root",
+            str(FIXTURES),
+            "--safe-test-mode",
+            "--mode",
+            mode,
+        )
+        assert tokens.returncode == 0, tokens.stderr
+        assert "Codex Project Token Usage" in tokens.stdout
+
+
+def test_size_format_applies_to_health_output() -> None:
+    human = run_health(
+        "check",
+        str(FIXTURES / "healthy.jsonl"),
+        "--safe-test-mode",
+        "--size-format",
+        "human",
+    )
+    both = run_health(
+        "check",
+        str(FIXTURES / "healthy.jsonl"),
+        "--safe-test-mode",
+        "--size-format",
+        "both",
+    )
+
+    assert human.returncode == 0, human.stderr
+    assert "bytes" not in human.stdout
+    assert "MiB" in human.stdout or "KiB" in human.stdout
+    assert both.returncode == 0, both.stderr
+    assert "bytes)" in both.stdout
+    assert "MiB" in both.stdout or "KiB" in both.stdout
+
+
+def test_format_json_alias_keeps_stdout_machine_readable() -> None:
+    result = run_health(
+        "check",
+        str(FIXTURES / "healthy.jsonl"),
+        "--safe-test-mode",
+        "--format",
+        "json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = assert_json_stdout(result)
+    assert payload["status"] == "ok"
 
 
 def test_options_only_defaults_to_projects_scan() -> None:
@@ -563,26 +781,62 @@ def test_options_only_defaults_to_projects_scan() -> None:
     assert "Session folder:" in result.stdout
 
 
-def test_projects_progress_can_be_forced_to_stderr() -> None:
-    result = run_health(
-        "projects",
-        "--session-root",
-        str(FIXTURES),
+def test_json_stdout_stays_clean_when_progress_is_forced() -> None:
+    commands = [
+        (
+            "check",
+            str(FIXTURES / "healthy.jsonl"),
+            "--safe-test-mode",
+        ),
+        (
+            "projects",
+            "--session-root",
+            str(FIXTURES),
+            "--safe-test-mode",
+            "--warn-items",
+            "20",
+            "--danger-items",
+            "40",
+        ),
+        (
+            "tokens",
+            "--session-root",
+            str(FIXTURES),
+            "--safe-test-mode",
+        ),
+    ]
+
+    for command in commands:
+        result = run_health(*command, "--json", "--progress", "always")
+        assert result.returncode in {0, 2, 3}, result.stderr
+        assert_json_stdout(result)
+        assert result.stderr
+
+
+def test_progress_uses_size_format() -> None:
+    bytes_result = run_health(
+        "check",
+        str(FIXTURES / "healthy.jsonl"),
         "--safe-test-mode",
-        "--json",
         "--progress",
         "always",
-        "--warn-items",
-        "20",
-        "--danger-items",
-        "40",
+    )
+    human_result = run_health(
+        "check",
+        str(FIXTURES / "healthy.jsonl"),
+        "--safe-test-mode",
+        "--progress",
+        "always",
+        "--size-format",
+        "human",
     )
 
-    assert result.returncode == 3
-    json.loads(result.stdout)
-    assert "Finding active sessions under:" in result.stderr
-    assert "Analyzing 11 active project session(s)" in result.stderr
-    assert "[1/11]" in result.stderr
+    assert bytes_result.returncode == 0, bytes_result.stderr
+    assert " bytes)" in bytes_result.stderr
+    assert "," in bytes_result.stderr
+    assert human_result.returncode == 0, human_result.stderr
+    assert " bytes)" not in human_result.stderr
+    assert "KiB)" in human_result.stderr or "MiB)" in human_result.stderr
 
 
 def test_discussion_of_compaction_failure_is_not_a_failure_signal() -> None:
@@ -801,12 +1055,20 @@ def test_pretty_output_includes_domain_breakdown() -> None:
     )
 
     assert result.returncode == 3
-    assert "Domain risks:" in result.stdout
+    assert "Domain Risks" in result.stdout
+    assert "Key Facts" in result.stdout
+    assert result.stdout.index("Domain Risks") < result.stdout.index("Key Facts")
+    assert "\n\nKey Facts\n" in result.stdout
+    assert "\n\nWhy:" in result.stdout
+    assert "Status" in result.stdout
+    assert "DANGER" in result.stdout
     assert "Continuation health: DANGER" in result.stdout
     assert "Handoff readiness: Needed" in result.stdout
-    assert "Visuals: OK" in result.stdout
-    assert "Compaction: DANGER" in result.stdout
-    assert "Continuity: DANGER" in result.stdout
+    assert "Visuals" in result.stdout
+    assert "Compaction" in result.stdout
+    assert "Continuity" in result.stdout
+    assert "Why" in result.stdout
+    assert "File:" in result.stdout
 
 
 def test_task_started_and_task_complete_aliases_are_counted() -> None:
@@ -968,7 +1230,30 @@ def test_tokens_pretty_output_is_human_readable() -> None:
 
     assert result.returncode == 0, result.stderr
     assert "Codex Project Token Usage" in result.stdout
-    assert "Reported lifetime tokens: 2353000" in result.stdout
+    assert "Reported lifetime tokens: 2,353,000" in result.stdout
+    assert "Project Token Summary" in result.stdout
+    assert "Project" in result.stdout
+    assert "Lifetime" in result.stdout
+    assert "Active" in result.stdout
+    assert "Context" in result.stdout
+    assert "Events" in result.stdout
     assert "/work/project-f" in result.stdout
-    assert "Lifetime tokens: 2100000" in result.stdout
-    assert "Active context: 15.48%" in result.stdout
+    assert "2,100,000" in result.stdout
+    assert "15.48%" in result.stdout
+    assert "not recorded" in result.stdout
+
+
+def test_tokens_verbose_output_keeps_latest_file_details() -> None:
+    result = run_health(
+        "tokens",
+        "--session-root",
+        str(FIXTURES),
+        "--safe-test-mode",
+        "--mode",
+        "verbose",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Latest file:" in result.stdout
+    assert "Token events: 0" in result.stdout
+    assert "not recorded" in result.stdout

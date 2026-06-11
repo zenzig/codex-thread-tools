@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.6 - 2026-06-11
+
+- Improve `codex-thread-tools health` and `health tokens` human output with
+  table-first display modes, readable standard-mode action summaries, and
+  human-readable size formatting.
 - Add package author metadata for Rich Olson.
 - Improve README command guidance so `npx`, global npm install, and source
   checkout workflows are all documented clearly.
