@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.7 - 2026-06-26
+
+- Clarify the difference between Codex remote host handoff and this repo's
+  repo-backed `codex-thread-handoff` continuity workflow.
+
 ## 0.4.6 - 2026-06-11
 
 - Improve `codex-thread-tools health` and `health tokens` human output with

@@ -5,7 +5,7 @@
 **Small tools and a Codex skill for keeping long OpenAI Codex threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.6-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.7-blue)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-1-brightgreen)](#skill)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](#testing)
 
@@ -17,7 +17,7 @@
 
 ## What This Is
 
-Current version: `0.4.6`
+Current version: `0.4.7`
 
 `codex-thread-tools` works with local session JSONL files under
 `~/.codex/sessions/`.
@@ -198,6 +198,24 @@ flowchart LR
   D --> F
   F --> G["Continue from durable repo notes"]
 ```
+
+### Codex remote handoff is different
+
+Codex also has a remote-connections handoff feature that moves the same active
+thread and its Git state between your local computer and a connected remote
+host. That's useful when you want to keep working in the same thread, but run it
+somewhere else. See the
+[Codex remote connections docs](https://developers.openai.com/codex/remote-connections#hand-off-a-thread-between-hosts).
+
+`codex-thread-handoff` is for a different problem: retiring or rotating a
+large, risky, or completed project thread while preserving durable project
+context in your repository. It writes a handoff file, records health findings,
+captures visual archive decisions, and gives you the prompt and markers needed
+to start a fresh thread with the right project context.
+
+You can use both together. Use Codex remote handoff for host placement. Use
+`codex-thread-tools` for thread health, repo-backed continuity, and safer
+thread rotation.
 
 ---
 
@@ -600,7 +618,7 @@ the `codex-thread-tools` package on npm with this trusted publisher:
 | Workflow filename | `publish-npm.yml` |
 
 Then publish a GitHub release whose tag matches the package version, for example
-`v0.4.6`. The `Publish npm package` workflow will:
+`v0.4.7`. The `Publish npm package` workflow will:
 
 - verify `VERSION` and `package.json` match
 - verify the GitHub release tag matches the package version

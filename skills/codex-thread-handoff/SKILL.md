@@ -9,6 +9,11 @@ description: Use when a user asks to hand off, preserve project context, finish 
 
 Move durable project memory out of the chat log and into the repository or workspace before a thread becomes too large to load, compact, or continue.
 
+This is a repo-backed continuity handoff, not Codex remote host handoff. If the
+user wants to move the same active thread between local and remote hosts, use
+Codex's remote connection handoff flow instead. Use this skill when the user
+wants durable project context for a fresh or replacement thread.
+
 ## Default
 
 When invoked, perform the workflow. Ask only if the project root is unclear, a write would overwrite an existing handoff, the active session file is needed for visual archiving, or the user must choose an archive location.
