@@ -87,9 +87,13 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
         "compacted_payload_percent": 0.0,
         "latest_compacted_timestamp": "",
         "latest_compaction_has_replacement_history": False,
+        "latest_compaction_installed": False,
+        "latest_compaction_state": "none",
         "legacy_compacted_records": 0,
+        "installed_compaction_checkpoints": 0,
         "max_replacement_history_items": 0,
         "max_replacement_history_bytes": 0,
+        "compaction_request_items": 0,
         "compaction_items": 0,
         "context_compaction_items": 0,
         "compaction_triggers": 0,
@@ -99,6 +103,9 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
         "turn_started_events": 0,
         "turn_complete_events": 0,
         "turn_aborted_events": 0,
+        "turn_terminal_events": 0,
+        "incomplete_turn_events": 0,
+        "latest_turn_event": "",
         "error_events": 0,
         "recovered_turn_error_events": 0,
         "unresolved_turn_error_events": 0,
@@ -129,6 +136,7 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
     project = ""
     session_id = ""
     turn_error_events_since_last_success = 0
+    open_turn_events = 0
 
     for line_no, raw, record in iter_jsonl(path):
         metrics["total_records"] += 1
@@ -157,11 +165,16 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
             if replacement is None:
                 metrics["legacy_compacted_records"] += 1
                 metrics["latest_compaction_has_replacement_history"] = False
+                metrics["latest_compaction_installed"] = False
+                metrics["latest_compaction_state"] = "legacy"
             else:
                 replacement_bytes = len(
                     json.dumps(replacement, separators=(",", ":")).encode("utf-8")
                 )
                 metrics["latest_compaction_has_replacement_history"] = True
+                metrics["latest_compaction_installed"] = True
+                metrics["latest_compaction_state"] = "installed"
+                metrics["installed_compaction_checkpoints"] += 1
                 metrics["max_replacement_history_items"] = max(
                     metrics["max_replacement_history_items"],
                     len(replacement),
@@ -175,12 +188,21 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
             if ptype == "message":
                 metrics["response_messages"] += 1
             elif ptype == "compaction":
+                metrics["compaction_request_items"] += 1
                 metrics["compaction_items"] += 1
+                metrics["latest_compaction_installed"] = False
+                metrics["latest_compaction_state"] = "request-only"
             elif ptype == "context_compaction":
+                metrics["compaction_request_items"] += 1
                 metrics["compaction_items"] += 1
                 metrics["context_compaction_items"] += 1
+                metrics["latest_compaction_installed"] = False
+                metrics["latest_compaction_state"] = "request-only"
             elif ptype == "compaction_trigger":
+                metrics["compaction_request_items"] += 1
                 metrics["compaction_triggers"] += 1
+                metrics["latest_compaction_installed"] = False
+                metrics["latest_compaction_state"] = "request-only"
         elif rtype == "event_msg":
             ptype = canonical_event_type(record)
             metrics["event_messages"] += 1
@@ -188,15 +210,26 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
                 metrics["context_compacted_events"] += 1
             elif ptype == "turn_started":
                 metrics["turn_started_events"] += 1
+                metrics["latest_turn_event"] = "turn_started"
+                open_turn_events += 1
             elif ptype == "turn_complete":
                 metrics["turn_complete_events"] += 1
+                metrics["turn_terminal_events"] += 1
+                metrics["latest_turn_event"] = "turn_complete"
+                open_turn_events = max(0, open_turn_events - 1)
                 metrics["recovered_turn_error_events"] += turn_error_events_since_last_success
                 turn_error_events_since_last_success = 0
             elif ptype == "turn_aborted":
                 metrics["turn_aborted_events"] += 1
+                metrics["turn_terminal_events"] += 1
+                metrics["latest_turn_event"] = "turn_aborted"
+                open_turn_events = max(0, open_turn_events - 1)
                 turn_error_events_since_last_success += 1
             elif ptype == "error":
                 metrics["error_events"] += 1
+                metrics["turn_terminal_events"] += 1
+                metrics["latest_turn_event"] = "error"
+                open_turn_events = max(0, open_turn_events - 1)
                 turn_error_events_since_last_success += 1
 
         update_token_metrics(record, metrics)
@@ -219,6 +252,7 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
             2,
         )
     metrics["unresolved_turn_error_events"] = turn_error_events_since_last_success
+    metrics["incomplete_turn_events"] = open_turn_events
 
     project = project or str(path.parent)
     risk_domains = build_risk_domains(metrics, thresholds)
@@ -376,6 +410,8 @@ def continuity_risk(metrics: dict[str, Any]) -> dict[str, Any]:
         danger.append("unresolved turn abort or error event was recorded")
     elif metrics["recovered_turn_error_events"] > 0:
         warn.append("historical turn abort or error event was recovered by later completion")
+    if metrics["incomplete_turn_events"] > 0:
+        warn.append("active turn has no terminal completion, abort, or error event")
     if metrics["session_meta_records"] == 0:
         danger.append("no session_meta record found")
     if (

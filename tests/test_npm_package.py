@@ -50,6 +50,7 @@ def test_npm_cli_help_and_version() -> None:
     assert help_result.returncode == 0, help_result.stderr
     assert "codex-thread-tools" in help_result.stdout
     assert "health [args...]" in help_result.stdout
+    assert "handoff-summary [args...]" in help_result.stdout
     assert "install-skill" in help_result.stdout
     assert version_result.returncode == 0, version_result.stderr
     assert version_result.stdout.strip() == (ROOT / "VERSION").read_text(
@@ -75,6 +76,26 @@ def test_npm_cli_dispatches_health_tool() -> None:
 
     assert result.returncode == 0, result.stderr
     assert "codex-thread-health.py check" in result.stdout
+    assert "session_file" in result.stdout
+
+
+def test_npm_cli_dispatches_handoff_summary_tool() -> None:
+    result = subprocess.run(
+        [
+            "node",
+            str(ROOT / "bin" / "codex-thread-tools.js"),
+            "handoff-summary",
+            "--help",
+        ],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "codex-thread-handoff-summary.py" in result.stdout
     assert "session_file" in result.stdout
 
 

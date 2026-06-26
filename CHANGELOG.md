@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.4.8 - 2026-06-26
+
+- Add active-turn and incomplete-turn safety checks so health reports do not
+  treat an in-progress turn as clean handoff state.
+- Distinguish compaction request items from installed replacement-history
+  checkpoints in health metrics.
+- Add `codex-thread-tools handoff-summary` for read-only, redacted handoff
+  summary drafts that preserve concise durable context without copying raw tool
+  payloads.
+
 ## 0.4.7 - 2026-06-26
 
 - Clarify the difference between Codex remote host handoff and this repo's

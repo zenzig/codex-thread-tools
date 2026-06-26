@@ -11,6 +11,7 @@ const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 
 const PYTHON_TOOLS = new Map([
   ["health", "codex-thread-health.py"],
+  ["handoff-summary", "codex-thread-handoff-summary.py"],
   ["handoff-marker", "codex-thread-handoff-marker.py"],
   ["visual-archive", "codex-visual-archive.py"],
   ["recover", "recover-codex-thread-starter.py"],
@@ -20,6 +21,7 @@ const HELP = `codex-thread-tools ${VERSION}
 
 Usage:
   codex-thread-tools health [args...]
+  codex-thread-tools handoff-summary [args...]
   codex-thread-tools handoff-marker [args...]
   codex-thread-tools visual-archive [args...]
   codex-thread-tools recover [args...]
@@ -29,6 +31,7 @@ Usage:
 Examples:
   codex-thread-tools health
   codex-thread-tools health check ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+  codex-thread-tools handoff-summary ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
   codex-thread-tools visual-archive scan ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 `;
 

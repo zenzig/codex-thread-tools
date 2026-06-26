@@ -5,7 +5,7 @@
 **Small tools and a Codex skill for keeping long OpenAI Codex threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.7-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.8-blue)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-1-brightgreen)](#skill)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](#testing)
 
@@ -17,7 +17,7 @@
 
 ## What This Is
 
-Current version: `0.4.7`
+Current version: `0.4.8`
 
 `codex-thread-tools` works with local session JSONL files under
 `~/.codex/sessions/`.
@@ -26,11 +26,12 @@ Codex can now keep long conversations alive with several compaction systems.
 That's good, but it doesn't mean a single thread should be treated as the
 only place your project memory lives.
 
-This repo gives you four practical things:
+This repo gives you five practical things:
 
 | Tool | What it does | Main command |
 | --- | --- | --- |
 | Health check | Reads Codex session files and tells you whether a thread looks ok, risky, or ready for handoff. | `codex-thread-tools health` |
+| Handoff summary | Creates a concise, redacted summary draft from one session file without copying raw tool payloads. | `codex-thread-tools handoff-summary <session.jsonl>` |
 | Visual archive | Copies screenshots and videos out of old threads into storage you choose, such as an external drive. | `codex-thread-tools visual-archive` |
 | Handoff skill | Writes durable project context into your repository before starting a fresh Codex thread. | `codex-thread-tools install-skill` |
 | Recovery starter | Helps inspect and back up damaged or oversized session files before any repair work. | `codex-thread-tools recover` |
@@ -99,6 +100,7 @@ developing this repository or working from a clone.
 | Project health report | `npx codex-thread-tools health` | `codex-thread-tools health` | `python3 tools/codex-thread-health.py` |
 | One session health report | `npx codex-thread-tools health check <session.jsonl>` | `codex-thread-tools health check <session.jsonl>` | `python3 tools/codex-thread-health.py check <session.jsonl>` |
 | Token usage report | `npx codex-thread-tools health tokens` | `codex-thread-tools health tokens` | `python3 tools/codex-thread-health.py tokens` |
+| Redacted handoff summary draft | `npx codex-thread-tools handoff-summary <session.jsonl>` | `codex-thread-tools handoff-summary <session.jsonl>` | `python3 tools/codex-thread-handoff-summary.py <session.jsonl>` |
 | Record handoff marker | `npx codex-thread-tools handoff-marker record ...` | `codex-thread-tools handoff-marker record ...` | `python3 tools/codex-thread-handoff-marker.py record ...` |
 | Scan visual references | `npx codex-thread-tools visual-archive scan <session.jsonl>` | `codex-thread-tools visual-archive scan <session.jsonl>` | `python3 tools/codex-visual-archive.py scan <session.jsonl>` |
 | Archive visual references | `npx codex-thread-tools visual-archive archive <session.jsonl> ...` | `codex-thread-tools visual-archive archive <session.jsonl> ...` | `python3 tools/codex-visual-archive.py archive <session.jsonl> ...` |
@@ -110,6 +112,7 @@ developing this repository or working from a clone.
 | Works through npm or npx | Still requires a source checkout |
 | --- | --- |
 | Run health checks against your real `~/.codex/sessions` folder. | Running the test suite with `python3 -m pytest`. |
+| Generate redacted handoff summary drafts from session files. | Auditing private session JSONL content before sharing examples. |
 | Record local handoff sidecar markers. | Rebuilding synthetic fixture sessions. |
 | Run visual archive scans, wizards, archive jobs, and verification. | Editing the Python tools or bundled skill. |
 | Inspect and back up damaged session files. | Contributing patches back to this repo. |
@@ -353,8 +356,9 @@ It looks at:
 - number of response items
 - number of `compacted` checkpoints
 - whether the latest compacted checkpoint has `replacement_history`
+- whether compaction signals are only requests or installed continuation state
 - compaction warning/error events
-- unresolved aborted turns and error events
+- active, incomplete, aborted, and error turns
 - active token usage, when Codex persisted it
 - embedded screenshots, videos, and visual references
 - whether compacted records dominate the file size
@@ -365,9 +369,9 @@ The report breaks those signals into five risk areas:
 | --- | --- |
 | `Load` | Disk size and unusually large JSONL records. |
 | `Visuals` | Embedded screenshots/videos, missing visual files, and visuals inside compacted history. |
-| `Compaction` | Failed, malformed, legacy, or repeatedly stressed compaction state. |
+| `Compaction` | Failed, malformed, legacy, request-only, installed, or repeatedly stressed compaction state. |
 | `Limits` | Response item count and active context-window pressure. |
-| `Continuity` | Missing session metadata, unresolved aborted turns, or error events. |
+| `Continuity` | Missing session metadata, active incomplete turns, unresolved aborted turns, or error events. |
 
 For visual payloads, the health check uses lightweight metrics. It estimates
 embedded media size without hashing or copying the image/video bytes, so it can
@@ -379,12 +383,29 @@ If a later `turn_complete` or `task_complete` event is persisted, the health
 check reports the historical abort/error as `WARN` instead of `DANGER`. If the
 latest terminal event is still an abort or error, it remains `DANGER`.
 
+If a `turn_started` event has no later completion, abort, or error event, the
+thread is reported as `WARN`. That usually means Codex was still working or the
+turn did not persist a clean terminal state, so a handoff should not be treated
+as clean yet.
+
 A single successful compaction is normal. The health check looks for evidence
 that compaction failed, a local compacted checkpoint lacks replacement history,
 or compaction didn't let the thread continue cleanly. Opaque compaction items
-alone aren't treated as a failure signal. It also
+alone are reported as request-only state, not as installed replacement history,
+and they aren't treated as a failure signal by themselves. It also
 ignores normal user or assistant text that merely talks about compaction errors;
 only persisted event records count as failure signals.
+
+To generate a read-only, redacted summary draft for one session:
+
+```bash
+codex-thread-tools handoff-summary ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+```
+
+The draft includes health, pre-handoff safety, compaction state, visual counts,
+and concise user/assistant context. It omits raw tool payloads, compacted
+payloads, and common secret-shaped values. Treat it as a starting point for the
+repo-backed handoff file, not as the final project memory.
 
 To record a completed handoff marker manually:
 
@@ -553,6 +574,7 @@ codex-thread-tools/
 ├── VERSION
 ├── codex_thread_tools/
 │   ├── display.py
+│   ├── handoff_summary.py
 │   ├── sessionlib.py
 │   ├── sessionpaths.py
 │   ├── handoff_markers.py
@@ -568,11 +590,13 @@ codex-thread-tools/
 │   ├── fixtures/
 │   ├── test_display.py
 │   ├── test_github_workflows.py
+│   ├── test_handoff_summary.py
 │   ├── test_npm_package.py
 │   ├── test_thread_health.py
 │   └── test_visual_artifacts.py
 └── tools/
     ├── codex-thread-health.py
+    ├── codex-thread-handoff-summary.py
     ├── codex-thread-handoff-marker.py
     ├── codex-visual-archive.py
     └── recover-codex-thread-starter.py
@@ -618,7 +642,7 @@ the `codex-thread-tools` package on npm with this trusted publisher:
 | Workflow filename | `publish-npm.yml` |
 
 Then publish a GitHub release whose tag matches the package version, for example
-`v0.4.7`. The `Publish npm package` workflow will:
+`v0.4.8`. The `Publish npm package` workflow will:
 
 - verify `VERSION` and `package.json` match
 - verify the GitHub release tag matches the package version

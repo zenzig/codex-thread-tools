@@ -18,13 +18,14 @@ wants durable project context for a fresh or replacement thread.
 
 When invoked, perform the workflow. Ask only if the project root is unclear, a write would overwrite an existing handoff, the active session file is needed for visual archiving, or the user must choose an archive location.
 
-Load `references/handoff-workflow.md` and `references/handoff-template.md`, then write a concise handoff and a fresh-thread prompt. Do not dump the full transcript.
+Load `references/handoff-workflow.md` and `references/handoff-template.md`, then write a concise handoff and a fresh-thread prompt. Do not dump the full transcript or raw tool payloads.
 
 ## Required Checks
 
 - Identify the project root and current git state before writing.
 - Run `tools/codex-thread-health.py` when available. Exit code `2` is `WARN`; exit code `3` is `DANGER`; both are reportable health results, not shell failures.
 - Prefer the health check's recommendation over a simple "compaction happened" rule. A successful compaction alone is not a handoff requirement.
+- When the active session file is known, use `tools/codex-thread-handoff-summary.py` as a redacted draft aid, not as a replacement for repo inspection.
 - If visuals are present or mentioned, record an explicit visual archive decision in the handoff: archived manifest paths, or `Not archived:` with the reason. Do not silently skip visual context.
 - Include exact paths, branch/commit, changed files, decisions, verification commands, risks, and next action.
 - Verify the handoff exists and is readable before responding.

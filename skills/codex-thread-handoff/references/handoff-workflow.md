@@ -4,6 +4,8 @@
 
 2. Health: run `python3 tools/codex-thread-health.py` when available. Codes `0`/`2`/`3` mean `OK`/`WARN`/`DANGER`. Include status, continuation health, handoff readiness, recommendation, top reasons, and domain risks. Do not use `--safe-test-mode` on live sessions.
 
+If the active session file is known, run `python3 tools/codex-thread-handoff-summary.py <session-file>` to seed a concise, redacted draft. Use it to catch durable project facts, pre-handoff safety state, compaction state, and visual counts. Do not dump raw transcript or tool payloads into the handoff; verify every important fact against repo files, git state, tests, or explicit user instructions.
+
 3. Visuals: if visuals are reported or mentioned, scan known sessions with `tools/codex-visual-archive.py scan <session-file>`. To retain visuals, ask for archive location, then use `wizard` or `archive`. If the session is unknown and visuals matter, ask for the exact session path.
 
 Record one visual outcome:

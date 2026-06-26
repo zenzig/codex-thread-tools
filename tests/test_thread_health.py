@@ -78,6 +78,10 @@ def test_check_compaction_success_is_ok_not_handoff() -> None:
     assert payload["recommendation"] == "continue"
     assert payload["metrics"]["compaction_triggers"] == 1
     assert payload["metrics"]["compaction_items"] == 2
+    assert payload["metrics"]["compaction_request_items"] == 3
+    assert payload["metrics"]["installed_compaction_checkpoints"] == 1
+    assert payload["metrics"]["latest_compaction_installed"] is True
+    assert payload["metrics"]["latest_compaction_state"] == "installed"
     assert not payload["metrics"]["compaction_failures"]
     assert payload["risk_domains"]["compaction"]["status"] == "ok"
     assert payload["continuation_status"] == "ok"
@@ -164,6 +168,10 @@ def test_opaque_compaction_items_alone_are_not_health_risk(tmp_path: Path) -> No
     payload = json.loads(result.stdout)
     assert payload["status"] == "ok"
     assert payload["continuation_status"] == "ok"
+    assert payload["metrics"]["compaction_request_items"] == 6
+    assert payload["metrics"]["installed_compaction_checkpoints"] == 0
+    assert payload["metrics"]["latest_compaction_installed"] is False
+    assert payload["metrics"]["latest_compaction_state"] == "request-only"
     assert payload["risk_domains"]["compaction"]["status"] == "ok"
     assert payload["handoff_readiness"]["status"] == "not-needed"
 
@@ -1166,6 +1174,46 @@ def test_latest_turn_abort_remains_danger(tmp_path: Path) -> None:
     assert payload["status"] == "danger"
     assert payload["risk_domains"]["continuity"]["status"] == "danger"
     assert payload["metrics"]["unresolved_turn_error_events"] == 1
+
+
+def test_incomplete_turn_blocks_clean_handoff_recommendation(tmp_path: Path) -> None:
+    session = tmp_path / "incomplete-turn.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "incomplete-turn", "cwd": "/work/incomplete"},
+            },
+            {
+                "timestamp": "2026-06-02T12:01:00Z",
+                "type": "event_msg",
+                "payload": {"type": "turn_started"},
+            },
+            {
+                "timestamp": "2026-06-02T12:01:30Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Still working."}],
+                },
+            },
+        ],
+    )
+
+    result = run_health("check", str(session), "--json")
+
+    assert result.returncode == 2, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "warn"
+    assert payload["recommendation"] == "monitor"
+    assert payload["handoff_readiness"]["status"] == "recommended"
+    assert payload["metrics"]["incomplete_turn_events"] == 1
+    assert payload["metrics"]["latest_turn_event"] == "turn_started"
+    assert payload["risk_domains"]["continuity"]["status"] == "warn"
+    assert any("active turn" in reason for reason in payload["reasons"])
 
 
 def test_generic_runtime_error_is_not_a_compaction_failure() -> None:
