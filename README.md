@@ -5,7 +5,7 @@
 **Small tools and a Codex skill for keeping long OpenAI Codex threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.8-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.9-blue)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-1-brightgreen)](#skill)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](#testing)
 
@@ -17,7 +17,7 @@
 
 ## What This Is
 
-Current version: `0.4.8`
+Current version: `0.4.9`
 
 `codex-thread-tools` works with local session JSONL files under
 `~/.codex/sessions/`.
@@ -26,12 +26,13 @@ Codex can now keep long conversations alive with several compaction systems.
 That's good, but it doesn't mean a single thread should be treated as the
 only place your project memory lives.
 
-This repo gives you five practical things:
+This repo gives you six practical things:
 
 | Tool | What it does | Main command |
 | --- | --- | --- |
 | Health check | Reads Codex session files and tells you whether a thread looks ok, risky, or ready for handoff. | `codex-thread-tools health` |
 | Handoff summary | Creates a concise, redacted summary draft from one session file without copying raw tool payloads. | `codex-thread-tools handoff-summary <session.jsonl>` |
+| Session archive | Copies old session JSONL files to external storage with manifests before optional local pruning. | `codex-thread-tools session-archive` |
 | Visual archive | Copies screenshots and videos out of old threads into storage you choose, such as an external drive. | `codex-thread-tools visual-archive` |
 | Handoff skill | Writes durable project context into your repository before starting a fresh Codex thread. | `codex-thread-tools install-skill` |
 | Recovery starter | Helps inspect and back up damaged or oversized session files before any repair work. | `codex-thread-tools recover` |
@@ -102,6 +103,10 @@ developing this repository or working from a clone.
 | Token usage report | `npx codex-thread-tools health tokens` | `codex-thread-tools health tokens` | `python3 tools/codex-thread-health.py tokens` |
 | Redacted handoff summary draft | `npx codex-thread-tools handoff-summary <session.jsonl>` | `codex-thread-tools handoff-summary <session.jsonl>` | `python3 tools/codex-thread-handoff-summary.py <session.jsonl>` |
 | Record handoff marker | `npx codex-thread-tools handoff-marker record ...` | `codex-thread-tools handoff-marker record ...` | `python3 tools/codex-thread-handoff-marker.py record ...` |
+| Plan old session archive | `npx codex-thread-tools session-archive plan ...` | `codex-thread-tools session-archive plan ...` | `python3 tools/codex-session-archive.py plan ...` |
+| Archive old session files | `npx codex-thread-tools session-archive archive ...` | `codex-thread-tools session-archive archive ...` | `python3 tools/codex-session-archive.py archive ...` |
+| Verify session archive | `npx codex-thread-tools session-archive verify --manifest <manifest.json>` | `codex-thread-tools session-archive verify --manifest <manifest.json>` | `python3 tools/codex-session-archive.py verify --manifest <manifest.json>` |
+| Prune archived local sessions | `npx codex-thread-tools session-archive prune-local --manifest <manifest.json> --confirm-prune-local` | `codex-thread-tools session-archive prune-local --manifest <manifest.json> --confirm-prune-local` | `python3 tools/codex-session-archive.py prune-local --manifest <manifest.json> --confirm-prune-local` |
 | Scan visual references | `npx codex-thread-tools visual-archive scan <session.jsonl>` | `codex-thread-tools visual-archive scan <session.jsonl>` | `python3 tools/codex-visual-archive.py scan <session.jsonl>` |
 | Archive visual references | `npx codex-thread-tools visual-archive archive <session.jsonl> ...` | `codex-thread-tools visual-archive archive <session.jsonl> ...` | `python3 tools/codex-visual-archive.py archive <session.jsonl> ...` |
 | Inspect a damaged thread | `npx codex-thread-tools recover inspect <session.jsonl>` | `codex-thread-tools recover inspect <session.jsonl>` | `python3 tools/recover-codex-thread-starter.py inspect <session.jsonl>` |
@@ -114,6 +119,7 @@ developing this repository or working from a clone.
 | Run health checks against your real `~/.codex/sessions` folder. | Running the test suite with `python3 -m pytest`. |
 | Generate redacted handoff summary drafts from session files. | Auditing private session JSONL content before sharing examples. |
 | Record local handoff sidecar markers. | Rebuilding synthetic fixture sessions. |
+| Copy old session JSONL files to external storage, verify them, and optionally prune local copies. | Deciding which private project sessions are safe to archive. |
 | Run visual archive scans, wizards, archive jobs, and verification. | Editing the Python tools or bundled skill. |
 | Inspect and back up damaged session files. | Contributing patches back to this repo. |
 | Install the bundled `codex-thread-handoff` skill into `~/.codex/skills/`. | Using source-only fixture paths like `tests/fixtures/sessions`. |
@@ -492,6 +498,77 @@ python3 tools/codex-thread-health.py \
 
 ---
 
+## Session Archive Tool
+
+Old threads can be useful as audit history, but Codex doesn't need old project
+threads in `~/.codex/sessions/` to continue work in your current thread. If you
+want to keep cold storage without filling your local drive, use the session
+archive tool.
+
+The session archive workflow has four phases:
+
+1. `plan` previews matching session files.
+2. `archive` copies those files to external storage and writes a manifest.
+3. `verify` checks archived file size and SHA-256 hashes against the manifest.
+4. `prune-local` optionally deletes the verified local JSONL files.
+
+Start with a read-only plan:
+
+```bash
+codex-thread-tools session-archive plan \
+  --project "/Users/you/project" \
+  --older-than 30d \
+  --min-size 100MiB
+```
+
+Then archive matching sessions to a folder outside `~/.codex/sessions/`, such
+as an external drive:
+
+```bash
+codex-thread-tools session-archive archive \
+  --project "/Users/you/project" \
+  --older-than 30d \
+  --min-size 100MiB \
+  --archive-root "/Volumes/CodexArchive" \
+  --archive-name "project-old-threads"
+```
+
+The archive command writes:
+
+- `manifest.json`: machine-readable inventory with source paths, archive paths,
+  byte counts, timestamps, session IDs, and SHA-256 hashes
+- `manifest.md`: human-readable archive summary
+- `sessions/`: copied session JSONL files, preserving their relative session
+  folder paths
+
+Verify the archive before deleting anything local:
+
+```bash
+codex-thread-tools session-archive verify \
+  --manifest "/Volumes/CodexArchive/codex-session-archives/project-old-threads/manifest.json"
+```
+
+Only after verification passes, prune the local copies:
+
+```bash
+codex-thread-tools session-archive prune-local \
+  --manifest "/Volumes/CodexArchive/codex-session-archives/project-old-threads/manifest.json" \
+  --confirm-prune-local
+```
+
+`prune-local` refuses to run while Codex appears to be open unless you pass
+`--allow-codex-running`. Closing Codex first is safer because the app may be
+reading or writing session files.
+
+Use `--json` on any phase when you want machine-readable output.
+
+Session archive and visual archive solve different problems. Session archive
+keeps raw thread JSONL in cold storage. Visual archive extracts screenshots and
+videos into handoff-ready manifests that a future fresh thread can understand
+without loading the old conversation.
+
+---
+
 ## Skill
 
 The bundled skill is:
@@ -578,6 +655,7 @@ codex-thread-tools/
 │   ├── sessionlib.py
 │   ├── sessionpaths.py
 │   ├── handoff_markers.py
+│   ├── session_archive.py
 │   ├── thread_health.py
 │   └── visual_artifacts.py
 ├── skills/
@@ -592,9 +670,11 @@ codex-thread-tools/
 │   ├── test_github_workflows.py
 │   ├── test_handoff_summary.py
 │   ├── test_npm_package.py
+│   ├── test_session_archive.py
 │   ├── test_thread_health.py
 │   └── test_visual_artifacts.py
 └── tools/
+    ├── codex-session-archive.py
     ├── codex-thread-health.py
     ├── codex-thread-handoff-summary.py
     ├── codex-thread-handoff-marker.py
@@ -642,7 +722,7 @@ the `codex-thread-tools` package on npm with this trusted publisher:
 | Workflow filename | `publish-npm.yml` |
 
 Then publish a GitHub release whose tag matches the package version, for example
-`v0.4.8`. The `Publish npm package` workflow will:
+`v0.4.9`. The `Publish npm package` workflow will:
 
 - verify `VERSION` and `package.json` match
 - verify the GitHub release tag matches the package version

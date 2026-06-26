@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.4.9 - 2026-06-26
+
+- Add `codex-thread-tools session-archive` with `plan`, `archive`, `verify`,
+  and guarded `prune-local` phases for moving old session JSONL files to
+  external storage.
+- Write verifiable session archive manifests with source paths, archive paths,
+  byte counts, timestamps, session IDs, and SHA-256 hashes.
+- Wire session archive support through the npm CLI and package metadata.
+
 ## 0.4.8 - 2026-06-26
 
 - Add active-turn and incomplete-turn safety checks so health reports do not

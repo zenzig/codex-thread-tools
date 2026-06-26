@@ -13,6 +13,7 @@ const PYTHON_TOOLS = new Map([
   ["health", "codex-thread-health.py"],
   ["handoff-summary", "codex-thread-handoff-summary.py"],
   ["handoff-marker", "codex-thread-handoff-marker.py"],
+  ["session-archive", "codex-session-archive.py"],
   ["visual-archive", "codex-visual-archive.py"],
   ["recover", "recover-codex-thread-starter.py"],
 ]);
@@ -23,6 +24,7 @@ Usage:
   codex-thread-tools health [args...]
   codex-thread-tools handoff-summary [args...]
   codex-thread-tools handoff-marker [args...]
+  codex-thread-tools session-archive [args...]
   codex-thread-tools visual-archive [args...]
   codex-thread-tools recover [args...]
   codex-thread-tools install-skill
@@ -32,6 +34,7 @@ Examples:
   codex-thread-tools health
   codex-thread-tools health check ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
   codex-thread-tools handoff-summary ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+  codex-thread-tools session-archive plan --older-than 30d --min-size 100MiB
   codex-thread-tools visual-archive scan ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 `;
 
