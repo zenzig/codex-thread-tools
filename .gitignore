@@ -36,7 +36,8 @@ build/
 # can include project paths, thread notes, handoffs, screenshots, or session
 # investigation output from this machine.
 .codex/
-docs/
+docs/superpowers/
+docs/codex-thread-recovery-starter.md
 documentation/
 notes/
 handoffs/

@@ -26,7 +26,7 @@ def test_package_metadata_is_publish_ready() -> None:
     assert "codex" in package["keywords"]
     assert "openai-codex" in package["keywords"]
     assert "tests/" not in package["files"]
-    assert "docs/" not in package["files"]
+    assert "docs/README.md" in package["files"]
 
 
 def test_npm_cli_help_and_version() -> None:
@@ -176,6 +176,9 @@ def test_npm_pack_excludes_generated_and_local_artifacts() -> None:
     assert all(not path.startswith("tests/") for path in paths)
     assert all(not path.startswith("documentation/") for path in paths)
     assert "bin/codex-thread-tools.js" in paths
+    assert "docs/README.md" in paths
+    assert "docs/health.md" in paths
+    assert "docs/session-archive.md" in paths
     assert "codex_thread_tools/session_archive.py" in paths
     assert "codex_thread_tools/thread_health.py" in paths
     assert "tools/codex-session-archive.py" in paths

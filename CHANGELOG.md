@@ -2,8 +2,12 @@
 
 ## Unreleased
 
-## 0.4.9 - 2026-06-26
+## 1.0.0 - 2026-06-27
 
+- Mark the CLI surface as production-ready and move the package version to
+  `1.0.0`.
+- Trim the root README into a concise project landing page and move detailed
+  usage into an indexed public `docs/` section.
 - Add `codex-thread-tools session-archive` with `plan`, `archive`, `verify`,
   and guarded `prune-local` phases for moving old session JSONL files to
   external storage.
@@ -93,7 +97,7 @@
 - Add lightweight embedded-media sizing so health checks do not hash or copy large visual payloads.
 - Add project lifetime token reporting with `codex-thread-health.py tokens`.
 - Add generated visual fixtures and test coverage without committing machine-local generated artifacts.
-- Remove local usage artifacts from the public repository tree and ignore future `docs/`, handoff, and archive outputs.
+- Remove local usage artifacts from the public repository tree and ignore future private handoff and archive outputs.
 
 ## 0.2.0 - 2026-05-26
 

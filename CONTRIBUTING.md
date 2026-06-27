@@ -19,8 +19,9 @@ python3 tests/fixtures/build_fixtures.py
 ## Privacy Rules
 
 Do not commit real Codex session files, handoffs, screenshots, visual archives,
-or machine-local planning notes. The repository intentionally ignores `docs/`,
-handoff directories, generated visual fixtures, and archive output.
+or machine-local planning notes. The repository intentionally ignores private
+handoff directories, generated visual fixtures, archive output, and local
+planning notes.
 
 If a contribution needs an example session, add a small synthetic fixture through
 `tests/fixtures/build_fixtures.py`.

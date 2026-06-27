@@ -47,11 +47,11 @@ def test_handoff_workflow_can_seed_redacted_summary() -> None:
     assert "Do not dump raw transcript or tool payloads" in workflow
 
 
-def test_readme_uses_current_openai_compaction_terms() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+def test_compaction_docs_use_current_openai_compaction_terms() -> None:
+    compaction_docs = (ROOT / "docs" / "compaction.md").read_text(encoding="utf-8")
 
-    assert "context_management" in readme
-    assert "compact_threshold" in readme
-    assert "/responses/compact" in readme
-    assert "opaque encrypted compaction" in readme
-    assert "replacement_history" in readme
+    assert "context_management" in compaction_docs
+    assert "compact_threshold" in compaction_docs
+    assert "/responses/compact" in compaction_docs
+    assert "opaque encrypted compaction" in compaction_docs
+    assert "replacement_history" in compaction_docs
