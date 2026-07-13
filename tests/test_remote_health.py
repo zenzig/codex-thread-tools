@@ -189,6 +189,7 @@ def test_run_remote_health_probes_version_and_returns_report(
             "stdout": subprocess.PIPE,
             "stderr": subprocess.PIPE,
             "check": False,
+            "shell": False,
             "timeout": 12,
         }
 

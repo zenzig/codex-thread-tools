@@ -118,6 +118,7 @@ def _run_ssh(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
+            shell=False,
             timeout=connect_timeout + 5,
         )
     except FileNotFoundError as exc:
