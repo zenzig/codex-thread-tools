@@ -472,6 +472,8 @@ def make_runner(
 
     def runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         command = shlex.split(argv[-1])
+        if command[:2] == ["sh", "-c"]:
+            command = shlex.split(command[-1])
         calls.append((command, kwargs))
         if command == ["codex-thread-tools", "--version"]:
             return subprocess.CompletedProcess(
@@ -549,6 +551,60 @@ def test_run_remote_health_returns_version_drift_warning() -> None:
     )
 
 
+def test_run_remote_health_retries_through_remote_login_shell() -> None:
+    report = fixture_remote_projects_report()
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def runner(
+        argv: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((argv, kwargs))
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(
+                argv,
+                127,
+                stdout="",
+                stderr="codex-thread-tools: command not found\n",
+            )
+        if len(calls) == 2:
+            return subprocess.CompletedProcess(
+                argv,
+                0,
+                stdout="1.0.0\n",
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=json.dumps(report),
+            stderr="",
+        )
+
+    result = run_remote_health(
+        "node1.atomicfalls.com",
+        ["health", "projects"],
+        local_version="1.0.0",
+        runner=runner,
+    )
+
+    assert result == (report, 0, None)
+    assert shlex.split(calls[0][0][-1]) == ["codex-thread-tools", "--version"]
+    assert shlex.split(calls[1][0][-1]) == [
+        "sh",
+        "-c",
+        'exec "${SHELL:-/bin/sh}" -lc "$1"',
+        "codex-thread-tools-login",
+        "codex-thread-tools --version",
+    ]
+    assert shlex.split(calls[2][0][-1]) == [
+        "sh",
+        "-c",
+        'exec "${SHELL:-/bin/sh}" -lc "$1"',
+        "codex-thread-tools-login",
+        "codex-thread-tools health projects --remote-safe-json --progress never",
+    ]
+
+
 def test_run_remote_health_fails_closed_when_remote_lacks_safe_protocol() -> None:
     calls, runner = make_runner(
         fixture_projects_report(),
@@ -604,7 +660,7 @@ def test_run_remote_health_maps_version_probe_failures(
             runner=runner,
         )
 
-    assert len(calls) == 1
+    assert len(calls) == (2 if version_returncode == 127 else 1)
 
 
 def test_run_remote_health_maps_health_command_failure() -> None:

@@ -118,6 +118,8 @@ def append_handoff_marker(
 def session_identity(path: Path) -> dict[str, str]:
     project = ""
     session_id = ""
+    thread_source = ""
+    parent_thread_id = ""
     for _line_no, _raw, record in iter_jsonl(path):
         rtype = record.get("type")
         if rtype not in {"session_meta", "turn_context"}:
@@ -133,9 +135,33 @@ def session_identity(path: Path) -> dict[str, str]:
             value = payload.get("id") or payload.get("session_id")
             if isinstance(value, str):
                 session_id = value
-        if project and session_id:
+        if not thread_source:
+            value = payload.get("thread_source")
+            if isinstance(value, str):
+                thread_source = value
+            else:
+                source = payload.get("source")
+                if isinstance(source, dict) and isinstance(source.get("subagent"), dict):
+                    thread_source = "subagent"
+        if not parent_thread_id:
+            value = payload.get("parent_thread_id")
+            if isinstance(value, str):
+                parent_thread_id = value
+        if project and session_id and rtype == "session_meta":
             break
-    return {"project": project or str(path.parent), "session_id": session_id}
+    return {
+        "project": project or str(path.parent),
+        "session_id": session_id,
+        "thread_source": thread_source,
+        "parent_thread_id": parent_thread_id,
+    }
+
+
+def is_user_owned_session(identity: dict[str, str]) -> bool:
+    thread_source = identity.get("thread_source", "")
+    if thread_source == "automation":
+        return False
+    return thread_source == "user" or not identity.get("parent_thread_id")
 
 
 def marker_prompt_block(marker: dict[str, Any]) -> str:
@@ -267,7 +293,7 @@ def marker_aware_active_sessions_by_project(
     session_root: Path,
     markers: list[dict[str, Any]],
 ) -> list[Path]:
-    grouped: dict[str, list[tuple[float, Path, str, bool]]] = {}
+    grouped: dict[str, list[tuple[float, Path, str, bool, bool]]] = {}
     for path in session_root.rglob("*.jsonl"):
         if not path.is_file():
             continue
@@ -278,13 +304,21 @@ def marker_aware_active_sessions_by_project(
             continue
         retired = is_retired_session(path, identity["session_id"], markers)
         grouped.setdefault(identity["project"], []).append(
-            (stat.st_mtime, path, identity["session_id"], retired)
+            (
+                stat.st_mtime,
+                path,
+                identity["session_id"],
+                retired,
+                is_user_owned_session(identity),
+            )
         )
 
     selected: list[Path] = []
     for sessions in grouped.values():
         active = [session for session in sessions if not session[3]]
         candidates = active or sessions
+        user_owned = [session for session in candidates if session[4]]
+        candidates = user_owned or candidates
         selected.append(max(candidates, key=lambda item: item[0])[1])
     return sorted(selected, key=str)
 

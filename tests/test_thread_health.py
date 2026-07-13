@@ -151,13 +151,17 @@ def fake_ssh_env(tmp_path: Path, report: dict) -> dict[str, str]:
         """#!/usr/bin/env python3
 import json
 import os
+import shlex
 import sys
 
 arguments = sys.argv[1:]
 with open(os.environ[\"FAKE_SSH_RECORD\"], \"a\", encoding=\"utf-8\") as handle:
     handle.write(json.dumps(arguments) + \"\\n\")
 command = arguments[-1]
-if command == \"codex-thread-tools --version\":
+command_parts = shlex.split(command)
+if command_parts[:2] == [\"sh\", \"-c\"]:
+    command_parts = shlex.split(command_parts[-1])
+if command_parts == [\"codex-thread-tools\", \"--version\"]:
     print(os.environ.get(\"FAKE_SSH_VERSION\", \"1.0.0\"))
     print(os.environ.get(\"FAKE_SSH_VERSION_STDERR\", \"\"), file=sys.stderr)
     raise SystemExit(int(os.environ.get(\"FAKE_SSH_VERSION_EXIT\", \"0\")))
@@ -830,6 +834,60 @@ def test_projects_uses_latest_session_per_project_without_live_root() -> None:
     assert payload["summary"]["projects"] == 11
     assert payload["summary"]["warn"] == 1
     assert payload["summary"]["danger"] == 4
+
+
+def test_projects_reports_root_compactions_instead_of_newer_subagent(
+    tmp_path: Path,
+) -> None:
+    session_root = tmp_path / "sessions"
+    project = "/work/thread-family"
+    parent = session_root / "parent.jsonl"
+    child = session_root / "child.jsonl"
+    write_session(
+        parent,
+        [
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": "parent",
+                    "cwd": project,
+                    "thread_source": "user",
+                },
+            },
+            {
+                "type": "compacted",
+                "payload": {"replacement_history": []},
+            },
+        ],
+        mtime=100,
+    )
+    write_session(
+        child,
+        [
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": "child",
+                    "cwd": project,
+                    "thread_source": "subagent",
+                    "parent_thread_id": "parent",
+                },
+            }
+        ],
+        mtime=200,
+    )
+
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--safe-test-mode",
+        "--json",
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["projects"][0]["file"] == str(parent)
+    assert payload["projects"][0]["metrics"]["compacted_records"] == 1
 
 
 def test_projects_reports_replacement_thread_when_source_was_handed_off(tmp_path: Path) -> None:

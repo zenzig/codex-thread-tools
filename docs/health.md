@@ -6,8 +6,11 @@ The main command is:
 codex-thread-tools health
 ```
 
-It scans your Codex session folder, finds the most recent session for each
-project, and reports whether each thread looks safe to continue.
+It scans your Codex session folder, finds the active user-owned root session
+for each project, and reports whether each thread looks safe to continue. A
+newer subagent or automation session does not replace that root in the project
+report. If a project has no root session, the newest available child session is
+used as a fallback.
 
 ## Statuses
 
@@ -59,10 +62,12 @@ codex-thread-tools --version
 ssh node1.example.com codex-thread-tools --version
 ```
 
-The remote package must be visible to non-interactive SSH sessions. The
-command uses normal OpenSSH configuration for authentication, including
-`~/.ssh/config`, keys, agents, and host aliases. It does not require a separate
-credential or token.
+The command first looks for the remote package in non-interactive SSH. If it is
+not found there, it retries through the remote account's login shell so Node
+managers such as NVM work without a system-wide launcher. The command uses
+normal OpenSSH configuration for authentication, including `~/.ssh/config`,
+keys, agents, and host aliases. It does not require a separate credential or
+token.
 
 Run an all-project report on the SSH host:
 
@@ -128,10 +133,9 @@ report.
   use `--connect-timeout` to adjust it.
 - **Public-key rejected:** Test `ssh node1.example.com` directly and fix the
   key, agent, host alias, or server account in your normal OpenSSH setup.
-- **Package missing from non-interactive `PATH`:** Run
-  `ssh node1.example.com 'command -v codex-thread-tools && codex-thread-tools --version'`.
-  Install the package for the remote account or configure its non-interactive
-  shell `PATH`.
+- **Package not found:** The tool checks both non-interactive SSH and the
+  account's login shell. Confirm the package is installed for that account with
+  `ssh node1.example.com "bash -lc 'command -v codex-thread-tools && codex-thread-tools --version'"`.
 - **Incompatible or protocol-missing versions:** Install the same version on
   both machines. A differing major version fails with exit code `1`. A minor or
   patch difference is normally a warning, but a remote version without the

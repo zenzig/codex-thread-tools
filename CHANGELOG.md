@@ -2,12 +2,16 @@
 
 ## Unreleased
 
-## 1.1.0 - 2026-07-12
+## 1.1.0 - 2026-07-13
 
 - Add `codex-thread-tools health remote --host <ssh-host>` for health reports
   generated on a remote Codex host without copying session JSONL files locally.
 - Support exact project selection, existing display modes and thresholds, JSON
   output, version compatibility checks, and actionable SSH diagnostics.
+- Retry remote commands through the account's login shell when needed so
+  NVM-managed installations work without system-wide launchers or PATH changes.
+- Prefer user-owned root sessions over newer subagent and automation files in
+  both local and remote project health reports.
 
 ## 1.0.0 - 2026-06-27
 

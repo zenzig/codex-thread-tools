@@ -2,125 +2,119 @@
 
 # codex-thread-tools
 
-**Production-ready CLI tools and a Codex skill for keeping long OpenAI Codex threads healthy.**
+**Your Codex session is a black box that only gets heavier. This is the toolkit that opens it up.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.1.0-blue)](CHANGELOG.md)
-[![Docs](https://img.shields.io/badge/docs-index-brightgreen)](docs/README.md)
-[![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](docs/development.md)
+[![npm version](https://img.shields.io/npm/v/codex-thread-tools.svg)](https://www.npmjs.com/package/codex-thread-tools)
+[![npm downloads](https://img.shields.io/npm/dm/codex-thread-tools.svg)](https://www.npmjs.com/package/codex-thread-tools)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-project_guides-brightgreen.svg)](docs/README.md)
 
-<img src="assets/codex-thread-tools-header.png" alt="codex-thread-tools turns tangled Codex session threads into an organized spool" width="100%">
+<img src="assets/codex-thread-tools-header.png" alt="A tangled Codex thread being organized onto a spool" width="100%">
 
 </div>
 
----
+## The problem
 
-## What This Is
+Every long Codex task ends the same way: a JSONL file on disk quietly ballooning with compacted history, tool output, screenshots, and thousands of response items — until it's too heavy to load, too risky to trust, and too big to read to figure out what's even in it.
 
-Current version: `1.1.0`
+Compaction trims what Codex keeps *in context*. It does nothing for the file sitting on disk, and it doesn't leave you anything durable to carry into a fresh task. So you're stuck choosing between grinding forward in a degraded session or starting over and losing everything you'd learned.
 
-`codex-thread-tools` works with local Codex session JSONL files under
-`~/.codex/sessions/`. Local reports read that local session root; remote
-reports execute against the SSH host's session root.
+`codex-thread-tools` is the toolkit for that moment in between: spot the risk before it bites, pull out what's actually worth keeping, and get the rest out of your way — without ever treating raw transcripts as documentation.
 
-Codex compaction helps long conversations continue, but it does not make an
-oversized local thread a good place to keep all project memory. This repo gives
-you practical tools for checking thread health, preserving durable context,
-archiving old session data, and recovering from oversized-session problems.
+## Use it when you want to
 
-The `1.1.0` release adds remote project health reporting. Stable scripting
-should use `--json`; human-readable output may keep improving over time.
+- Know whether a task — local or remote — is still healthy enough to keep pushing.
+- Get a straight answer: keep going, keep watching, or hand off.
+- Carry the decisions and screenshots that matter into a clean task.
+- Archive stale sessions with manifests and integrity checks, not just `rm`.
+- Recover something useful from a session that's already too big or broken to open.
 
-## Quick Start
+## What's in the box
 
-Run once with `npx`:
+| Capability | Purpose |
+| --- | --- |
+| Thread health | Scores load, compaction, context limits, continuity, and visual risks. |
+| Remote health | Same analysis over SSH — without shipping raw session files anywhere. |
+| Handoff workflow | Preserves the concise project facts a fresh task actually needs. |
+| Handoff summaries | Redacted drafts — no raw tool payloads along for the ride. |
+| Session archives | Moves old JSONL files to external storage with verifiable manifests. |
+| Visual archives | Keeps referenced screenshots and videos alive outside task history. |
+| Recovery | Inspects and backs up sessions that won't open normally. |
+
+Everything defaults to read-only. Anything that copies or prunes files needs an explicit command, a verification step, and a confirmation flag — nothing destructive happens by accident.
+
+## Quick start
+
+Try it with no install:
 
 ```bash
 npx codex-thread-tools health
 ```
 
-Install globally:
+Living with it day to day:
 
 ```bash
 npm install -g codex-thread-tools
 codex-thread-tools health
 ```
 
-Install the bundled handoff skill:
+(The npm package wraps bundled Python tools — you'll need Node.js 18+ and Python 3 on `PATH`.)
+
+Want Codex to prepare a handoff when you ask? Install the skill:
 
 ```bash
 codex-thread-tools install-skill
 ```
 
-Then, from any Codex thread:
+Then just say `Use codex-thread-handoff` whenever a health report tells you it's time.
 
-```text
-Use codex-thread-handoff.
+## How it works
+
+1. **Inspect** — a health report finds your active project session and scores independent risk domains, not just raw file size.
+2. **Decide** — it tells you plainly: continue, monitor, or hand off, and shows the signals behind that call.
+3. **Preserve** — handoff and archive tools keep the durable facts and visual evidence, and leave the bulky or sensitive payloads behind.
+4. **Continue** — start clean with tight project context, while the old session stays around for recovery or verified archiving.
+
+### Local health
+
+```bash
+codex-thread-tools health
+codex-thread-tools health --mode verbose --size-format both
+codex-thread-tools health --json
 ```
 
-Python 3 must be available on your `PATH`. The npm package is a wrapper around
-the bundled Python tools.
+The human-readable output is for your terminal. `--json` is the stable interface if you're scripting against it.
 
-## Tools
+### Remote health
 
-| Tool | What it does | Main command |
-| --- | --- | --- |
-| Health check | Reports whether Codex project threads look ok, risky, or ready for handoff. | `codex-thread-tools health` |
-| Remote project health | Builds a privacy-safe project report on an SSH host without copying raw session content. | `codex-thread-tools health remote --host <ssh-host>` |
-| Handoff summary | Creates a concise, redacted summary draft from one session file. | `codex-thread-tools handoff-summary <session.jsonl>` |
-| Session archive | Copies old session JSONL files to external storage with verifiable manifests. | `codex-thread-tools session-archive` |
-| Visual archive | Copies screenshots and videos out of old threads into storage you choose. | `codex-thread-tools visual-archive` |
-| Handoff skill | Writes durable project context before starting a fresh Codex thread. | `codex-thread-tools install-skill` |
-| Recovery starter | Helps inspect and back up damaged or oversized session files. | `codex-thread-tools recover` |
+Install the same package on both ends, then:
+
+```bash
+codex-thread-tools health remote --host user@remote-host \
+  --project /path/to/project
+```
+
+The analysis runs on the remote host. Only a privacy-filtered report and bounded diagnostics ever cross SSH — raw JSONL, transcript text, tool payloads, and visual data never leave the remote machine. If the CLI isn't reachable over a non-interactive SSH session, it automatically retries through your login shell, NVM installs included.
 
 ## Documentation
 
-Read the [Documentation](docs/README.md) index for full command usage and
-maintainer notes.
+Start at [Documentation](docs/README.md), or jump straight to:
 
-| Guide | Covers |
+| Guide | Topic |
 | --- | --- |
-| [Installation](docs/installation.md) | `npx`, global npm install, source checkout, and skill install. |
-| [Thread health](docs/health.md) | Local and SSH-host health reports, display modes, risk domains, token reports, and JSON output. |
-| [Handoff workflow](docs/handoff.md) | Repo-backed continuity, redacted summaries, and handoff markers. |
-| [Session archive](docs/session-archive.md) | Moving old JSONL sessions to external storage and pruning verified local copies. |
-| [Visual archive](docs/visual-archive.md) | Preserving screenshots and videos outside oversized threads. |
-| [Recovery](docs/recovery.md) | Inspecting and backing up damaged sessions. |
-| [Compaction](docs/compaction.md) | How Codex compaction differs from handoffs and archives. |
-| [Development](docs/development.md) | Tests, fixtures, package checks, and repo hygiene. |
-| [Publishing](docs/publishing.md) | GitHub release and npm Trusted Publishing flow. |
+| [Installation](docs/installation.md) | `npx`, global npm, source, and skill installation. |
+| [Thread health](docs/health.md) | Local/remote reports, risk domains, output modes, exit codes. |
+| [Handoff workflow](docs/handoff.md) | Durable context, summaries, markers, remote-handoff distinctions. |
+| [Session archive](docs/session-archive.md) | Plan, archive, verify, and prune workflows. |
+| [Visual archive](docs/visual-archive.md) | Screenshot and video preservation. |
+| [Recovery](docs/recovery.md) | Oversized or damaged session inspection. |
+| [Compaction](docs/compaction.md) | Compaction, handoff, and archive boundaries. |
 
-## Command Reference
+## Project
 
-| Task | Command |
-| --- | --- |
-| Project health report | `codex-thread-tools health` |
-| Remote project health report | `codex-thread-tools health remote --host <ssh-host>` |
-| One session health report | `codex-thread-tools health check <session.jsonl>` |
-| Token usage report | `codex-thread-tools health tokens` |
-| Redacted handoff summary draft | `codex-thread-tools handoff-summary <session.jsonl>` |
-| Record handoff marker | `codex-thread-tools handoff-marker record ...` |
-| Plan old session archive | `codex-thread-tools session-archive plan ...` |
-| Archive old session files | `codex-thread-tools session-archive archive ...` |
-| Verify session archive | `codex-thread-tools session-archive verify --manifest <manifest.json>` |
-| Prune archived local sessions | `codex-thread-tools session-archive prune-local --manifest <manifest.json> --confirm-prune-local` |
-| Scan visual references | `codex-thread-tools visual-archive scan <session.jsonl>` |
-| Archive visual references | `codex-thread-tools visual-archive archive <session.jsonl> ...` |
-| Inspect a damaged thread | `codex-thread-tools recover inspect <session.jsonl>` |
-
-## The Simple Rule
-
-Use compaction to keep working inside the current thread.
-
-Use a handoff when the thread is getting large, has compacted several times, or
-contains decisions that should survive outside the chat log.
-
-Use archive tools when old sessions or visuals should be preserved somewhere
-other than your live Codex session folder.
-
-Use recovery tools only after a thread is already hard to load, has disappeared
-from the sidebar, or has hit a compaction/context error.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+- **Status:** Production
+- **Version:** `1.1.0`
+- **Issues:** [Report a bug or request a feature](https://github.com/zenzig/codex-thread-tools/issues)
+- **Security:** Read the [security policy](SECURITY.md) before reporting a vulnerability.
+- **Development:** See the [development guide](docs/development.md) for tests and package checks.
+- **License:** [MIT](LICENSE)

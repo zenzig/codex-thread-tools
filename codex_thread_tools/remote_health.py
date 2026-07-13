@@ -482,6 +482,16 @@ def _run_ssh(
         ) from exc
 
 
+def _login_shell_args(remote_args: list[str]) -> list[str]:
+    return [
+        "sh",
+        "-c",
+        'exec "${SHELL:-/bin/sh}" -lc "$1"',
+        "codex-thread-tools-login",
+        shlex.join(remote_args),
+    ]
+
+
 def _raise_remote_command_error(
     result: subprocess.CompletedProcess[str],
     host: str,
@@ -511,15 +521,28 @@ def run_remote_health(
     ssh_executable: str = "ssh",
     runner: Runner = subprocess.run,
 ) -> tuple[dict[str, Any], int, str | None]:
+    use_login_shell = False
+    version_args = ["codex-thread-tools", "--version"]
     version_result = _run_ssh(
         host,
-        ["codex-thread-tools", "--version"],
+        version_args,
         connect_timeout=connect_timeout,
         ssh_executable=ssh_executable,
         runner=runner,
         operation="remote version probe",
         wall_timeout=connect_timeout + 5,
     )
+    if version_result.returncode == 127:
+        use_login_shell = True
+        version_result = _run_ssh(
+            host,
+            _login_shell_args(version_args),
+            connect_timeout=connect_timeout,
+            ssh_executable=ssh_executable,
+            runner=runner,
+            operation="remote login-shell version probe",
+            wall_timeout=connect_timeout + 5,
+        )
     if version_result.returncode != 0:
         _raise_remote_command_error(version_result, host, command="version")
     remote_version = version_result.stdout.strip()
@@ -527,9 +550,10 @@ def run_remote_health(
 
     health_args = deepcopy(remote_args)
     health_args.extend(("--remote-safe-json", "--progress", "never"))
+    health_command = ["codex-thread-tools", *health_args]
     health_result = _run_ssh(
         host,
-        ["codex-thread-tools", *health_args],
+        _login_shell_args(health_command) if use_login_shell else health_command,
         connect_timeout=connect_timeout,
         ssh_executable=ssh_executable,
         runner=runner,
