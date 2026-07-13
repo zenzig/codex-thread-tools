@@ -90,6 +90,34 @@ def validate_projects_report(value: object) -> dict[str, Any]:
     return value
 
 
+def select_remote_project(
+    report: dict[str, Any],
+    project: str | None,
+) -> dict[str, Any]:
+    selected = deepcopy(report)
+    if project is None:
+        return selected
+    projects = [item for item in selected["projects"] if item["project"] == project]
+    if not projects:
+        raise RemoteHealthError(f"remote project was not found: {project}")
+    selected["projects"] = projects
+    selected["summary"] = {
+        "projects": len(projects),
+        "ok": sum(item["status"] == "ok" for item in projects),
+        "warn": sum(item["status"] == "warn" for item in projects),
+        "danger": sum(item["status"] == "danger" for item in projects),
+        "retired": sum(item["status"] == "retired" for item in projects),
+    }
+    return selected
+
+
+def add_remote_metadata(report: dict[str, Any], host: str) -> dict[str, Any]:
+    result = deepcopy(report)
+    result["source"] = "remote"
+    result["host"] = host
+    return result
+
+
 def _remote_stderr(result: subprocess.CompletedProcess[str]) -> str:
     value = result.stderr or ""
     if isinstance(value, bytes):

@@ -7,11 +7,13 @@ from pathlib import Path
 
 import pytest
 
+from codex_thread_tools.remote_health import add_remote_metadata
 from codex_thread_tools.remote_health import build_ssh_argv
 from codex_thread_tools.remote_health import (
     RemoteHealthError,
     ensure_compatible_versions,
     run_remote_health,
+    select_remote_project,
     validate_projects_report,
 )
 
@@ -38,6 +40,115 @@ def fixture_projects_report() -> dict:
     )
     assert result.returncode in {0, 2, 3}, result.stderr
     return json.loads(result.stdout)
+
+
+@pytest.fixture
+def projects_payload() -> dict:
+    return validate_projects_report(
+        {
+            "session_root": "/remote/sessions",
+            "summary": {
+                "projects": 4,
+                "ok": 1,
+                "warn": 1,
+                "danger": 1,
+                "retired": 1,
+            },
+            "projects": [
+                {
+                    "project": "/work/project-a",
+                    "status": "ok",
+                    "recommendation": "continue",
+                    "metrics": {},
+                    "reasons": [],
+                    "handoff_readiness": {},
+                },
+                {
+                    "project": "/work/project-b",
+                    "status": "warn",
+                    "recommendation": "review",
+                    "metrics": {},
+                    "reasons": [],
+                    "handoff_readiness": {},
+                },
+                {
+                    "project": "/work/project-c",
+                    "status": "danger",
+                    "recommendation": "handoff-now",
+                    "metrics": {},
+                    "reasons": [],
+                    "handoff_readiness": {},
+                },
+                {
+                    "project": "/work/project-d",
+                    "status": "retired",
+                    "recommendation": "archive",
+                    "metrics": {},
+                    "reasons": [],
+                    "handoff_readiness": {},
+                },
+            ],
+        }
+    )
+
+
+def test_select_remote_project_recomputes_summary(projects_payload: dict) -> None:
+    selected = select_remote_project(projects_payload, "/work/project-b")
+
+    assert [item["project"] for item in selected["projects"]] == [
+        "/work/project-b"
+    ]
+    assert selected["summary"] == {
+        "projects": 1,
+        "ok": 0,
+        "warn": 1,
+        "danger": 0,
+        "retired": 0,
+    }
+
+
+def test_select_remote_project_rejects_absent_path(projects_payload: dict) -> None:
+    with pytest.raises(
+        RemoteHealthError,
+        match=r"remote project was not found: /work/missing",
+    ):
+        select_remote_project(projects_payload, "/work/missing")
+
+
+def test_add_remote_metadata_does_not_mutate_input(projects_payload: dict) -> None:
+    result = add_remote_metadata(projects_payload, "node1.atomicfalls.com")
+
+    assert result["source"] == "remote"
+    assert result["host"] == "node1.atomicfalls.com"
+    assert "source" not in projects_payload
+
+
+def test_malicious_project_path_is_exact_and_not_forwarded_to_ssh(
+    projects_payload: dict,
+) -> None:
+    malicious = "/home/rich/atomic-development; touch /tmp/project-injection"
+    projects_payload["projects"].append(
+        {
+            "project": malicious,
+            "status": "ok",
+            "recommendation": "continue",
+            "metrics": {},
+            "reasons": [],
+            "handoff_readiness": {},
+        }
+    )
+    calls, runner = make_runner(projects_payload)
+
+    report, _returncode, _warning = run_remote_health(
+        "node1.atomicfalls.com",
+        ["health", "projects"],
+        local_version="1.0.0",
+        runner=runner,
+    )
+    selected = select_remote_project(report, malicious)
+
+    assert selected["projects"][0]["project"] == malicious
+    assert all(malicious not in command[-1] for command, _kwargs in calls)
 
 
 def test_build_ssh_argv_keeps_host_and_remote_arguments_inert() -> None:
