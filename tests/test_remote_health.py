@@ -180,6 +180,22 @@ def test_build_ssh_argv_keeps_host_and_remote_arguments_inert() -> None:
     )
 
 
+def test_run_remote_health_rejects_option_like_host_before_execution() -> None:
+    def runner(_argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("runner must not be called")
+
+    with pytest.raises(
+        RemoteHealthError,
+        match=re.escape("SSH host must be a non-empty destination"),
+    ):
+        run_remote_health(
+            "-unsafe-host",
+            ["health", "projects"],
+            local_version="1.0.0",
+            runner=runner,
+        )
+
+
 def test_equal_versions_need_no_warning() -> None:
     assert ensure_compatible_versions("1.1.0", "1.1.0") is None
 
@@ -434,6 +450,19 @@ def test_run_remote_health_maps_ssh_timeout() -> None:
         RemoteHealthError,
         match=re.escape("SSH connection to node1.atomicfalls.com timed out"),
     ):
+        run_remote_health(
+            "node1.atomicfalls.com",
+            ["health", "projects"],
+            local_version="1.0.0",
+            runner=runner,
+        )
+
+
+def test_run_remote_health_propagates_keyboard_interrupt() -> None:
+    def runner(_argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
         run_remote_health(
             "node1.atomicfalls.com",
             ["health", "projects"],

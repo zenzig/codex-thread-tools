@@ -116,6 +116,7 @@ with open(os.environ[\"FAKE_SSH_RECORD\"], \"a\", encoding=\"utf-8\") as handle:
 command = arguments[-1]
 if command == \"codex-thread-tools --version\":
     print(os.environ.get(\"FAKE_SSH_VERSION\", \"1.0.0\"))
+    print(os.environ.get(\"FAKE_SSH_VERSION_STDERR\", \"\"), file=sys.stderr)
     raise SystemExit(int(os.environ.get(\"FAKE_SSH_VERSION_EXIT\", \"0\")))
 print(os.environ[\"FAKE_SSH_REPORT\"])
 print(os.environ.get(\"FAKE_SSH_HEALTH_STDERR\", \"\"), file=sys.stderr)
@@ -269,6 +270,127 @@ def test_remote_health_errors_return_one_with_empty_stdout(tmp_path: Path) -> No
     assert result.returncode == 1
     assert result.stdout == ""
     assert "error: SSH command failed for node1.atomicfalls.com: Connection refused" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("env_overrides", "args", "expected"),
+    [
+        (
+            {
+                "FAKE_SSH_VERSION_EXIT": "255",
+                "FAKE_SSH_VERSION_STDERR": "Permission denied (publickey)",
+            },
+            (),
+            "SSH command failed for node1.atomicfalls.com: Permission denied (publickey)",
+        ),
+        (
+            {"FAKE_SSH_VERSION_EXIT": "127"},
+            (),
+            "not installed or not available to non-interactive SSH",
+        ),
+        (
+            {"FAKE_SSH_VERSION": "2.0.0"},
+            (),
+            "incompatible remote version",
+        ),
+        (
+            {"FAKE_SSH_REPORT": "{truncated: remote-stdout-sentinel}"},
+            (),
+            "returned malformed JSON",
+        ),
+        (
+            {
+                "FAKE_SSH_REPORT": json.dumps(
+                    {
+                        "session_root": "/remote/.codex/sessions",
+                        "summary": {"projects": 0, "ok": 0, "warn": 0, "danger": 0, "retired": 0},
+                    }
+                )
+            },
+            (),
+            "invalid remote health report",
+        ),
+        (
+            {},
+            ("--project", "/home/rich/missing"),
+            "remote project was not found",
+        ),
+        (
+            {},
+            ("--connect-timeout", "0"),
+            "timeout must be at least 1 second",
+        ),
+    ],
+)
+def test_remote_operational_failures_keep_stdout_empty(
+    tmp_path: Path,
+    env_overrides: dict[str, str],
+    args: tuple[str, ...],
+    expected: str,
+) -> None:
+    env = fake_ssh_env(tmp_path, remote_projects_report("ok"))
+    env.update(env_overrides)
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--json",
+        *args,
+    )
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert expected in result.stderr
+    assert "remote-stdout-sentinel" not in result.stderr
+
+
+def test_remote_injection_values_remain_inert_and_project_stays_local(
+    tmp_path: Path,
+) -> None:
+    host_sentinel = Path("/tmp/host-injection")
+    project_sentinel = Path("/tmp/project-injection")
+    host_sentinel.unlink(missing_ok=True)
+    project_sentinel.unlink(missing_ok=True)
+    malicious_host = "node1.atomicfalls.com;touch /tmp/host-injection"
+    malicious_project = "/home/rich/atomic-development;touch /tmp/project-injection"
+    report = remote_projects_report("ok")
+    report["projects"][0]["project"] = malicious_project
+    env = fake_ssh_env(tmp_path, report)
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        malicious_host,
+        "--project",
+        malicious_project,
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not host_sentinel.exists()
+    assert not project_sentinel.exists()
+    for ssh_arguments in fake_ssh_commands(env):
+        assert ssh_arguments.count(malicious_host) == 1
+        assert malicious_project not in ssh_arguments[-1]
+
+
+def test_remote_rejects_option_like_host_before_ssh_execution(tmp_path: Path) -> None:
+    env = fake_ssh_env(tmp_path, remote_projects_report("ok"))
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host=-unsafe-host",
+        "--json",
+    )
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "SSH host must be a non-empty destination" in result.stderr
+    assert not Path(env["FAKE_SSH_RECORD"]).exists()
 
 
 @pytest.mark.parametrize(
