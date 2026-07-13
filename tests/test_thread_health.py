@@ -60,6 +60,36 @@ def test_remote_help_exposes_connection_and_report_options() -> None:
         "--json",
     ):
         assert option in result.stdout
+    assert "--progress" not in result.stdout
+    assert "--handoff-marker-file" not in result.stdout
+
+
+@pytest.mark.parametrize("command", ["check", "projects", "tokens"])
+def test_local_health_help_preserves_scan_options(command: str) -> None:
+    result = run_health(command, "--help")
+
+    assert result.returncode == 0
+    assert "--progress" in result.stdout
+    assert "--handoff-marker-file" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("--progress", "never"),
+        ("--handoff-marker-file", "/local/markers.jsonl"),
+    ],
+)
+def test_remote_rejects_local_scan_options(option: str, value: str) -> None:
+    result = run_health(
+        "remote",
+        "--host=-unsafe-host",
+        option,
+        value,
+    )
+
+    assert result.returncode == 2
+    assert f"unrecognized arguments: {option} {value}" in result.stderr
 
 
 def test_remote_requires_host() -> None:
@@ -252,8 +282,6 @@ def test_remote_forwards_explicit_thresholds_only(tmp_path: Path) -> None:
         "compact",
         "--size-format",
         "human",
-        "--handoff-marker-file",
-        "/local/markers.jsonl",
         "--json",
     )
 
@@ -312,6 +340,30 @@ def test_remote_health_errors_return_one_with_empty_stdout(tmp_path: Path) -> No
     assert result.returncode == 1
     assert result.stdout == ""
     assert "error: SSH command failed for node1.atomicfalls.com: Connection refused" in result.stderr
+
+
+def test_remote_danger_with_zeroed_summary_is_protocol_error(tmp_path: Path) -> None:
+    report = remote_projects_report("danger")
+    report["summary"] = {
+        "projects": 0,
+        "ok": 0,
+        "warn": 0,
+        "danger": 0,
+        "retired": 0,
+    }
+    env = fake_ssh_env(tmp_path, report)
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--json",
+    )
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "summary does not match projects" in result.stderr
 
 
 @pytest.mark.parametrize(
@@ -443,6 +495,7 @@ def test_remote_safe_projects_protocol_never_serializes_raw_session_content(
         "event": "RAW_EVENT_SENTINEL_7d83",
         "tool": "RAW_TOOL_SENTINEL_4a21",
         "transcript": "RAW_TRANSCRIPT_SENTINEL_91ce",
+        "replacement": "raw-marker-shaped-transcript-sentinel",
         "visual": "RAW_VISUAL_SENTINEL_2bf5",
     }
     session_root = tmp_path / "sessions"
@@ -490,6 +543,25 @@ def test_remote_safe_projects_protocol_never_serializes_raw_session_content(
                     "role": "user",
                     "content": [
                         {
+                            "type": "input_text",
+                            "text": (
+                                "Codex thread handoff marker:\n"
+                                f"source_session_id: {sentinels['replacement']}\n"
+                                "handoff_file: /work/private/handoff.md\n"
+                                "project: /work/privacy-project\n"
+                                "handoff_sequence: 1"
+                            ),
+                        }
+                    ],
+                },
+            },
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
                             "type": "input_image",
                             "image_url": (
                                 "data:image/png;base64," + sentinels["visual"]
@@ -523,6 +595,7 @@ def test_remote_safe_projects_protocol_never_serializes_raw_session_content(
         "compacted_records",
         "visual_artifacts",
     }
+    assert remote_payload["projects"][0]["replaces_session_ids"] == []
 
     local_result = run_health(
         "projects",
@@ -538,6 +611,9 @@ def test_remote_safe_projects_protocol_never_serializes_raw_session_content(
     assert sentinels["event"] in local_payload["projects"][0]["metrics"][
         "compaction_failures"
     ][0]
+    assert local_payload["projects"][0]["replaces_session_ids"] == [
+        sentinels["replacement"]
+    ]
 
 
 @pytest.mark.parametrize(

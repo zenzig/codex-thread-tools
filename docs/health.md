@@ -95,9 +95,10 @@ serialization, the remote process builds a privacy-safe allowlisted report
 containing project identity, health status, renderer metrics, handoff state,
 and canonical diagnostics. Raw session JSONL records, transcript text, tool
 payloads, event or tool-error excerpts, and visual data never cross SSH. Only
-package versions and the allowlisted health report cross SSH. Project matching
-is exact; a path that differs by a symlink, spelling, or trailing component is
-not treated as the same project.
+package versions, the allowlisted health report, and
+bounded remote stderr diagnostics cross SSH. Project matching is exact;
+a path that differs by a symlink, spelling, or trailing component is not
+treated as the same project.
 
 The remote command requires privacy-safe protocol support on the SSH host. A
 remote minor version without that protocol fails closed with an upgrade error;

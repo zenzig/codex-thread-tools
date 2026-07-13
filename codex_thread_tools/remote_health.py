@@ -18,7 +18,10 @@ class RemoteHealthError(ValueError):
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 VERSION_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
-SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+CODEX_SESSION_ID_PATTERN = re.compile(
+    r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-"
+    r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+)
 UTC_TIMESTAMP_PATTERN = re.compile(
     r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
     r"(?:\.[0-9]{1,6})?Z$"
@@ -157,6 +160,13 @@ def _is_enum(value: object, allowed: set[str]) -> bool:
     return isinstance(value, str) and value in allowed
 
 
+def _is_codex_session_id(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and CODEX_SESSION_ID_PATTERN.fullmatch(value) is not None
+    )
+
+
 def _is_canonical_utc_timestamp(value: object) -> bool:
     if not isinstance(value, str) or not UTC_TIMESTAMP_PATTERN.fullmatch(value):
         return False
@@ -188,6 +198,16 @@ def _nonnegative_int(value: object, field: str) -> int:
     if not _is_int(value):
         raise RemoteHealthError(f"cannot build remote-safe health report: invalid {field}")
     return value
+
+
+def _project_summary(projects: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "projects": len(projects),
+        "ok": sum(item["status"] == "ok" for item in projects),
+        "warn": sum(item["status"] == "warn" for item in projects),
+        "danger": sum(item["status"] == "danger" for item in projects),
+        "retired": sum(item["status"] == "retired" for item in projects),
+    }
 
 
 def build_remote_safe_report(report: dict[str, Any]) -> dict[str, Any]:
@@ -277,7 +297,7 @@ def build_remote_safe_report(report: dict[str, Any]) -> dict[str, Any]:
             "replaces_session_ids": [
                 value
                 for value in replacements
-                if isinstance(value, str) and SESSION_ID_PATTERN.fullmatch(value)
+                if _is_codex_session_id(value)
             ]
             if isinstance(replacements, list)
             else [],
@@ -383,12 +403,15 @@ def validate_projects_report(value: object) -> dict[str, Any]:
             raise RemoteHealthError("invalid remote health report: invalid handoff summary")
         replacements = project["replaces_session_ids"]
         if not isinstance(replacements, list) or any(
-            not isinstance(item, str) or not SESSION_ID_PATTERN.fullmatch(item)
-            for item in replacements
+            not _is_codex_session_id(item) for item in replacements
         ):
             raise RemoteHealthError("invalid remote health report: invalid replacement ids")
         if not isinstance(project["retired_by_handoff"], bool):
             raise RemoteHealthError("invalid remote health report: invalid retirement state")
+    if summary != _project_summary(projects):
+        raise RemoteHealthError(
+            "invalid remote health report: summary does not match projects"
+        )
     return value
 
 
@@ -403,13 +426,7 @@ def select_remote_project(
     if not projects:
         raise RemoteHealthError(f"remote project was not found: {project}")
     selected["projects"] = projects
-    selected["summary"] = {
-        "projects": len(projects),
-        "ok": sum(item["status"] == "ok" for item in projects),
-        "warn": sum(item["status"] == "warn" for item in projects),
-        "danger": sum(item["status"] == "danger" for item in projects),
-        "retired": sum(item["status"] == "retired" for item in projects),
-    }
+    selected["summary"] = _project_summary(projects)
     return selected
 
 
@@ -434,6 +451,8 @@ def _run_ssh(
     connect_timeout: int,
     ssh_executable: str,
     runner: Runner,
+    operation: str,
+    wall_timeout: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
     argv = build_ssh_argv(
         host,
@@ -441,23 +460,25 @@ def _run_ssh(
         connect_timeout=connect_timeout,
         ssh_executable=ssh_executable,
     )
+    runner_kwargs: dict[str, Any] = {
+        "text": True,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "check": False,
+        "shell": False,
+    }
+    if wall_timeout is not None:
+        runner_kwargs["timeout"] = wall_timeout
     try:
-        return runner(
-            argv,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-            shell=False,
-            timeout=connect_timeout + 5,
-        )
+        return runner(argv, **runner_kwargs)
     except FileNotFoundError as exc:
         raise RemoteHealthError(
             f"SSH executable was not found: {ssh_executable}"
         ) from exc
     except subprocess.TimeoutExpired as exc:
+        elapsed = wall_timeout if wall_timeout is not None else exc.timeout
         raise RemoteHealthError(
-            f"SSH connection to {host} timed out"
+            f"{operation} timed out on {host} after {elapsed} seconds"
         ) from exc
 
 
@@ -496,6 +517,8 @@ def run_remote_health(
         connect_timeout=connect_timeout,
         ssh_executable=ssh_executable,
         runner=runner,
+        operation="remote version probe",
+        wall_timeout=connect_timeout + 5,
     )
     if version_result.returncode != 0:
         _raise_remote_command_error(version_result, host, command="version")
@@ -510,6 +533,7 @@ def run_remote_health(
         connect_timeout=connect_timeout,
         ssh_executable=ssh_executable,
         runner=runner,
+        operation="remote health analysis",
     )
     if health_result.returncode not in {0, 2, 3}:
         _raise_remote_command_error(health_result, host, command="health")

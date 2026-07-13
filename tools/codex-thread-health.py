@@ -616,22 +616,12 @@ def remote_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def add_threshold_args(
-    parser: argparse.ArgumentParser,
-    *,
-    safe_test_mode: bool = True,
-) -> None:
+def add_report_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--warn-bytes", type=int)
     parser.add_argument("--danger-bytes", type=int)
     parser.add_argument("--warn-items", type=int)
     parser.add_argument("--danger-items", type=int)
     parser.add_argument("--max-healthy-compactions", type=int)
-    if safe_test_mode:
-        parser.add_argument(
-            "--safe-test-mode",
-            action="store_true",
-            help="refuse to read from ~/.codex/sessions; intended for fixture and scratch runs",
-        )
     parser.add_argument("--format", choices=("json", "pretty"), default="pretty")
     parser.add_argument(
         "--mode",
@@ -643,7 +633,7 @@ def add_threshold_args(
         "--size-format",
         choices=("bytes", "human", "both"),
         default="bytes",
-        help="size display for pretty output and progress messages",
+        help="size display for pretty output",
     )
     parser.add_argument(
         "--json",
@@ -651,6 +641,14 @@ def add_threshold_args(
         const="json",
         dest="format",
         help="print machine-readable JSON instead of the beginner-friendly report",
+    )
+
+
+def add_local_scan_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--safe-test-mode",
+        action="store_true",
+        help="refuse to read from ~/.codex/sessions; intended for fixture and scratch runs",
     )
     parser.add_argument(
         "--progress",
@@ -701,7 +699,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     check = subparsers.add_parser("check", help="analyze one session file")
     check.add_argument("session_file")
-    add_threshold_args(check)
+    add_report_args(check)
+    add_local_scan_args(check)
     check.set_defaults(func=check_command)
 
     projects = subparsers.add_parser(
@@ -713,7 +712,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=str(default_session_root()),
         help="Codex session root to scan",
     )
-    add_threshold_args(projects)
+    add_report_args(projects)
+    add_local_scan_args(projects)
     projects.add_argument(
         "--remote-safe-json",
         action="store_true",
@@ -730,7 +730,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=str(default_session_root()),
         help="Codex session root to scan",
     )
-    add_threshold_args(tokens)
+    add_report_args(tokens)
+    add_local_scan_args(tokens)
     tokens.set_defaults(func=tokens_command)
 
     remote = subparsers.add_parser(
@@ -752,7 +753,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=10,
         help="SSH connection timeout in seconds",
     )
-    add_threshold_args(remote, safe_test_mode=False)
+    add_report_args(remote)
     remote.set_defaults(func=remote_command)
 
     return parser

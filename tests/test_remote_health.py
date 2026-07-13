@@ -3,6 +3,7 @@ import re
 import shlex
 import subprocess
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -148,6 +149,8 @@ def projects_payload() -> dict:
 
 
 def test_select_remote_project_recomputes_summary(projects_payload: dict) -> None:
+    original = deepcopy(projects_payload)
+
     selected = select_remote_project(projects_payload, "/work/project-b")
 
     assert [item["project"] for item in selected["projects"]] == [
@@ -160,6 +163,19 @@ def test_select_remote_project_recomputes_summary(projects_payload: dict) -> Non
         "danger": 0,
         "retired": 0,
     }
+    assert projects_payload == original
+
+
+def test_select_remote_project_with_no_filter_does_not_mutate_input(
+    projects_payload: dict,
+) -> None:
+    original = deepcopy(projects_payload)
+
+    selected = select_remote_project(projects_payload, None)
+
+    assert selected == original
+    assert selected is not projects_payload
+    assert projects_payload == original
 
 
 def test_select_remote_project_rejects_absent_path(projects_payload: dict) -> None:
@@ -176,19 +192,18 @@ def test_add_remote_metadata_does_not_mutate_input(projects_payload: dict) -> No
     assert result["source"] == "remote"
     assert result["host"] == "node1.atomicfalls.com"
     assert "source" not in projects_payload
+    assert "host" not in projects_payload
 
 
 def test_malicious_project_path_is_exact_and_not_forwarded_to_ssh(
     projects_payload: dict,
 ) -> None:
     malicious = "/home/rich/atomic-development; touch /tmp/project-injection"
-    projects_payload["projects"].append(
-        {
-            **projects_payload["projects"][0],
-            "project": malicious,
-            "file": "/remote/sessions/malicious.jsonl",
-        }
-    )
+    projects_payload["projects"][0] = {
+        **projects_payload["projects"][0],
+        "project": malicious,
+        "file": "/remote/sessions/malicious.jsonl",
+    }
     calls, runner = make_runner(projects_payload)
 
     report, _returncode, _warning = run_remote_health(
@@ -300,6 +315,24 @@ def test_validate_projects_report_accepts_fixture_payload() -> None:
     assert validated == payload
 
 
+def test_validate_projects_report_rejects_summary_that_disagrees_with_projects() -> None:
+    payload = fixture_remote_projects_report()
+    payload["projects"][0]["status"] = "danger"
+    payload["summary"] = {
+        "projects": 0,
+        "ok": 0,
+        "warn": 0,
+        "danger": 0,
+        "retired": 0,
+    }
+
+    with pytest.raises(
+        RemoteHealthError,
+        match="summary does not match projects",
+    ):
+        validate_projects_report(payload)
+
+
 def test_validate_projects_report_rejects_missing_privacy_protocol() -> None:
     payload = fixture_remote_projects_report()
     del payload["remote_health_protocol"]
@@ -350,6 +383,50 @@ def test_remote_safe_builder_replaces_diagnostics_and_drops_invalid_id_list() ->
         "additional health signal omitted by remote privacy filter"
     ]
     assert safe["projects"][0]["replaces_session_ids"] == []
+
+
+def test_remote_safe_builder_allows_only_canonical_codex_session_ids() -> None:
+    lower_uuid = "019e7100-fe04-7823-a3b6-d7ab058ccc05"
+    upper_uuid = "019E7100-FE04-7823-A3B6-D7AB058CCC05"
+    sentinel = "raw-marker-shaped-transcript-sentinel"
+    payload = fixture_projects_report()
+    payload["projects"][0]["replaces_session_ids"] = [
+        lower_uuid,
+        upper_uuid,
+        sentinel,
+    ]
+
+    safe = build_remote_safe_report(payload)
+
+    assert safe["projects"][0]["replaces_session_ids"] == [lower_uuid, upper_uuid]
+    assert sentinel not in json.dumps(safe)
+
+
+@pytest.mark.parametrize(
+    "session_id",
+    [
+        "019e7100-fe04-7823-a3b6-d7ab058ccc05",
+        "019E7100-FE04-7823-A3B6-D7AB058CCC05",
+    ],
+)
+def test_validate_projects_report_accepts_canonical_codex_session_ids(
+    session_id: str,
+) -> None:
+    payload = fixture_remote_projects_report()
+    payload["projects"][0]["replaces_session_ids"] = [session_id]
+
+    assert validate_projects_report(payload) == payload
+
+
+def test_validate_projects_report_rejects_non_uuid_replacement_id() -> None:
+    sentinel = "raw-marker-shaped-transcript-sentinel"
+    payload = fixture_remote_projects_report()
+    payload["projects"][0]["replaces_session_ids"] = [sentinel]
+
+    with pytest.raises(RemoteHealthError) as error:
+        validate_projects_report(payload)
+
+    assert sentinel not in str(error.value)
 
 
 def test_remote_safe_builder_drops_noncanonical_handoff_timestamp() -> None:
@@ -443,15 +520,15 @@ def test_run_remote_health_probes_version_and_returns_report(
             "never",
         ],
     ]
-    for _command, kwargs in calls:
-        assert kwargs == {
-            "text": True,
-            "stdout": subprocess.PIPE,
-            "stderr": subprocess.PIPE,
-            "check": False,
-            "shell": False,
-            "timeout": 12,
-        }
+    common_runner_kwargs = {
+        "text": True,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "check": False,
+        "shell": False,
+    }
+    assert calls[0][1] == {**common_runner_kwargs, "timeout": 12}
+    assert calls[1][1] == common_runner_kwargs
 
 
 def test_run_remote_health_returns_version_drift_warning() -> None:
@@ -601,7 +678,9 @@ def test_run_remote_health_maps_ssh_timeout() -> None:
 
     with pytest.raises(
         RemoteHealthError,
-        match=re.escape("SSH connection to node1.atomicfalls.com timed out"),
+        match=re.escape(
+            "remote version probe timed out on node1.atomicfalls.com after 15 seconds"
+        ),
     ):
         run_remote_health(
             "node1.atomicfalls.com",
