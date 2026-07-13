@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.1.0 - 2026-07-12
+
+- Add `codex-thread-tools health remote --host <ssh-host>` for health reports
+  generated on a remote Codex host without copying session JSONL files locally.
+- Support exact project selection, existing display modes and thresholds, JSON
+  output, version compatibility checks, and actionable SSH diagnostics.
+
 ## 1.0.0 - 2026-06-27
 
 - Mark the CLI surface as production-ready and move the package version to

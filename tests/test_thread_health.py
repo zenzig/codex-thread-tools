@@ -293,7 +293,7 @@ def test_remote_version_warning_preserves_json_stdout(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["source"] == "remote"
-    assert "Warning: remote version differs: local 1.0.0, remote 1.0.1" in result.stderr
+    assert "Warning: remote version differs: local 1.1.0, remote 1.0.1" in result.stderr
 
 
 def test_remote_health_errors_return_one_with_empty_stdout(tmp_path: Path) -> None:

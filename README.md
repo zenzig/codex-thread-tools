@@ -5,7 +5,7 @@
 **Production-ready CLI tools and a Codex skill for keeping long OpenAI Codex threads healthy.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue)](CHANGELOG.md)
 [![Docs](https://img.shields.io/badge/docs-index-brightgreen)](docs/README.md)
 [![Tests](https://img.shields.io/badge/tests-pytest-brightgreen)](docs/development.md)
 
@@ -17,7 +17,7 @@
 
 ## What This Is
 
-Current version: `1.0.0`
+Current version: `1.1.0`
 
 `codex-thread-tools` works with local Codex session JSONL files under
 `~/.codex/sessions/`. Local reports read that local session root; remote
@@ -28,7 +28,7 @@ oversized local thread a good place to keep all project memory. This repo gives
 you practical tools for checking thread health, preserving durable context,
 archiving old session data, and recovering from oversized-session problems.
 
-The `1.0.0` release marks the CLI surface as production-ready. Stable scripting
+The `1.1.0` release adds remote project health reporting. Stable scripting
 should use `--json`; human-readable output may keep improving over time.
 
 ## Quick Start
