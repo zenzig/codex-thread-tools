@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import json
 import base64
+import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,10 +26,283 @@ def run_health(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def run_health_with_env(
+    env: dict[str, str],
+    *args: str,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "codex-thread-health.py"), *args],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
 def assert_json_stdout(result: subprocess.CompletedProcess[str]) -> dict:
     assert "Codex Thread Health" not in result.stdout
     assert "Codex Project Token Usage" not in result.stdout
     return json.loads(result.stdout)
+
+
+def test_remote_help_exposes_connection_and_report_options() -> None:
+    result = run_health("remote", "--help")
+
+    assert result.returncode == 0
+    for option in (
+        "--host",
+        "--project",
+        "--connect-timeout",
+        "--mode",
+        "--size-format",
+        "--json",
+    ):
+        assert option in result.stdout
+
+
+def test_remote_requires_host() -> None:
+    result = run_health("remote")
+
+    assert result.returncode == 2
+    assert "the following arguments are required: --host" in result.stderr
+
+
+def remote_projects_report(*statuses: str) -> dict:
+    projects = [
+        {
+            "project": f"/home/rich/project-{index}",
+            "status": status,
+            "recommendation": "handoff-now" if status == "danger" else "continue",
+            "metrics": {
+                "bytes": 1024,
+                "response_items": 10,
+                "compacted_records": 0,
+                "visual_artifacts": 0,
+            },
+            "reasons": [],
+            "handoff_readiness": {"status": "not-needed"},
+        }
+        for index, status in enumerate(statuses, 1)
+    ]
+    return {
+        "session_root": "/remote/.codex/sessions",
+        "summary": {
+            "projects": len(projects),
+            "ok": sum(item["status"] == "ok" for item in projects),
+            "warn": sum(item["status"] == "warn" for item in projects),
+            "danger": sum(item["status"] == "danger" for item in projects),
+            "retired": sum(item["status"] == "retired" for item in projects),
+        },
+        "projects": projects,
+    }
+
+
+def fake_ssh_env(tmp_path: Path, report: dict) -> dict[str, str]:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    record_file = tmp_path / "ssh-arguments.jsonl"
+    ssh = fake_bin / "ssh"
+    ssh.write_text(
+        """#!/usr/bin/env python3
+import json
+import os
+import sys
+
+arguments = sys.argv[1:]
+with open(os.environ[\"FAKE_SSH_RECORD\"], \"a\", encoding=\"utf-8\") as handle:
+    handle.write(json.dumps(arguments) + \"\\n\")
+command = arguments[-1]
+if command == \"codex-thread-tools --version\":
+    print(os.environ.get(\"FAKE_SSH_VERSION\", \"1.0.0\"))
+    raise SystemExit(int(os.environ.get(\"FAKE_SSH_VERSION_EXIT\", \"0\")))
+print(os.environ[\"FAKE_SSH_REPORT\"])
+print(os.environ.get(\"FAKE_SSH_HEALTH_STDERR\", \"\"), file=sys.stderr)
+raise SystemExit(int(os.environ.get(\"FAKE_SSH_HEALTH_EXIT\", \"0\")))
+""",
+        encoding="utf-8",
+    )
+    ssh.chmod(0o755)
+    env = os.environ.copy()
+    env.update(
+        {
+            "FAKE_SSH_RECORD": str(record_file),
+            "FAKE_SSH_REPORT": json.dumps(report),
+            "PATH": f"{fake_bin}{os.pathsep}{env['PATH']}",
+        }
+    )
+    return env
+
+
+def fake_ssh_commands(env: dict[str, str]) -> list[list[str]]:
+    return [
+        json.loads(line)
+        for line in Path(env["FAKE_SSH_RECORD"]).read_text(encoding="utf-8").splitlines()
+    ]
+
+
+def test_remote_json_adds_metadata_and_filters_project(tmp_path: Path) -> None:
+    report = remote_projects_report("ok", "danger")
+    report["projects"][0]["project"] = "/home/rich/atomic-development"
+    env = fake_ssh_env(tmp_path, report)
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--project",
+        "/home/rich/atomic-development",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["source"] == "remote"
+    assert payload["host"] == "node1.atomicfalls.com"
+    assert [item["project"] for item in payload["projects"]] == [
+        "/home/rich/atomic-development"
+    ]
+
+
+def test_remote_pretty_identifies_source_and_host(tmp_path: Path) -> None:
+    env = fake_ssh_env(tmp_path, remote_projects_report("ok"))
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--mode",
+        "compact",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Source: REMOTE" in result.stdout
+    assert "Host: node1.atomicfalls.com" in result.stdout
+
+
+def test_remote_forwards_explicit_thresholds_only(tmp_path: Path) -> None:
+    report = remote_projects_report("ok")
+    report["projects"][0]["project"] = "/home/rich/atomic-development"
+    env = fake_ssh_env(tmp_path, report)
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--project",
+        "/home/rich/atomic-development",
+        "--warn-bytes",
+        "101",
+        "--danger-bytes",
+        "202",
+        "--warn-items",
+        "3",
+        "--danger-items",
+        "4",
+        "--max-healthy-compactions",
+        "5",
+        "--mode",
+        "compact",
+        "--size-format",
+        "human",
+        "--handoff-marker-file",
+        "/local/markers.jsonl",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    health_command = shlex.split(fake_ssh_commands(env)[1][-1])
+    assert health_command == [
+        "codex-thread-tools",
+        "health",
+        "projects",
+        "--warn-bytes",
+        "101",
+        "--danger-bytes",
+        "202",
+        "--warn-items",
+        "3",
+        "--danger-items",
+        "4",
+        "--max-healthy-compactions",
+        "5",
+        "--json",
+        "--progress",
+        "never",
+    ]
+
+
+def test_remote_version_warning_preserves_json_stdout(tmp_path: Path) -> None:
+    env = fake_ssh_env(tmp_path, remote_projects_report("ok"))
+    env["FAKE_SSH_VERSION"] = "1.0.1"
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["source"] == "remote"
+    assert "Warning: remote version differs: local 1.0.0, remote 1.0.1" in result.stderr
+
+
+def test_remote_health_errors_return_one_with_empty_stdout(tmp_path: Path) -> None:
+    env = fake_ssh_env(tmp_path, remote_projects_report("ok"))
+    env["FAKE_SSH_HEALTH_EXIT"] = "255"
+    env["FAKE_SSH_HEALTH_STDERR"] = "Connection refused"
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--json",
+    )
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "error: SSH command failed for node1.atomicfalls.com: Connection refused" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_returncode"),
+    [("ok", 0), ("warn", 2), ("danger", 3)],
+)
+def test_remote_project_filter_recomputes_exit_code(
+    tmp_path: Path,
+    status: str,
+    expected_returncode: int,
+) -> None:
+    report = remote_projects_report(status, "danger")
+    report["projects"][0]["project"] = "/home/rich/atomic-development"
+    env = fake_ssh_env(tmp_path, report)
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--project",
+        "/home/rich/atomic-development",
+        "--json",
+    )
+
+    assert result.returncode == expected_returncode, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["summary"] == {
+        "projects": 1,
+        "ok": int(status == "ok"),
+        "warn": int(status == "warn"),
+        "danger": int(status == "danger"),
+        "retired": 0,
+    }
 
 
 def write_session(path: Path, records: list[dict], mtime: float | None = None) -> None:

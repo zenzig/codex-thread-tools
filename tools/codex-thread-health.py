@@ -14,6 +14,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from codex_thread_tools import __version__
+from codex_thread_tools.remote_health import (
+    RemoteHealthError,
+    add_remote_metadata,
+    run_remote_health,
+    select_remote_project,
+)
 from codex_thread_tools.sessionlib import die, expand_path
 from codex_thread_tools.sessionpaths import default_session_root
 from codex_thread_tools.display import (
@@ -120,17 +127,21 @@ def maybe_pretty(
 def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
     summary = result["summary"]
     status = summary_status(summary)
-    lines = [
-        "Codex Thread Health",
-        f"Session folder: {result['session_root']}",
-        (
-            f"Overall: {status_label(status)} "
-            f"({summary['ok']} ok, {summary['warn']} warn, "
-            f"{summary['danger']} danger, {summary.get('retired', 0)} retired)"
-        ),
-        f"Projects: {format_count(summary['projects'])}",
-        f"Next step: {next_step(status)}",
-    ]
+    lines = ["Codex Thread Health"]
+    if result.get("source") == "remote":
+        lines.extend(["Source: REMOTE", f"Host: {result['host']}"])
+    lines.extend(
+        [
+            f"Session folder: {result['session_root']}",
+            (
+                f"Overall: {status_label(status)} "
+                f"({summary['ok']} ok, {summary['warn']} warn, "
+                f"{summary['danger']} danger, {summary.get('retired', 0)} retired)"
+            ),
+            f"Projects: {format_count(summary['projects'])}",
+            f"Next step: {next_step(status)}",
+        ]
+    )
     if mode == "verbose":
         if result["projects"]:
             lines.extend(["", "Attention Required"])
@@ -566,17 +577,57 @@ def tokens_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def add_threshold_args(parser: argparse.ArgumentParser) -> None:
+def remote_threshold_args(args: argparse.Namespace) -> list[str]:
+    result: list[str] = []
+    for name in (
+        "warn_bytes",
+        "danger_bytes",
+        "warn_items",
+        "danger_items",
+        "max_healthy_compactions",
+    ):
+        value = getattr(args, name)
+        if value is not None:
+            result.extend([f"--{name.replace('_', '-')}", str(value)])
+    return result
+
+
+def remote_command(args: argparse.Namespace) -> int:
+    report, _remote_code, version_warning = run_remote_health(
+        args.host,
+        ["health", "projects", *remote_threshold_args(args)],
+        local_version=__version__,
+        connect_timeout=args.connect_timeout,
+    )
+    selected = select_remote_project(report, args.project)
+    result = add_remote_metadata(selected, args.host)
+    if version_warning:
+        print(f"Warning: {version_warning}", file=sys.stderr)
+    print(maybe_pretty(result, args.format, args.mode, args.size_format))
+    summary = result["summary"]
+    if summary["danger"]:
+        return 3
+    if summary["warn"]:
+        return 2
+    return 0
+
+
+def add_threshold_args(
+    parser: argparse.ArgumentParser,
+    *,
+    safe_test_mode: bool = True,
+) -> None:
     parser.add_argument("--warn-bytes", type=int)
     parser.add_argument("--danger-bytes", type=int)
     parser.add_argument("--warn-items", type=int)
     parser.add_argument("--danger-items", type=int)
     parser.add_argument("--max-healthy-compactions", type=int)
-    parser.add_argument(
-        "--safe-test-mode",
-        action="store_true",
-        help="refuse to read from ~/.codex/sessions; intended for fixture and scratch runs",
-    )
+    if safe_test_mode:
+        parser.add_argument(
+            "--safe-test-mode",
+            action="store_true",
+            help="refuse to read from ~/.codex/sessions; intended for fixture and scratch runs",
+        )
     parser.add_argument("--format", choices=("json", "pretty"), default="pretty")
     parser.add_argument(
         "--mode",
@@ -673,6 +724,28 @@ def build_parser() -> argparse.ArgumentParser:
     add_threshold_args(tokens)
     tokens.set_defaults(func=tokens_command)
 
+    remote = subparsers.add_parser(
+        "remote",
+        help="analyze active project sessions on an SSH host",
+    )
+    remote.add_argument(
+        "--host",
+        required=True,
+        help="OpenSSH destination or alias containing the remote Codex sessions",
+    )
+    remote.add_argument(
+        "--project",
+        help="exact remote project path to select from the active-project report",
+    )
+    remote.add_argument(
+        "--connect-timeout",
+        type=int,
+        default=10,
+        help="SSH connection timeout in seconds",
+    )
+    add_threshold_args(remote, safe_test_mode=False)
+    remote.set_defaults(func=remote_command)
+
     return parser
 
 
@@ -685,6 +758,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
+    except RemoteHealthError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     except SystemExit as exc:
         if isinstance(exc.code, str) and exc.code.startswith("error:"):
             print(exc.code, file=sys.stderr)
