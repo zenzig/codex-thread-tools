@@ -7,6 +7,7 @@ import re
 import shlex
 import subprocess
 from copy import deepcopy
+from datetime import datetime
 from typing import Any, Callable
 
 
@@ -18,6 +19,10 @@ Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 VERSION_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+UTC_TIMESTAMP_PATTERN = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]{1,6})?Z$"
+)
 REMOTE_HEALTH_PROTOCOL = 1
 SUMMARY_KEYS = ("projects", "ok", "warn", "danger", "retired")
 REMOTE_METRIC_KEYS = (
@@ -152,6 +157,16 @@ def _is_enum(value: object, allowed: set[str]) -> bool:
     return isinstance(value, str) and value in allowed
 
 
+def _is_canonical_utc_timestamp(value: object) -> bool:
+    if not isinstance(value, str) or not UTC_TIMESTAMP_PATTERN.fullmatch(value):
+        return False
+    try:
+        datetime.fromisoformat(f"{value[:-1]}+00:00")
+    except ValueError:
+        return False
+    return True
+
+
 def _canonical_diagnostics(value: object) -> list[str]:
     if not isinstance(value, list):
         return [FILTERED_DIAGNOSTIC]
@@ -207,6 +222,7 @@ def build_remote_safe_report(report: dict[str, Any]) -> dict[str, Any]:
             raise RemoteHealthError(
                 "cannot build remote-safe health report: invalid project diagnostics"
             )
+        latest_handoff_at = handoff_summary.get("latest_handoff_at", "")
 
         safe_domains: dict[str, dict[str, Any]] = {}
         for name in REMOTE_DOMAIN_KEYS:
@@ -253,8 +269,8 @@ def build_remote_safe_report(report: dict[str, Any]) -> dict[str, Any]:
                     "handoff_summary.total_handoffs",
                 ),
                 "latest_handoff_at": (
-                    handoff_summary.get("latest_handoff_at", "")
-                    if isinstance(handoff_summary.get("latest_handoff_at", ""), str)
+                    latest_handoff_at
+                    if _is_canonical_utc_timestamp(latest_handoff_at)
                     else ""
                 ),
             },
@@ -357,6 +373,12 @@ def validate_projects_report(value: object) -> dict[str, Any]:
             or set(handoff_summary) != {"total_handoffs", "latest_handoff_at"}
             or not _is_int(handoff_summary["total_handoffs"])
             or not isinstance(handoff_summary["latest_handoff_at"], str)
+            or (
+                handoff_summary["latest_handoff_at"] != ""
+                and not _is_canonical_utc_timestamp(
+                    handoff_summary["latest_handoff_at"]
+                )
+            )
         ):
             raise RemoteHealthError("invalid remote health report: invalid handoff summary")
         replacements = project["replaces_session_ids"]

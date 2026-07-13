@@ -352,6 +352,35 @@ def test_remote_safe_builder_replaces_diagnostics_and_drops_invalid_id_list() ->
     assert safe["projects"][0]["replaces_session_ids"] == []
 
 
+def test_remote_safe_builder_drops_noncanonical_handoff_timestamp() -> None:
+    sentinel = "RAW_HANDOFF_TIMESTAMP_SENTINEL_8f31"
+    payload = fixture_projects_report()
+    payload["projects"][0]["handoff_summary"] = {
+        "total_handoffs": 1,
+        "latest_handoff_at": f"2026-06-03T12:00:00Z {sentinel}",
+    }
+
+    safe = build_remote_safe_report(payload)
+    serialized = json.dumps(safe)
+
+    assert sentinel not in serialized
+    assert safe["projects"][0]["handoff_summary"]["latest_handoff_at"] == ""
+
+
+def test_validate_projects_report_rejects_noncanonical_handoff_timestamp() -> None:
+    sentinel = "RAW_HANDOFF_TIMESTAMP_SENTINEL_d2c7"
+    payload = fixture_remote_projects_report()
+    payload["projects"][0]["handoff_summary"] = {
+        "total_handoffs": 1,
+        "latest_handoff_at": f"2026-06-03T12:00:00.123456Z{sentinel}",
+    }
+
+    with pytest.raises(RemoteHealthError) as error:
+        validate_projects_report(payload)
+
+    assert sentinel not in str(error.value)
+
+
 def make_runner(
     report: dict,
     *,
