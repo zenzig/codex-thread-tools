@@ -9,6 +9,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def single_pack_result(payload: object) -> dict:
+    if isinstance(payload, list) and len(payload) == 1 and isinstance(payload[0], dict):
+        return payload[0]
+    if isinstance(payload, dict) and len(payload) == 1:
+        [package] = payload.values()
+        if isinstance(package, dict):
+            return package
+    raise AssertionError("expected one package from npm pack --json")
+
+
+def test_single_pack_result_accepts_npm_11_and_npm_12_shapes() -> None:
+    package = {"name": "codex-thread-tools", "files": []}
+
+    assert single_pack_result([package]) == package
+    assert single_pack_result({"codex-thread-tools": package}) == package
+
+
 def test_package_metadata_is_publish_ready() -> None:
     package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
 
@@ -170,7 +187,7 @@ def test_npm_pack_excludes_generated_and_local_artifacts() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    [package] = json.loads(result.stdout)
+    package = single_pack_result(json.loads(result.stdout))
     paths = {entry["path"] for entry in package["files"]}
     assert all("__pycache__" not in path for path in paths)
     assert all(not path.startswith("tests/") for path in paths)
