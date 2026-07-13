@@ -90,7 +90,10 @@ def test_invalid_remote_version_is_rejected(value: str) -> None:
         ensure_compatible_versions("1.1.0", value)
 
 
-@pytest.mark.parametrize("case", ["non_object", "missing_root", "summary", "project"])
+@pytest.mark.parametrize(
+    "case",
+    ["non_object", "missing_root", "summary", "projects_not_list", "project"],
+)
 def test_validate_projects_report_rejects_invalid_shape(case: str) -> None:
     payload: object
     if case == "non_object":
@@ -101,6 +104,8 @@ def test_validate_projects_report_rejects_invalid_shape(case: str) -> None:
         payload = fixture_projects_report()
         if case == "summary":
             payload["summary"] = {}
+        elif case == "projects_not_list":
+            payload["projects"] = {}
         else:
             payload["projects"] = [{}]
 
