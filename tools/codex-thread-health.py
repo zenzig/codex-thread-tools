@@ -18,6 +18,7 @@ from codex_thread_tools import __version__
 from codex_thread_tools.remote_health import (
     RemoteHealthError,
     add_remote_metadata,
+    build_remote_safe_report,
     run_remote_health,
     select_remote_project,
 )
@@ -545,7 +546,10 @@ def projects_command(args: argparse.Namespace) -> int:
         annotate_result_with_handoff_context(project, markers, replacements)
     summary = aggregate_project_results(projects)
     result = {"session_root": str(session_root), "summary": summary, "projects": projects}
-    print(maybe_pretty(result, args.format, args.mode, args.size_format))
+    if args.remote_safe_json:
+        print(json.dumps(build_remote_safe_report(result), indent=2))
+    else:
+        print(maybe_pretty(result, args.format, args.mode, args.size_format))
     if summary["danger"]:
         return 3
     if summary["warn"]:
@@ -710,6 +714,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Codex session root to scan",
     )
     add_threshold_args(projects)
+    projects.add_argument(
+        "--remote-safe-json",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     projects.set_defaults(func=projects_command)
 
     tokens = subparsers.add_parser(

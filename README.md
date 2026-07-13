@@ -66,7 +66,7 @@ the bundled Python tools.
 | Tool | What it does | Main command |
 | --- | --- | --- |
 | Health check | Reports whether Codex project threads look ok, risky, or ready for handoff. | `codex-thread-tools health` |
-| Remote project health | Reports project health from an SSH host without copying session data locally. | `codex-thread-tools health remote --host <ssh-host>` |
+| Remote project health | Builds a privacy-safe project report on an SSH host without copying raw session content. | `codex-thread-tools health remote --host <ssh-host>` |
 | Handoff summary | Creates a concise, redacted summary draft from one session file. | `codex-thread-tools handoff-summary <session.jsonl>` |
 | Session archive | Copies old session JSONL files to external storage with verifiable manifests. | `codex-thread-tools session-archive` |
 | Visual archive | Copies screenshots and videos out of old threads into storage you choose. | `codex-thread-tools visual-archive` |

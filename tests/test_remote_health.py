@@ -11,6 +11,7 @@ from codex_thread_tools.remote_health import add_remote_metadata
 from codex_thread_tools.remote_health import build_ssh_argv
 from codex_thread_tools.remote_health import (
     RemoteHealthError,
+    build_remote_safe_report,
     ensure_compatible_versions,
     run_remote_health,
     select_remote_project,
@@ -42,10 +43,90 @@ def fixture_projects_report() -> dict:
     return json.loads(result.stdout)
 
 
+def fixture_remote_projects_report() -> dict:
+    report = fixture_projects_report()
+    projects = []
+    for item in report["projects"]:
+        project = {
+            "project": item["project"],
+            "file": item["file"],
+            "status": item["status"],
+            "continuation_status": item["continuation_status"],
+            "recommendation": item["recommendation"],
+            "metrics": {
+                key: item["metrics"][key]
+                for key in (
+                    "bytes",
+                    "response_items",
+                    "compacted_records",
+                    "visual_artifacts",
+                )
+            },
+            "reasons": item["reasons"],
+            "risk_domains": item["risk_domains"],
+            "handoff_readiness": {
+                "status": item["handoff_readiness"]["status"],
+            },
+            "handoff_summary": {
+                "total_handoffs": item.get("handoff_summary", {}).get(
+                    "total_handoffs", 0
+                ),
+                "latest_handoff_at": item.get("handoff_summary", {}).get(
+                    "latest_handoff_at", ""
+                ),
+            },
+            "replaces_session_ids": item.get("replaces_session_ids", []),
+            "retired_by_handoff": bool(item.get("retired_by_handoff", False)),
+        }
+        if "underlying_status" in item:
+            project["underlying_status"] = item["underlying_status"]
+        projects.append(project)
+    return {
+        "remote_health_protocol": 1,
+        "session_root": report["session_root"],
+        "summary": report["summary"],
+        "projects": projects,
+    }
+
+
 @pytest.fixture
 def projects_payload() -> dict:
+    def project_item(path: str, status: str, recommendation: str) -> dict:
+        return {
+            "project": path,
+            "file": f"/remote/sessions/{path.rsplit('/', 1)[-1]}.jsonl",
+            "status": status,
+            "continuation_status": status,
+            "recommendation": recommendation,
+            "metrics": {
+                "bytes": 0,
+                "response_items": 0,
+                "compacted_records": 0,
+                "visual_artifacts": 0,
+            },
+            "reasons": [],
+            "risk_domains": {
+                name: {"status": "ok", "evidence": []}
+                for name in (
+                    "load",
+                    "visuals",
+                    "compaction",
+                    "limits",
+                    "continuity",
+                )
+            },
+            "handoff_readiness": {"status": "not-needed"},
+            "handoff_summary": {
+                "total_handoffs": 0,
+                "latest_handoff_at": "",
+            },
+            "replaces_session_ids": [],
+            "retired_by_handoff": False,
+        }
+
     return validate_projects_report(
         {
+            "remote_health_protocol": 1,
             "session_root": "/remote/sessions",
             "summary": {
                 "projects": 4,
@@ -55,38 +136,12 @@ def projects_payload() -> dict:
                 "retired": 1,
             },
             "projects": [
-                {
-                    "project": "/work/project-a",
-                    "status": "ok",
-                    "recommendation": "continue",
-                    "metrics": {},
-                    "reasons": [],
-                    "handoff_readiness": {},
-                },
-                {
-                    "project": "/work/project-b",
-                    "status": "warn",
-                    "recommendation": "review",
-                    "metrics": {},
-                    "reasons": [],
-                    "handoff_readiness": {},
-                },
-                {
-                    "project": "/work/project-c",
-                    "status": "danger",
-                    "recommendation": "handoff-now",
-                    "metrics": {},
-                    "reasons": [],
-                    "handoff_readiness": {},
-                },
-                {
-                    "project": "/work/project-d",
-                    "status": "retired",
-                    "recommendation": "archive",
-                    "metrics": {},
-                    "reasons": [],
-                    "handoff_readiness": {},
-                },
+                project_item("/work/project-a", "ok", "continue"),
+                project_item("/work/project-b", "warn", "monitor"),
+                project_item("/work/project-c", "danger", "handoff-now"),
+                project_item(
+                    "/work/project-d", "retired", "use-replacement-thread"
+                ),
             ],
         }
     )
@@ -129,12 +184,9 @@ def test_malicious_project_path_is_exact_and_not_forwarded_to_ssh(
     malicious = "/home/rich/atomic-development; touch /tmp/project-injection"
     projects_payload["projects"].append(
         {
+            **projects_payload["projects"][0],
             "project": malicious,
-            "status": "ok",
-            "recommendation": "continue",
-            "metrics": {},
-            "reasons": [],
-            "handoff_readiness": {},
+            "file": "/remote/sessions/malicious.jsonl",
         }
     )
     calls, runner = make_runner(projects_payload)
@@ -226,9 +278,9 @@ def test_validate_projects_report_rejects_invalid_shape(case: str) -> None:
     if case == "non_object":
         payload = None
     elif case == "missing_root":
-        payload = {}
+        payload = {"remote_health_protocol": 1}
     else:
-        payload = fixture_projects_report()
+        payload = fixture_remote_projects_report()
         if case == "summary":
             payload["summary"] = {}
         elif case == "projects_not_list":
@@ -241,11 +293,63 @@ def test_validate_projects_report_rejects_invalid_shape(case: str) -> None:
 
 
 def test_validate_projects_report_accepts_fixture_payload() -> None:
-    payload = fixture_projects_report()
+    payload = fixture_remote_projects_report()
 
     validated = validate_projects_report(payload)
 
     assert validated == payload
+
+
+def test_validate_projects_report_rejects_missing_privacy_protocol() -> None:
+    payload = fixture_remote_projects_report()
+    del payload["remote_health_protocol"]
+
+    with pytest.raises(
+        RemoteHealthError,
+        match="privacy-safe remote health protocol",
+    ):
+        validate_projects_report(payload)
+
+
+@pytest.mark.parametrize("location", ["metrics", "reasons", "evidence"])
+def test_validate_projects_report_rejects_noncanonical_sensitive_fields(
+    location: str,
+) -> None:
+    sentinel = f"raw-{location}-sentinel"
+    payload = fixture_remote_projects_report()
+    project = payload["projects"][0]
+    if location == "metrics":
+        project["metrics"]["compaction_failures"] = [sentinel]
+    elif location == "reasons":
+        project["reasons"] = [sentinel]
+    else:
+        project["risk_domains"]["compaction"]["evidence"] = [sentinel]
+
+    with pytest.raises(RemoteHealthError) as error:
+        validate_projects_report(payload)
+
+    assert sentinel not in str(error.value)
+
+
+def test_remote_safe_builder_replaces_diagnostics_and_drops_invalid_id_list() -> None:
+    sentinel = "raw-diagnostic-and-id-sentinel"
+    payload = fixture_projects_report()
+    project = payload["projects"][0]
+    project["reasons"] = [sentinel]
+    project["risk_domains"]["compaction"]["evidence"] = [sentinel]
+    project["replaces_session_ids"] = sentinel
+
+    safe = build_remote_safe_report(payload)
+    serialized = json.dumps(safe)
+
+    assert sentinel not in serialized
+    assert safe["projects"][0]["reasons"] == [
+        "additional health signal omitted by remote privacy filter"
+    ]
+    assert safe["projects"][0]["risk_domains"]["compaction"]["evidence"] == [
+        "additional health signal omitted by remote privacy filter"
+    ]
+    assert safe["projects"][0]["replaces_session_ids"] == []
 
 
 def make_runner(
@@ -284,7 +388,7 @@ def make_runner(
 def test_run_remote_health_probes_version_and_returns_report(
     returncode: int,
 ) -> None:
-    report = fixture_projects_report()
+    report = fixture_remote_projects_report()
     calls, runner = make_runner(report, health_returncode=returncode)
     remote_args = ["health", "projects"]
 
@@ -305,7 +409,7 @@ def test_run_remote_health_probes_version_and_returns_report(
             "codex-thread-tools",
             "health",
             "projects",
-            "--json",
+            "--remote-safe-json",
             "--progress",
             "never",
         ],
@@ -322,7 +426,7 @@ def test_run_remote_health_probes_version_and_returns_report(
 
 
 def test_run_remote_health_returns_version_drift_warning() -> None:
-    report = fixture_projects_report()
+    report = fixture_remote_projects_report()
     calls, runner = make_runner(report, version_stdout="1.1.0\n")
 
     result = run_remote_health(
@@ -337,6 +441,26 @@ def test_run_remote_health_returns_version_drift_warning() -> None:
         0,
         "remote version differs: local 1.0.0, remote 1.1.0",
     )
+
+
+def test_run_remote_health_fails_closed_when_remote_lacks_safe_protocol() -> None:
+    calls, runner = make_runner(
+        fixture_projects_report(),
+        version_stdout="1.1.0\n",
+    )
+
+    with pytest.raises(
+        RemoteHealthError,
+        match="privacy-safe remote health protocol",
+    ):
+        run_remote_health(
+            "node1.atomicfalls.com",
+            ["health", "projects"],
+            local_version="1.0.0",
+            runner=runner,
+        )
+
+    assert len(calls) == 2
 
 
 @pytest.mark.parametrize(
@@ -361,7 +485,7 @@ def test_run_remote_health_maps_version_probe_failures(
     expected: str,
 ) -> None:
     calls, runner = make_runner(
-        fixture_projects_report(),
+        fixture_remote_projects_report(),
         version_returncode=version_returncode,
         version_stderr=version_stderr,
     )
@@ -379,7 +503,7 @@ def test_run_remote_health_maps_version_probe_failures(
 
 def test_run_remote_health_maps_health_command_failure() -> None:
     calls, runner = make_runner(
-        fixture_projects_report(),
+        fixture_remote_projects_report(),
         health_returncode=1,
         health_stderr="remote health exploded\n",
     )
@@ -404,7 +528,7 @@ def test_run_remote_health_maps_health_command_failure() -> None:
 def test_run_remote_health_rejects_malformed_json_without_echoing_stdout() -> None:
     secret = "remote-secret-sentinel"
     calls, runner = make_runner(
-        fixture_projects_report(),
+        fixture_remote_projects_report(),
         health_stdout=f"{{not-json:{secret}}}",
     )
 
@@ -473,7 +597,7 @@ def test_run_remote_health_propagates_keyboard_interrupt() -> None:
 
 def test_run_remote_health_caps_remote_stderr() -> None:
     calls, runner = make_runner(
-        fixture_projects_report(),
+        fixture_remote_projects_report(),
         health_returncode=1,
         health_stderr="x" * 700,
     )

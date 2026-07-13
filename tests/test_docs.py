@@ -39,6 +39,8 @@ def test_health_docs_cover_remote_health_contract() -> None:
     assert "non-interactive SSH" in text
     assert "Raw session JSONL" in text
     assert "remote token" in text.lower()
+    assert "post-parse health-result codes" in text.lower()
+    assert "fails closed" in text.lower()
 
 
 def test_root_readme_lists_remote_health_command() -> None:

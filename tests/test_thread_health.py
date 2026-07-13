@@ -73,7 +73,9 @@ def remote_projects_report(*statuses: str) -> dict:
     projects = [
         {
             "project": f"/home/rich/project-{index}",
+            "file": f"/remote/.codex/sessions/project-{index}.jsonl",
             "status": status,
+            "continuation_status": status,
             "recommendation": "handoff-now" if status == "danger" else "continue",
             "metrics": {
                 "bytes": 1024,
@@ -82,11 +84,22 @@ def remote_projects_report(*statuses: str) -> dict:
                 "visual_artifacts": 0,
             },
             "reasons": [],
+            "risk_domains": {
+                name: {"status": "ok", "evidence": []}
+                for name in ("load", "visuals", "compaction", "limits", "continuity")
+            },
             "handoff_readiness": {"status": "not-needed"},
+            "handoff_summary": {
+                "total_handoffs": 0,
+                "latest_handoff_at": "",
+            },
+            "replaces_session_ids": [],
+            "retired_by_handoff": False,
         }
         for index, status in enumerate(statuses, 1)
     ]
     return {
+        "remote_health_protocol": 1,
         "session_root": "/remote/.codex/sessions",
         "summary": {
             "projects": len(projects),
@@ -184,6 +197,35 @@ def test_remote_pretty_identifies_source_and_host(tmp_path: Path) -> None:
     assert "Host: node1.atomicfalls.com" in result.stdout
 
 
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        ("compact", "Project Summary"),
+        ("standard", "Action Summary"),
+        ("verbose", "Attention Required"),
+    ],
+)
+def test_remote_pretty_modes_render_safe_report_schema(
+    tmp_path: Path,
+    mode: str,
+    expected: str,
+) -> None:
+    env = fake_ssh_env(tmp_path, remote_projects_report("warn"))
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--mode",
+        mode,
+    )
+
+    assert result.returncode == 2, result.stderr
+    assert "Source: REMOTE" in result.stdout
+    assert expected in result.stdout
+
+
 def test_remote_forwards_explicit_thresholds_only(tmp_path: Path) -> None:
     report = remote_projects_report("ok")
     report["projects"][0]["project"] = "/home/rich/atomic-development"
@@ -231,7 +273,7 @@ def test_remote_forwards_explicit_thresholds_only(tmp_path: Path) -> None:
         "4",
         "--max-healthy-compactions",
         "5",
-        "--json",
+        "--remote-safe-json",
         "--progress",
         "never",
     ]
@@ -302,6 +344,7 @@ def test_remote_health_errors_return_one_with_empty_stdout(tmp_path: Path) -> No
             {
                 "FAKE_SSH_REPORT": json.dumps(
                     {
+                        "remote_health_protocol": 1,
                         "session_root": "/remote/.codex/sessions",
                         "summary": {"projects": 0, "ok": 0, "warn": 0, "danger": 0, "retired": 0},
                     }
@@ -391,6 +434,110 @@ def test_remote_rejects_option_like_host_before_ssh_execution(tmp_path: Path) ->
     assert result.stdout == ""
     assert "SSH host must be a non-empty destination" in result.stderr
     assert not Path(env["FAKE_SSH_RECORD"]).exists()
+
+
+def test_remote_safe_projects_protocol_never_serializes_raw_session_content(
+    tmp_path: Path,
+) -> None:
+    sentinels = {
+        "event": "RAW_EVENT_SENTINEL_7d83",
+        "tool": "RAW_TOOL_SENTINEL_4a21",
+        "transcript": "RAW_TRANSCRIPT_SENTINEL_91ce",
+        "visual": "RAW_VISUAL_SENTINEL_2bf5",
+    }
+    session_root = tmp_path / "sessions"
+    session = session_root / "2026" / "07" / "13" / "privacy.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": "privacy-session",
+                    "cwd": "/work/privacy-project",
+                },
+            },
+            {
+                "type": "event_msg",
+                "payload": {
+                    "type": "error",
+                    "message": (
+                        "context window exhausted " + sentinels["event"]
+                    ),
+                },
+            },
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call_output",
+                    "output": sentinels["tool"],
+                },
+            },
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": sentinels["transcript"]}
+                    ],
+                },
+            },
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_image",
+                            "image_url": (
+                                "data:image/png;base64," + sentinels["visual"]
+                            ),
+                        }
+                    ],
+                },
+            },
+        ],
+    )
+
+    remote_result = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--safe-test-mode",
+        "--remote-safe-json",
+        "--progress",
+        "never",
+    )
+
+    assert remote_result.returncode in {0, 2, 3}, remote_result.stderr
+    for sentinel in sentinels.values():
+        assert sentinel not in remote_result.stdout
+        assert sentinel not in remote_result.stderr
+    remote_payload = json.loads(remote_result.stdout)
+    assert remote_payload["remote_health_protocol"] == 1
+    assert set(remote_payload["projects"][0]["metrics"]) == {
+        "bytes",
+        "response_items",
+        "compacted_records",
+        "visual_artifacts",
+    }
+
+    local_result = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--safe-test-mode",
+        "--json",
+        "--progress",
+        "never",
+    )
+    assert local_result.returncode in {0, 2, 3}, local_result.stderr
+    local_payload = json.loads(local_result.stdout)
+    assert sentinels["event"] in local_payload["projects"][0]["metrics"][
+        "compaction_failures"
+    ][0]
 
 
 @pytest.mark.parametrize(
