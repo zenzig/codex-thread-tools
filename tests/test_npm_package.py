@@ -181,5 +181,6 @@ def test_npm_pack_excludes_generated_and_local_artifacts() -> None:
     assert "docs/session-archive.md" in paths
     assert "codex_thread_tools/session_archive.py" in paths
     assert "codex_thread_tools/thread_health.py" in paths
+    assert "codex_thread_tools/remote_health.py" in paths
     assert "tools/codex-session-archive.py" in paths
     assert "tools/codex-thread-health.py" in paths

@@ -48,6 +48,84 @@ codex-thread-tools health --json
 JSON output ignores pretty display options and is the stable scripting
 interface.
 
+## Remote Project Health
+
+Remote project health analyzes the session root on an SSH host. Install the
+same package on both machines and verify both versions before running a report:
+
+```bash
+npm install -g codex-thread-tools@latest
+codex-thread-tools --version
+ssh node1.example.com codex-thread-tools --version
+```
+
+The remote package must be visible to non-interactive SSH sessions. The
+command uses normal OpenSSH configuration for authentication, including
+`~/.ssh/config`, keys, agents, and host aliases. It does not require a separate
+credential or token.
+
+Run an all-project report on the SSH host:
+
+```bash
+codex-thread-tools health remote --host node1.example.com
+```
+
+Select one project by its exact recorded path:
+
+```bash
+codex-thread-tools health remote --host node1.example.com \
+  --project /home/you/project
+```
+
+Use verbose output with human-readable sizes:
+
+```bash
+codex-thread-tools health remote --host node1.example.com \
+  --mode verbose --size-format human
+```
+
+Use JSON for scripts or other tooling:
+
+```bash
+codex-thread-tools health remote --host node1.example.com --json
+```
+
+Analysis occurs remotely against the SSH host's session root. Raw session JSONL
+and transcripts are not copied to the local machine. Only package
+versions, diagnostics, and the health JSON report cross SSH. Project matching
+is exact; a path that differs by a symlink, spelling, or trailing component is
+not treated as the same project.
+
+This command is read-only and limited to remote project health. Remote token,
+archive, recovery, visual, and handoff operations are excluded.
+
+### Remote Exit Codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | The selected report contains only `OK` or `RETIRED` projects. |
+| `1` | The remote operation failed, such as SSH authentication, package discovery, incompatible major versions, malformed output, or a missing project. |
+| `2` | At least one selected project is `WARN`. |
+| `3` | At least one selected project is `DANGER`. |
+
+### Remote Troubleshooting
+
+- **Host unreachable or timed out:** Confirm the host name, network route, and
+  SSH service. The command uses a ten-second connection timeout by default;
+  use `--connect-timeout` to adjust it.
+- **Public-key rejected:** Test `ssh node1.example.com` directly and fix the
+  key, agent, host alias, or server account in your normal OpenSSH setup.
+- **Package missing from non-interactive `PATH`:** Run
+  `ssh node1.example.com 'command -v codex-thread-tools && codex-thread-tools --version'`.
+  Install the package for the remote account or configure its non-interactive
+  shell `PATH`.
+- **Incompatible major versions:** Install matching major versions on both
+  machines. A differing minor or patch version is reported as a warning; a
+  differing major version fails with exit code `1`.
+- **Project not found:** Use the exact project path recorded on the remote
+  host. Run the all-project report first and copy the path exactly into
+  `--project`.
+
 ## Progress
 
 Large screenshot-heavy sessions can take a while to parse. In an interactive

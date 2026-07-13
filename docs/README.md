@@ -11,7 +11,7 @@ release process.
 | Topic | Use this when |
 | --- | --- |
 | [Installation](installation.md) | You want to choose between `npx`, global npm install, or source checkout. |
-| [Thread health](health.md) | You want to understand `codex-thread-tools health`, report modes, risk domains, and token reports. |
+| [Thread health](health.md) | You want local or SSH-host project reports, report modes, risk domains, and token reports. |
 | [Handoff workflow](handoff.md) | You want to preserve durable project context and rotate into a fresh Codex thread. |
 | [Session archive](session-archive.md) | You want to move old session JSONL files to external storage and optionally prune local copies. |
 | [Visual archive](visual-archive.md) | You want to preserve screenshots and videos outside an oversized Codex thread. |

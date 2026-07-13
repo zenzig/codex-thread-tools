@@ -31,6 +31,22 @@ def test_root_readme_is_concise_and_links_docs_index() -> None:
     assert "## Documentation" in text
 
 
+def test_health_docs_cover_remote_health_contract() -> None:
+    text = (DOCS / "health.md").read_text(encoding="utf-8")
+
+    assert "health remote --host" in text
+    assert "--project /home/you/project" in text
+    assert "non-interactive SSH" in text
+    assert "Raw session JSONL" in text
+    assert "remote token" in text.lower()
+
+
+def test_root_readme_lists_remote_health_command() -> None:
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "health remote --host" in text
+
+
 def test_public_docs_index_links_all_detail_pages() -> None:
     index = DOCS / "README.md"
     text = index.read_text(encoding="utf-8")

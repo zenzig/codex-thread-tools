@@ -20,7 +20,8 @@
 Current version: `1.0.0`
 
 `codex-thread-tools` works with local Codex session JSONL files under
-`~/.codex/sessions/`.
+`~/.codex/sessions/`. Local reports read that local session root; remote
+reports execute against the SSH host's session root.
 
 Codex compaction helps long conversations continue, but it does not make an
 oversized local thread a good place to keep all project memory. This repo gives
@@ -65,6 +66,7 @@ the bundled Python tools.
 | Tool | What it does | Main command |
 | --- | --- | --- |
 | Health check | Reports whether Codex project threads look ok, risky, or ready for handoff. | `codex-thread-tools health` |
+| Remote project health | Reports project health from an SSH host without copying session data locally. | `codex-thread-tools health remote --host <ssh-host>` |
 | Handoff summary | Creates a concise, redacted summary draft from one session file. | `codex-thread-tools handoff-summary <session.jsonl>` |
 | Session archive | Copies old session JSONL files to external storage with verifiable manifests. | `codex-thread-tools session-archive` |
 | Visual archive | Copies screenshots and videos out of old threads into storage you choose. | `codex-thread-tools visual-archive` |
@@ -79,7 +81,7 @@ maintainer notes.
 | Guide | Covers |
 | --- | --- |
 | [Installation](docs/installation.md) | `npx`, global npm install, source checkout, and skill install. |
-| [Thread health](docs/health.md) | Health reports, display modes, risk domains, token reports, and JSON output. |
+| [Thread health](docs/health.md) | Local and SSH-host health reports, display modes, risk domains, token reports, and JSON output. |
 | [Handoff workflow](docs/handoff.md) | Repo-backed continuity, redacted summaries, and handoff markers. |
 | [Session archive](docs/session-archive.md) | Moving old JSONL sessions to external storage and pruning verified local copies. |
 | [Visual archive](docs/visual-archive.md) | Preserving screenshots and videos outside oversized threads. |
@@ -93,6 +95,7 @@ maintainer notes.
 | Task | Command |
 | --- | --- |
 | Project health report | `codex-thread-tools health` |
+| Remote project health report | `codex-thread-tools health remote --host <ssh-host>` |
 | One session health report | `codex-thread-tools health check <session.jsonl>` |
 | Token usage report | `codex-thread-tools health tokens` |
 | Redacted handoff summary draft | `codex-thread-tools handoff-summary <session.jsonl>` |
