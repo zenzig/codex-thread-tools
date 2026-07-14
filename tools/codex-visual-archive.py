@@ -13,11 +13,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import codex_thread_tools.visual_artifacts as visual_artifacts
 from codex_thread_tools.sessionlib import die, expand_path
 from codex_thread_tools.visual_artifacts import (
     archive_visuals,
     scan_session_visuals,
-    verify_manifest,
 )
 
 
@@ -80,14 +80,14 @@ def allow_roots(args: argparse.Namespace) -> list[Path]:
 
 def scan_command(args: argparse.Namespace) -> int:
     session_file = ensure_session_file(args.session_file)
-    result = scan_session_visuals(session_file, allow_roots(args))
+    result = visual_artifacts.scan_session_visuals(session_file, allow_roots(args))
     print(json_or_pretty(result, args.format))
     return 0
 
 
 def archive_command(args: argparse.Namespace) -> int:
     session_file = ensure_session_file(args.session_file)
-    result = archive_visuals(
+    result = visual_artifacts.archive_visuals(
         session_file=session_file,
         archive_root=expand_path(args.archive_root),
         project_name=args.project_name,
@@ -105,7 +105,7 @@ def verify_command(args: argparse.Namespace) -> int:
     manifest_path = expand_path(args.manifest)
     if not manifest_path.exists():
         die(f"manifest does not exist: {manifest_path}")
-    result = verify_manifest(manifest_path)
+    result = visual_artifacts.verify_manifest(manifest_path)
     print(json_or_pretty(result, args.format))
     return 2 if result["status"] == "warn" else 0
 
@@ -195,6 +195,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
+    except (OSError, ValueError, RuntimeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     except SystemExit as exc:
         if isinstance(exc.code, str) and exc.code.startswith("error:"):
             print(exc.code, file=sys.stderr)

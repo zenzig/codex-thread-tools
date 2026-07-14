@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -115,6 +118,23 @@ def test_npm_cli_dispatches_handoff_summary_tool() -> None:
     assert result.returncode == 0, result.stderr
     assert "codex-thread-handoff-summary.py" in result.stdout
     assert "session_file" in result.stdout
+
+
+def test_handoff_summary_imports_with_macos_system_python() -> None:
+    system_python = Path("/usr/bin/python3")
+    if sys.platform != "darwin" or not system_python.is_file():
+        pytest.skip("macOS system Python is not available")
+
+    result = subprocess.run(
+        [str(system_python), "-c", "import codex_thread_tools.handoff_summary"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_npm_cli_dispatches_session_archive_tool() -> None:

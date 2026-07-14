@@ -44,6 +44,19 @@ and concise user/assistant context. It omits raw tool payloads, compacted
 payloads, and common secret-shaped values. Treat it as a starting point for the
 repo-backed handoff file, not as final project memory.
 
+## Security Boundary
+
+The handoff summary uses best-effort redaction. Tool payloads and compacted
+record contents are omitted, then known secret patterns are redacted before text
+normalization. This protects common token/key/password surfaces (environment
+assignments, authorization headers, credentials in URIs, PEM blocks, and known
+vendor key formats) as a guardrail, not a security boundary.
+
+Arbitrary encoded content, unknown formats, or secrets that don't match known
+patterns aren't reliably classified as sensitive. This is best-effort redaction,
+not proof that a summary is clean. Always review before sharing, committing, or
+using a generated summary for a manual handoff.
+
 ## Handoff Markers
 
 Completed handoffs are tracked in a local sidecar marker file under

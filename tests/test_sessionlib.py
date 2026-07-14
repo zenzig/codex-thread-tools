@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from pathlib import Path
 
@@ -54,3 +55,26 @@ def test_is_codex_running_uses_platform_process_listing(monkeypatch) -> None:
 
     assert sessionlib.is_codex_running()
     assert calls == [["tasklist", "/FO", "CSV", "/NH"]]
+
+
+def test_record_text_extracts_direct_and_content_text() -> None:
+    assert sessionlib.record_text({"payload": {"message": "message"}}) == "message"
+    assert sessionlib.record_text({"payload": {"error": "error"}}) == "error"
+    assert sessionlib.record_text({"payload": {"text": "text"}}) == "text"
+    assert (
+        sessionlib.record_text(
+            {
+                "payload": {
+                    "content": [{"text": "one"}, {"ignored": True}, {"text": "two"}]
+                }
+            }
+        )
+        == "one\ntwo"
+    )
+    assert sessionlib.record_text({"payload": "invalid"}) == ""
+
+
+def test_sha256_file_hashes_file_contents(tmp_path: Path) -> None:
+    path = tmp_path / "payload.bin"
+    path.write_bytes(b"codex-thread-tools")
+    assert sessionlib.sha256_file(path) == hashlib.sha256(b"codex-thread-tools").hexdigest()

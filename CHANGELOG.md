@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 1.1.1 - 2026-07-14
+
+- Expand best-effort handoff-summary redaction for common credentials, authorization headers, private keys, and credential-bearing URLs.
+- Replace raw health-event snippets with canonical diagnostics so local JSON reports do not preserve session text.
+- Confine archive verification to manifest-owned directories and reject traversal and symlink escapes.
+- Use staged, transactional session and visual archive replacement so stale files
+  are removed only after the replacement is ready and handled failures preserve
+  the prior archive; crash consistency is not guaranteed.
+- Preflight local session pruning and verify staged archive copies before replacing
+  existing archives.
+- Serialize archive replacement and pruning with persistent operating-system
+  advisory locks that cannot be reclaimed from an active process using stale metadata.
+- Stage session pruning in same-filesystem recovery quarantine, fail closed on
+  malformed visual manifests, and report expected integrity failures without
+  tracebacks. Cleanup failures and process or OS crashes are not guaranteed to
+  restore prior archive state.
+- Harden SSH destination validation and consolidate shared parsing, hashing, timestamp, and archive naming helpers without changing CLI syntax.
+
 ## 1.1.0 - 2026-07-13
 
 - Add `codex-thread-tools health remote --host <ssh-host>` for health reports

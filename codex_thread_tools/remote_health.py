@@ -95,6 +95,17 @@ CANONICAL_DIAGNOSTIC_PATTERNS = (
 )
 
 
+def validate_ssh_destination(host: str) -> str:
+    if not host or host.startswith("-"):
+        raise RemoteHealthError("SSH host must be a non-empty destination")
+    if any(
+        character.isspace() or ord(character) < 32 or ord(character) == 127
+        for character in host
+    ):
+        raise RemoteHealthError("SSH host contains whitespace or control characters")
+    return host
+
+
 def build_ssh_argv(
     host: str,
     remote_args: list[str],
@@ -102,8 +113,7 @@ def build_ssh_argv(
     connect_timeout: int = 10,
     ssh_executable: str = "ssh",
 ) -> list[str]:
-    if not host or host.startswith("-"):
-        raise RemoteHealthError("SSH host must be a non-empty destination")
+    host = validate_ssh_destination(host)
     if connect_timeout < 1:
         raise RemoteHealthError("SSH connection timeout must be at least 1 second")
     return [

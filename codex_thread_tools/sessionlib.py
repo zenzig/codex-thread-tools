@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import platform
 import re
@@ -100,3 +101,31 @@ def payload_role(record: dict[str, Any]) -> str:
 def record_timestamp(record: dict[str, Any]) -> str:
     value = record.get("timestamp")
     return value if isinstance(value, str) else ""
+
+
+def record_text(record: dict[str, Any]) -> str:
+    payload = record.get("payload")
+    if not isinstance(payload, dict):
+        return ""
+    for key in ("message", "error", "text"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            return value
+    content = payload.get("content")
+    if isinstance(content, list):
+        pieces: list[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                value = item.get("text")
+                if isinstance(value, str):
+                    pieces.append(value)
+        return "\n".join(pieces)
+    return ""
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

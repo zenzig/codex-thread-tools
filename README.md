@@ -37,7 +37,7 @@ Compaction trims what Codex keeps *in context*. It does nothing for the file sit
 | Remote health | Same analysis over SSH — without shipping raw session files anywhere. |
 | Handoff workflow | Preserves the concise project facts a fresh task actually needs. |
 | Handoff summaries | Redacted drafts — no raw tool payloads along for the ride. |
-| Session archives | Moves old JSONL files to external storage with verifiable manifests. |
+| Session archives | Moves old JSONL files into staged, verified archives, with a recovery quarantine before local pruning. |
 | Visual archives | Keeps referenced screenshots and videos alive outside task history. |
 | Recovery | Inspects and backs up sessions that won't open normally. |
 
@@ -105,7 +105,7 @@ Start at [Documentation](docs/README.md), or jump straight to:
 | [Installation](docs/installation.md) | `npx`, global npm, source, and skill installation. |
 | [Thread health](docs/health.md) | Local/remote reports, risk domains, output modes, exit codes. |
 | [Handoff workflow](docs/handoff.md) | Durable context, summaries, markers, remote-handoff distinctions. |
-| [Session archive](docs/session-archive.md) | Plan, archive, verify, and prune workflows. |
+| [Session archive](docs/session-archive.md) | Staged archive, verification, recovery, and prune workflows. |
 | [Visual archive](docs/visual-archive.md) | Screenshot and video preservation. |
 | [Recovery](docs/recovery.md) | Oversized or damaged session inspection. |
 | [Compaction](docs/compaction.md) | Compaction, handoff, and archive boundaries. |
@@ -113,7 +113,7 @@ Start at [Documentation](docs/README.md), or jump straight to:
 ## Project
 
 - **Status:** Production
-- **Version:** `1.1.0`
+- **Version:** `1.1.1`
 - **Issues:** [Report a bug or request a feature](https://github.com/zenzig/codex-thread-tools/issues)
 - **Security:** Read the [security policy](SECURITY.md) before reporting a vulnerability.
 - **Development:** See the [development guide](docs/development.md) for tests and package checks.

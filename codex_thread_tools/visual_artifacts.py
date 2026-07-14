@@ -12,7 +12,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from codex_thread_tools.sessionlib import iter_jsonl, now_iso, record_timestamp
+from codex_thread_tools.atomic_directory import staged_directory
+from codex_thread_tools.sessionlib import (
+    iter_jsonl,
+    now_iso,
+    record_timestamp,
+    sha256_file,
+)
+from codex_thread_tools.archive_paths import ArchivePathError, resolve_archive_member
 from codex_thread_tools.sessionpaths import default_session_root
 
 
@@ -71,6 +78,7 @@ class VisualOccurrence:
     data: bytes | None = None
     local_path: Path | None = None
     archive_path: str = ""
+    archive_relative_path: str = ""
     error: str = ""
 
     def to_manifest(self) -> dict[str, Any]:
@@ -83,6 +91,7 @@ class VisualOccurrence:
             "sha256": self.sha256,
             "bytes": self.bytes,
             "archive_path": self.archive_path,
+            "archive_relative_path": self.archive_relative_path,
             "source": {
                 "line_no": self.source.line_no,
                 "timestamp": self.source.timestamp,
@@ -94,6 +103,26 @@ class VisualOccurrence:
             "notes": "",
             "error": self.error,
         }
+
+
+def _verify_staged_artifact(artifact: VisualOccurrence, target: Path) -> None:
+    expected_sha256 = artifact.sha256
+    expected_bytes = artifact.bytes
+    if not isinstance(expected_sha256, str) or not expected_sha256:
+        raise RuntimeError(f"missing sha256 for staged artifact {artifact.artifact_id}")
+    if not isinstance(expected_bytes, int) or expected_bytes < 0:
+        raise RuntimeError(f"invalid artifact byte count for staged artifact {artifact.artifact_id}")
+
+    if target.stat().st_size != expected_bytes:
+        raise RuntimeError(
+            f"artifact size changed while staging: {artifact.artifact_id}"
+        )
+
+    actual_sha256 = sha256_file(target)
+    if actual_sha256 != expected_sha256:
+        raise RuntimeError(
+            f"artifact hash changed while staging: {artifact.artifact_id}"
+        )
 
 
 def scan_session_visuals(
@@ -377,7 +406,7 @@ def add_path_or_url(
         return
     try:
         size = resolved.stat().st_size
-        sha256 = hash_file(resolved)
+        sha256 = sha256_file(resolved)
     except OSError as exc:
         artifacts.append(
             VisualOccurrence(
@@ -445,10 +474,9 @@ def archive_visuals(
 ) -> dict[str, Any]:
     archive_root = archive_root.expanduser().resolve()
     validate_archive_root(archive_root)
-    project_slug = slugify(project_name)
-    set_slug = slugify(artifact_set)
+    project_slug = visual_archive_slug(project_name)
+    set_slug = visual_archive_slug(artifact_set)
     archive_dir = archive_root / "codex-visual-artifacts" / project_slug / set_slug
-    artifacts_dir = archive_dir / "artifacts"
     artifacts = iter_visual_occurrences(session_file, allow_local_roots)
 
     if dry_run:
@@ -459,52 +487,76 @@ def archive_visuals(
             "artifacts": [artifact.to_manifest() for artifact in artifacts],
         }
 
+    _reject_symlinked_archive_layout(archive_root, archive_dir)
     if archive_dir.exists() and not force:
         raise SystemExit(f"error: archive already exists: {archive_dir}")
-    archive_dir.mkdir(parents=True, exist_ok=True)
-    artifacts_dir.mkdir(parents=True, exist_ok=True)
 
-    stored: dict[str, Path] = {}
-    copied_bytes = 0
-    for artifact in artifacts:
-        if artifact.status != "ready" or not artifact.sha256:
-            continue
-        target = stored.get(artifact.sha256)
-        if target is None:
-            target = artifacts_dir / f"{artifact.sha256}{artifact.extension}"
-            if artifact.data is not None:
-                atomic_write_bytes(target, artifact.data)
-            elif artifact.local_path is not None:
-                atomic_copy_file(artifact.local_path, target)
-            stored[artifact.sha256] = target
-            copied_bytes += artifact.bytes
-        artifact.archive_path = str(target)
-        artifact.status = "copied"
+    with staged_directory(archive_dir, replace=force) as staging_dir:
+        staging_artifacts_dir = staging_dir / "artifacts"
+        staging_artifacts_dir.mkdir(parents=True, exist_ok=True)
 
-    manifest = build_manifest(
-        session_file=session_file,
-        archive_root=archive_root,
-        archive_dir=archive_dir,
-        project_name=project_name,
-        artifact_set=artifact_set,
-        visual_context=visual_context,
-        artifacts=artifacts,
-        copied_bytes=copied_bytes,
-    )
-    manifest_json = archive_dir / "manifest.json"
-    manifest_markdown = archive_dir / "manifest.md"
-    handoff_snippet = archive_dir / "handoff-snippet.md"
-    atomic_write_text(manifest_json, json.dumps(manifest, indent=2) + "\n")
-    atomic_write_text(manifest_markdown, manifest_to_markdown(manifest))
-    atomic_write_text(handoff_snippet, manifest_to_handoff_snippet(manifest))
+        stored: dict[str, Path] = {}
+        copied_bytes = 0
+        for artifact in artifacts:
+            if artifact.status != "ready" or not artifact.sha256:
+                continue
+            target = stored.get(artifact.sha256)
+            if target is None:
+                staging_target = staging_artifacts_dir / f"{artifact.sha256}{artifact.extension}"
+                if artifact.data is not None:
+                    atomic_write_bytes(staging_target, artifact.data)
+                elif artifact.local_path is not None:
+                    atomic_copy_file(artifact.local_path, staging_target)
+                _verify_staged_artifact(artifact, staging_target)
+                target = archive_dir / "artifacts" / staging_target.name
+                stored[artifact.sha256] = target
+                copied_bytes += artifact.bytes
+            artifact.archive_path = str(target)
+            artifact.archive_relative_path = str(target.relative_to(archive_dir))
+            artifact.status = "copied"
+
+        manifest = build_manifest(
+            session_file=session_file,
+            archive_root=archive_root,
+            archive_dir=archive_dir,
+            project_name=project_name,
+            artifact_set=artifact_set,
+            visual_context=visual_context,
+            artifacts=artifacts,
+            copied_bytes=copied_bytes,
+        )
+        staging_manifest_json = staging_dir / "manifest.json"
+        staging_manifest_markdown = staging_dir / "manifest.md"
+        staging_handoff_snippet = staging_dir / "handoff-snippet.md"
+        atomic_write_text(staging_manifest_json, json.dumps(manifest, indent=2) + "\n")
+        atomic_write_text(staging_manifest_markdown, manifest_to_markdown(manifest))
+        atomic_write_text(staging_handoff_snippet, manifest_to_handoff_snippet(manifest))
 
     return {
-        "manifest_json": str(manifest_json),
-        "manifest_markdown": str(manifest_markdown),
-        "handoff_snippet": str(handoff_snippet),
+        "manifest_json": str(archive_dir / "manifest.json"),
+        "manifest_markdown": str(archive_dir / "manifest.md"),
+        "handoff_snippet": str(archive_dir / "handoff-snippet.md"),
         "archive_dir": str(archive_dir),
         "summary": manifest["summary"],
     }
+
+
+def _reject_symlinked_archive_layout(
+    archive_root: Path,
+    archive_dir: Path,
+) -> None:
+    container_dir = archive_root / "codex-visual-artifacts"
+    project_dir = archive_dir.parent
+    for component in (container_dir, project_dir, archive_dir):
+        if component.is_symlink():
+            label = (
+                "visual archive container"
+                if component == container_dir
+                else "project directory"
+                if component == project_dir
+                else "archive target"
+            )
+            raise SystemExit(f"error: {label} is a symlink: {component}")
 
 
 def build_manifest(
@@ -535,37 +587,186 @@ def build_manifest(
 
 
 def verify_manifest(manifest_path: Path) -> dict[str, Any]:
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(raw_manifest, dict):
+        return {
+            "status": "warn",
+            "manifest": str(manifest_path),
+            "checked_files": 0,
+            "missing_files": 0,
+            "mismatched_files": 0,
+            "details": [
+                {
+                    "artifact_id": "",
+                    "path": str(manifest_path),
+                    "error": "manifest root must be an object",
+                }
+            ],
+        }
+
+    if raw_manifest.get("schema_version") != 1:
+        return {
+            "status": "warn",
+            "manifest": str(manifest_path),
+            "checked_files": 0,
+            "missing_files": 0,
+            "mismatched_files": 0,
+            "details": [
+                {
+                    "artifact_id": "",
+                    "path": str(manifest_path),
+                    "error": (
+                        f"unsupported manifest schema_version: "
+                        f"{raw_manifest.get('schema_version')}"
+                    ),
+                }
+            ],
+        }
+
+    archive_dir_value = raw_manifest.get("archive_dir")
+    if not isinstance(archive_dir_value, str) or not archive_dir_value:
+        return {
+            "status": "warn",
+            "manifest": str(manifest_path),
+            "checked_files": 0,
+            "missing_files": 0,
+            "mismatched_files": 0,
+            "details": [
+                {
+                    "artifact_id": "",
+                    "path": str(manifest_path),
+                    "error": "manifest archive_dir must be a path",
+                }
+            ],
+        }
+
+    manifest = raw_manifest
+    manifest_dir = manifest_path.expanduser().resolve().parent
+    manifest_archive_dir = Path(archive_dir_value).expanduser()
     missing = 0
     mismatched = 0
     checked = 0
     details: list[dict[str, str]] = []
-    for artifact in manifest.get("artifacts", []):
+
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list):
+        return {
+            "status": "warn",
+            "manifest": str(manifest_path),
+            "checked_files": 0,
+            "missing_files": 0,
+            "mismatched_files": 0,
+            "details": [
+                {
+                    "artifact_id": "",
+                    "path": str(manifest_path),
+                    "error": "manifest artifacts must be a list",
+                }
+            ],
+        }
+
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            details.append(
+                {
+                    "artifact_id": "",
+                    "path": str(manifest_path),
+                    "error": "artifact entry must be an object",
+                }
+            )
+            mismatched += 1
+            continue
+
         archive_path = artifact.get("archive_path")
-        if not archive_path:
-            continue
-        checked += 1
-        path = Path(archive_path)
-        if not path.is_file():
-            missing += 1
-            details.append({"artifact_id": artifact.get("artifact_id", ""), "path": archive_path})
-            continue
-        expected_bytes = artifact.get("bytes")
-        expected_sha256 = artifact.get("sha256")
-        actual_bytes = path.stat().st_size
-        actual_sha256 = hash_file(path)
-        if (
-            isinstance(expected_bytes, int)
-            and actual_bytes != expected_bytes
-            or isinstance(expected_sha256, str)
-            and expected_sha256
-            and actual_sha256 != expected_sha256
-        ):
+        archive_relative_path = artifact.get("archive_relative_path")
+        artifact_status = artifact.get("status")
+        if artifact_status not in {"copied", "ready", "skipped", "error"}:
             mismatched += 1
             details.append(
                 {
                     "artifact_id": artifact.get("artifact_id", ""),
-                    "path": archive_path,
+                    "path": str(archive_path or ""),
+                    "error": "artifact status is missing or unsupported",
+                }
+            )
+            continue
+        claims_archive_content = artifact_status in {"copied", "ready"} or bool(
+            archive_path
+        ) or bool(archive_relative_path)
+        if not claims_archive_content:
+            continue
+
+        if not isinstance(archive_relative_path, str) or not archive_relative_path:
+            archive_relative_path = _derive_legacy_archive_relative_path(
+                archive_path,
+                manifest_archive_dir,
+            )
+        if not archive_relative_path:
+            missing += 1
+            details.append(
+                {
+                    "artifact_id": artifact.get("artifact_id", ""),
+                    "path": str(archive_path),
+                    "error": "missing archive path metadata",
+                }
+            )
+            continue
+        checked += 1
+        expected_bytes = artifact.get("bytes")
+        expected_sha256 = artifact.get("sha256")
+        if not isinstance(expected_bytes, int) or expected_bytes < 0:
+            mismatched += 1
+            details.append(
+                {
+                    "artifact_id": artifact.get("artifact_id", ""),
+                    "path": str(archive_path),
+                    "error": "archive manifest has invalid byte metadata",
+                }
+            )
+            continue
+        if not isinstance(expected_sha256, str) or not expected_sha256:
+            mismatched += 1
+            details.append(
+                {
+                    "artifact_id": artifact.get("artifact_id", ""),
+                    "path": str(archive_path),
+                    "error": "archive manifest has invalid hash metadata",
+                }
+            )
+            continue
+        try:
+            path = resolve_archive_member(manifest_dir, archive_relative_path)
+        except ArchivePathError as exc:
+            missing += 1
+            details.append(
+                {
+                    "artifact_id": artifact.get("artifact_id", ""),
+                    "path": str(archive_path),
+                    "error": str(exc),
+                }
+            )
+            continue
+        if not path.is_file():
+            missing += 1
+            details.append(
+                {
+                    "artifact_id": artifact.get("artifact_id", ""),
+                    "path": str(path),
+                }
+            )
+            continue
+        actual_bytes = path.stat().st_size
+        actual_sha256 = sha256_file(path)
+        size_mismatch = (
+            actual_bytes != expected_bytes
+        )
+        hash_mismatch = actual_sha256 != expected_sha256
+        if size_mismatch or hash_mismatch:
+            mismatched += 1
+            details.append(
+                {
+                    "artifact_id": artifact.get("artifact_id", ""),
+                    "path": str(path),
                     "error": "archived file hash or size does not match manifest",
                 }
             )
@@ -577,6 +778,27 @@ def verify_manifest(manifest_path: Path) -> dict[str, Any]:
         "mismatched_files": mismatched,
         "details": details,
     }
+
+
+def _derive_legacy_archive_relative_path(
+    archive_path: object,
+    manifest_archive_dir: Path,
+) -> str | None:
+    if not archive_path or not isinstance(archive_path, str):
+        return None
+    legacy = Path(archive_path).expanduser()
+    if not legacy.is_absolute():
+        return str(legacy)
+    if not manifest_archive_dir.is_absolute():
+        return None
+    legacy_parent_text = str(manifest_archive_dir).replace("\\", "/").rstrip("/")
+    legacy_text = str(legacy).replace("\\", "/")
+    if legacy_text == legacy_parent_text:
+        return ""
+    prefix = f"{legacy_parent_text}/"
+    if not legacy_text.startswith(prefix):
+        return None
+    return legacy_text[len(prefix) :]
 
 
 def summarize_occurrences(artifacts: list[VisualOccurrence]) -> dict[str, int]:
@@ -703,14 +925,6 @@ def path_allowed(path: Path, allow_roots: list[Path]) -> bool:
     return False
 
 
-def hash_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def atomic_write_bytes(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
@@ -802,7 +1016,7 @@ def extension_for_mime(mime: str) -> str:
     return mapping.get(mime, ".bin")
 
 
-def slugify(value: str) -> str:
+def visual_archive_slug(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
     return slug or "untitled"
 
