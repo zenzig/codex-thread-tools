@@ -22,5 +22,6 @@ release process.
 
 | Topic | Use this when |
 | --- | --- |
+| [Changelog](../CHANGELOG.md) | You want the release-by-release history of changes. |
 | [Development](development.md) | You are editing this repository, running tests, or checking package contents. |
 | [Publishing](publishing.md) | You are preparing a GitHub release that publishes to npm through Trusted Publishing. |

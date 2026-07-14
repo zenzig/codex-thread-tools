@@ -30,6 +30,7 @@ def test_root_readme_is_concise_and_links_docs_index() -> None:
     assert len(non_blank_lines) <= 220
     assert "[Documentation](docs/README.md)" in text
     assert "## Documentation" in text
+    assert "[Changelog](CHANGELOG.md)" in text
 
 
 def test_health_docs_cover_remote_health_contract() -> None:
@@ -96,6 +97,7 @@ def test_public_docs_index_links_all_detail_pages() -> None:
     for doc in PUBLIC_DOCS:
         assert f"]({doc})" in text
         assert (DOCS / doc).is_file()
+    assert "[Changelog](../CHANGELOG.md)" in text
 
 
 def test_public_docs_are_free_of_internal_placeholders() -> None:

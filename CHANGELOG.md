@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Restore visible changelog links in the root README and documentation index.
+- Update the npm publishing workflow to `actions/setup-python@v6` for the
+  supported Node 24 GitHub Actions runtime.
+- Restore Python 3.9 compatibility for the remote-health test module.
+
 ## 1.1.1 - 2026-07-14
 
 - Expand best-effort handoff-summary redaction for common credentials, authorization headers, private keys, and credential-bearing URLs.

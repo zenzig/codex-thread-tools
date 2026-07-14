@@ -21,6 +21,8 @@ def test_npm_publish_workflow_verifies_and_publishes_package() -> None:
 
     assert "publish-npm:" in workflow_text
     assert "actions/checkout@v6" in workflow_text
+    assert "actions/setup-python@v6" in workflow_text
+    assert "actions/setup-python@v5" not in workflow_text
     assert "actions/setup-node@v6" in workflow_text
     assert 'node-version: "24"' in workflow_text
     assert "package-manager-cache: false" in workflow_text

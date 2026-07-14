@@ -116,5 +116,6 @@ Start at [Documentation](docs/README.md), or jump straight to:
 - **Version:** `1.1.1`
 - **Issues:** [Report a bug or request a feature](https://github.com/zenzig/codex-thread-tools/issues)
 - **Security:** Read the [security policy](SECURITY.md) before reporting a vulnerability.
+- **[Changelog](CHANGELOG.md):** Release history and notable changes.
 - **Development:** See the [development guide](docs/development.md) for tests and package checks.
 - **License:** [MIT](LICENSE)
