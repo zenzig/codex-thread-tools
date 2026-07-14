@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from codex_thread_tools.sessionlib import iter_jsonl
+from codex_thread_tools.sessionlib import iter_jsonl, now_iso, record_text
 
 
 MARKER_TYPE = "handoff_completed"
@@ -21,10 +20,6 @@ def default_marker_file() -> Path:
     if override:
         return Path(override).expanduser()
     return DEFAULT_MARKER_FILE
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def load_handoff_markers(marker_file: Path | None = None) -> list[dict[str, Any]]:
@@ -98,7 +93,7 @@ def append_handoff_marker(
     )
     marker = {
         "type": MARKER_TYPE,
-        "created_at": created_at or utc_now(),
+        "created_at": created_at or now_iso(),
         "project": project,
         "source_session_id": source_session_id,
         "source_session_file": source_session_file,
@@ -218,26 +213,6 @@ def parse_prompt_marker(text: str) -> dict[str, Any] | None:
         "project": fields.get("project", ""),
         "handoff_sequence": sequence,
     }
-
-
-def record_text(record: dict[str, Any]) -> str:
-    payload = record.get("payload")
-    if not isinstance(payload, dict):
-        return ""
-    for key in ("message", "error", "text"):
-        value = payload.get(key)
-        if isinstance(value, str):
-            return value
-    content = payload.get("content")
-    if isinstance(content, list):
-        pieces: list[str] = []
-        for item in content:
-            if isinstance(item, dict):
-                value = item.get("text")
-                if isinstance(value, str):
-                    pieces.append(value)
-        return "\n".join(pieces)
-    return ""
 
 
 def retired_marker_for_result(

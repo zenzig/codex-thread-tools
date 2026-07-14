@@ -59,6 +59,17 @@ python3 tests/fixtures/build_fixtures.py
 
 The tests do not depend on your real `~/.codex/sessions` folder.
 
+## 1.1.1 Compatibility
+
+Version 1.1.1 doesn't change CLI syntax or add runtime dependencies. Local
+health JSON now uses canonical diagnostics instead of preserving raw event
+snippets from session records.
+
+Session and visual archive replacements are now staged and transactional for
+handled failure paths. Existing archives are preserved or restored when a
+replacement step fails, but handled-cleanup failures and process/OS crashes are
+not guaranteed to preserve the prior archive.
+
 ## Public Repo Hygiene
 
 This repository intentionally does not track local Codex usage artifacts. The

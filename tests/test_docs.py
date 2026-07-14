@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -102,3 +103,90 @@ def test_public_docs_are_free_of_internal_placeholders() -> None:
         text = path.read_text(encoding="utf-8")
         assert not re.search(r"\b(TODO|TBD)\b", text)
         assert "documentation/agent-handoffs" not in text
+
+
+def test_version_contract_is_exact() -> None:
+    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert version == "1.1.1"
+    assert package["version"] == "1.1.1"
+    assert f"**Version:** `{version}`" in readme
+
+
+def test_handoff_redaction_documentation_is_explicit() -> None:
+    text = (DOCS / "handoff.md").read_text(encoding="utf-8")
+
+    assert "best-effort redaction" in text
+    assert "review before sharing" in text
+
+
+def test_health_json_and_archive_verification_contract_is_documented() -> None:
+    development_text = (DOCS / "development.md").read_text(encoding="utf-8")
+    archive_text = (DOCS / "session-archive.md").read_text(encoding="utf-8")
+
+    assert "canonical diagnostics" in development_text
+    assert "raw event" in development_text
+    assert "manifest directory" in archive_text
+    assert "reject" in archive_text.lower()
+
+
+def test_release_compatibility_is_documented() -> None:
+    text = (DOCS / "development.md").read_text(encoding="utf-8")
+
+    assert "doesn't change CLI syntax" in text
+    assert "runtime dependencies" in text
+
+
+def test_archive_force_modes_document_staged_replacement_limits() -> None:
+    session_text = (DOCS / "session-archive.md").read_text(encoding="utf-8")
+    visual_text = (DOCS / "visual-archive.md").read_text(encoding="utf-8")
+
+    assert "--force" in session_text
+    assert "complete staged replacement" in session_text.lower()
+    assert "transactional staged replacement" in session_text.lower()
+    assert "not an in-place overlay" in session_text.lower()
+    assert "--force" in visual_text
+    assert "complete staged replacement" in visual_text.lower()
+    assert "transactional staged replacement" in visual_text.lower()
+    assert "not an in-place overlay" in visual_text.lower()
+
+
+def test_archive_safety_behavior_is_documented() -> None:
+    readme_text = (ROOT / "README.md").read_text(encoding="utf-8")
+    index_text = (DOCS / "README.md").read_text(encoding="utf-8")
+    session_text = (DOCS / "session-archive.md").read_text(encoding="utf-8")
+    visual_text = (DOCS / "visual-archive.md").read_text(encoding="utf-8")
+
+    assert "staged, verified archives" in readme_text.lower()
+    assert "recovery quarantine" in readme_text.lower()
+    assert "staged, verified cold storage" in index_text.lower()
+    assert "recovery_file" in session_text
+    assert "fail closed" in session_text.lower()
+    assert "advisory lock" in session_text.lower()
+    assert "fail closed" in visual_text.lower()
+
+
+def test_archive_documentation_calls_out_cleanup_and_crash_limitations() -> None:
+    session_text = (DOCS / "session-archive.md").read_text(encoding="utf-8")
+    visual_text = (DOCS / "visual-archive.md").read_text(encoding="utf-8")
+    dev_text = (DOCS / "development.md").read_text(encoding="utf-8")
+
+    assert "crash consistency is not guaranteed" in session_text.lower()
+    assert "cleanup failures" in session_text.lower()
+    assert "cleanup failures" in visual_text.lower()
+    assert "not guaranteed to preserve" in dev_text.lower()
+
+
+def test_repository_hygiene_ignores_archival_staging_artifacts() -> None:
+    ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+
+    for pattern in (
+        "**/codex-session-archives/",
+        "**/.codex-thread-tools-staging-*",
+        "**/.codex-thread-tools-backup-*",
+        "**/.codex-thread-tools-reservation-*",
+        "**/.codex-thread-tools-prune-*",
+    ):
+        assert pattern in ignore

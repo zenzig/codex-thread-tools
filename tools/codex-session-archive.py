@@ -13,15 +13,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import codex_thread_tools.session_archive as session_archive
 from codex_thread_tools.session_archive import (
-    archive_sessions,
-    build_archive_plan,
     format_archive,
     format_plan,
     format_prune,
     format_verify,
-    prune_local_sessions,
-    verify_archive,
 )
 from codex_thread_tools.sessionlib import expand_path, is_codex_running
 from codex_thread_tools.sessionpaths import default_session_root
@@ -33,13 +30,13 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         return args.handler(args)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
 
 def handle_plan(args: argparse.Namespace) -> int:
-    result = build_archive_plan(
+    result = session_archive.build_archive_plan(
         session_root=expand_path(args.session_root),
         project=args.project,
         older_than=args.older_than,
@@ -51,7 +48,7 @@ def handle_plan(args: argparse.Namespace) -> int:
 
 
 def handle_archive(args: argparse.Namespace) -> int:
-    result = archive_sessions(
+    result = session_archive.archive_sessions(
         session_root=expand_path(args.session_root),
         archive_root=expand_path(args.archive_root),
         project=args.project,
@@ -66,7 +63,7 @@ def handle_archive(args: argparse.Namespace) -> int:
 
 
 def handle_verify(args: argparse.Namespace) -> int:
-    result = verify_archive(expand_path(args.manifest))
+    result = session_archive.verify_archive(expand_path(args.manifest))
     emit(result, args.json, format_verify)
     return 3 if result["summary"]["failed"] else 0
 
@@ -80,12 +77,12 @@ def handle_prune(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    result = prune_local_sessions(
+    result = session_archive.prune_local_sessions(
         manifest_file=expand_path(args.manifest),
         confirm_prune_local=args.confirm_prune_local,
     )
     emit(result, args.json, format_prune)
-    return 0
+    return 3 if result["summary"].get("failed_count", 0) else 0
 
 
 def emit(

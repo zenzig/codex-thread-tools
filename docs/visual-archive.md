@@ -63,6 +63,12 @@ The archive command writes:
 - `handoff-snippet.md`: text to paste into a handoff `Assets / References` section
 - `artifacts/`: copied image and video files, deduplicated by SHA-256
 
+`--force` performs complete staged replacement, not an in-place overlay. This is
+a transactional staged replacement: stale artifacts are removed only after the
+full replacement is ready. Handled failures preserve or restore the prior archive
+contents, but cleanup failures and process or OS crashes are not guaranteed to
+preserve those contents.
+
 Local visual files are copied only when they resolve under an explicit
 `--allow-local-root`. This prevents the tool from following arbitrary paths out
 of a session file and copying files you did not intend to archive.
@@ -76,7 +82,8 @@ codex-thread-tools visual-archive verify /Volumes/CodexArchive/codex-visual-arti
 ```
 
 Verification checks that archived files still exist and that their byte size and
-SHA-256 hash match the manifest.
+SHA-256 hash match the manifest. Malformed manifests, unsupported schemas,
+missing artifact metadata, and paths outside the archive fail closed.
 
 The visual archive tool does not edit, delete, trim, or rewrite Codex session
 files. It only scans a session and copies visual files into the archive location

@@ -43,9 +43,14 @@ notes/
 handoffs/
 agent-handoffs/
 codex-visual-artifacts/
+**/codex-session-archives/
 session_quarantine/
 .codex/sessions/
 codex-sessions/
+**/.codex-thread-tools-staging-*
+**/.codex-thread-tools-backup-*
+**/.codex-thread-tools-reservation-*
+**/.codex-thread-tools-prune-*
 *.handoff.md
 *-handoff.md
 handoff-*.md

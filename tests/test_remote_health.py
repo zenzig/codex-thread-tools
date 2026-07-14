@@ -8,16 +8,18 @@ from pathlib import Path
 
 import pytest
 
-from codex_thread_tools.remote_health import add_remote_metadata
-from codex_thread_tools.remote_health import build_ssh_argv
 from codex_thread_tools.remote_health import (
     RemoteHealthError,
+    add_remote_metadata,
     build_remote_safe_report,
+    build_ssh_argv,
     ensure_compatible_versions,
+    validate_ssh_destination,
     run_remote_health,
     select_remote_project,
     validate_projects_report,
 )
+from codex_thread_tools.thread_health import COMPACTION_FAILURE_DIAGNOSTIC
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -263,6 +265,47 @@ def test_run_remote_health_rejects_option_like_host_before_execution() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "host",
+    [
+        "",
+        "-oProxyCommand=bad",
+        "node1\nexample.com",
+        "node1\rexample.com",
+        "node1\texample.com",
+        "node1\x00example.com",
+        "node1 example.com",
+        "node1\x7fexample.com",
+        "node1\u00a0example.com",
+    ],
+)
+def test_build_ssh_argv_rejects_unsafe_host_inputs(host: str) -> None:
+    with pytest.raises(
+        RemoteHealthError,
+        match="SSH host (must be a non-empty destination|contains whitespace or control characters)",
+    ):
+        build_ssh_argv(host, ["codex-thread-tools", "--version"])
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "node1",
+        "user@example.com",
+        "192.0.2.5",
+        "[2001:db8::1]",
+        "user@[fe80::1%en0]",
+        "dev_host",
+    ],
+)
+def test_validate_ssh_destination_accepts_safe_values(host: str) -> None:
+    assert validate_ssh_destination(host) == host
+    assert build_ssh_argv(
+        host,
+        ["codex-thread-tools", "--version"],
+    )[-2] == host
+
+
 def test_equal_versions_need_no_warning() -> None:
     assert ensure_compatible_versions("1.1.0", "1.1.0") is None
 
@@ -456,6 +499,30 @@ def test_validate_projects_report_rejects_noncanonical_handoff_timestamp() -> No
         validate_projects_report(payload)
 
     assert sentinel not in str(error.value)
+
+
+def test_remote_safe_builder_preserves_canonical_compaction_diagnostics() -> None:
+    payload = fixture_remote_projects_report()
+    project = payload["projects"][0]
+    project["reasons"] = [
+        "untrusted diagnostic",
+        COMPACTION_FAILURE_DIAGNOSTIC,
+    ]
+    project["risk_domains"]["compaction"]["evidence"] = [
+        "untrusted diagnostic",
+        COMPACTION_FAILURE_DIAGNOSTIC,
+    ]
+
+    safe = build_remote_safe_report(payload)
+
+    assert safe["projects"][0]["reasons"] == [
+        "additional health signal omitted by remote privacy filter",
+        COMPACTION_FAILURE_DIAGNOSTIC,
+    ]
+    assert safe["projects"][0]["risk_domains"]["compaction"]["evidence"] == [
+        "additional health signal omitted by remote privacy filter",
+        COMPACTION_FAILURE_DIAGNOSTIC,
+    ]
 
 
 def make_runner(

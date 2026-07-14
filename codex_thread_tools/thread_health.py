@@ -9,7 +9,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from codex_thread_tools.sessionlib import iter_jsonl, payload_role, payload_type, record_timestamp
+from codex_thread_tools.sessionlib import (
+    iter_jsonl,
+    payload_role,
+    payload_type,
+    record_text,
+    record_timestamp,
+)
 from codex_thread_tools.sessionpaths import default_session_root
 from codex_thread_tools.visual_artifacts import scan_record_visual_metrics
 
@@ -19,6 +25,11 @@ DEFAULT_DANGER_BYTES = 2 * 1024 * 1024 * 1024
 DEFAULT_WARN_ITEMS = 8_000
 DEFAULT_DANGER_ITEMS = 12_000
 DEFAULT_MAX_HEALTHY_COMPACTIONS = 3
+
+COMPACTION_FAILURE_DIAGNOSTIC = (
+    "compaction failure or context-window error event was recorded"
+)
+LONG_THREAD_DIAGNOSTIC = "long-thread or context-window warning event was recorded"
 
 STATUS_RANK = {"ok": 0, "warn": 1, "danger": 2}
 
@@ -242,9 +253,9 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
             if event_type in {"error", "warning"} and any(
                 term in lowered for term in COMPACTION_FAILURE_TERMS
             ):
-                metrics["compaction_failures"].append(text[:200])
+                metrics["compaction_failures"].append(COMPACTION_FAILURE_DIAGNOSTIC)
             if any(term in lowered for term in LONG_THREAD_TERMS):
-                metrics["long_thread_warnings"].append(text[:200])
+                metrics["long_thread_warnings"].append(LONG_THREAD_DIAGNOSTIC)
 
     if metrics["bytes"] > 0:
         metrics["compacted_payload_percent"] = round(
@@ -579,8 +590,11 @@ def update_token_metrics(record: dict[str, Any], metrics: dict[str, Any]) -> Non
         metrics["latest_cumulative_token_ratio"] = round(total / window, 4)
 
 
-def update_visual_metrics(record: dict[str, Any], line_no: int, metrics: dict[str, Any]) -> None:
-    del line_no
+def update_visual_metrics(
+    record: dict[str, Any],
+    _line_no: int,
+    metrics: dict[str, Any],
+) -> None:
     visual_metrics = scan_record_visual_metrics(record)
     if visual_metrics["visual_artifacts"] == 0:
         return
@@ -605,26 +619,6 @@ def token_usage_fields(usage: dict[str, Any]) -> dict[str, int | None]:
         field: usage[field] if isinstance(usage.get(field), int) else None
         for field in fields
     }
-
-
-def record_text(record: dict[str, Any]) -> str:
-    payload = record.get("payload")
-    if not isinstance(payload, dict):
-        return ""
-    for key in ("message", "error", "text"):
-        value = payload.get(key)
-        if isinstance(value, str):
-            return value
-    content = payload.get("content")
-    if isinstance(content, list):
-        pieces: list[str] = []
-        for item in content:
-            if isinstance(item, dict):
-                value = item.get("text")
-                if isinstance(value, str):
-                    pieces.append(value)
-        return "\n".join(pieces)
-    return ""
 
 
 def active_sessions_by_project(session_root: Path) -> list[Path]:

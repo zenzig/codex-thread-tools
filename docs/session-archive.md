@@ -45,6 +45,18 @@ The archive command writes:
 - `sessions/`: copied session JSONL files, preserving their relative session
   folder paths
 
+Verification resolves archived session paths from the manifest directory. It
+rejects paths outside that directory, including traversal and symlink escapes.
+Malformed manifests, unsupported schemas, missing metadata, and invalid paths
+fail closed instead of being treated as verified archives.
+
+Cleanup of local session files uses a staged quarantine first, then verifies
+captured metadata before deleting originals. If a source changes between
+preflight and delete, the tool rolls files back to their original paths and
+preserves the local session tree. If another file appears at an original path
+before rollback, the new file remains untouched and the captured session stays
+in quarantine; the command reports its location as `recovery_file`.
+
 ## Verify
 
 Verify the archive before deleting anything local:
@@ -69,6 +81,18 @@ codex-thread-tools session-archive prune-local \
 reading or writing session files.
 
 Use `--json` on any phase when you want machine-readable output.
+
+Operations for the same archive target are serialized with a hidden, persistent
+advisory lock file in the archive's parent directory. The file is intentionally
+reused between runs; the operating system lock, not its stored PID metadata,
+determines whether another process owns the target.
+
+Use `--force` for complete staged replacement of an existing archive. This is a
+transactional staged replacement, not an in-place overlay: the old archive
+remains in place until the full replacement is ready. Handled failures preserve
+or restore the prior archive contents before rethrowing, but cleanup failures and
+process or OS crashes are not guaranteed to preserve the previous archive.
+Crash consistency is not guaranteed.
 
 ## Session Archive vs Visual Archive
 

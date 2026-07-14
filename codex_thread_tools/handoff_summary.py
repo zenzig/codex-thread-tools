@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
 from codex_thread_tools.display import format_count
-from codex_thread_tools.sessionlib import iter_jsonl, payload_role, payload_type, record_timestamp
+from codex_thread_tools.redaction import redact_sensitive_text
+from codex_thread_tools.sessionlib import (
+    iter_jsonl,
+    payload_role,
+    payload_type,
+    record_text,
+    record_timestamp,
+)
 from codex_thread_tools.thread_health import (
     HealthThresholds,
     analyze_session_file,
-    record_text,
 )
 
 
@@ -28,14 +33,6 @@ TOOL_PAYLOAD_TYPES = {
     "tool_result",
     "web_search_call",
 }
-
-SENSITIVE_PATTERNS = (
-    re.compile(r"\bsk-[A-Za-z0-9_-]+\b"),
-    re.compile(r"\bgh[pousr]_[A-Za-z0-9_]+\b"),
-    re.compile(
-        r"(?i)\b(api[_ -]?key|secret|token|password)\s*[:=]\s*['\"]?[^'\"\s]+"
-    ),
-)
 
 
 def build_handoff_summary(
@@ -106,10 +103,13 @@ def durable_context_items(
             continue
         if not is_context_record(record):
             continue
-        text = normalize_text(record_text(record))
+        raw_text = record_text(record)
+        if not raw_text:
+            continue
+        redacted_text, sensitive_count = redact_sensitive_text(raw_text)
+        text = normalize_text(redacted_text)
         if not text:
             continue
-        text, sensitive_count = redact_sensitive_text(text)
         redactions["sensitive_values_redacted"] += sensitive_count
         if len(text) > max_text_chars:
             text = text[: max_text_chars - 3].rstrip() + "..."
@@ -155,15 +155,6 @@ def context_role(record: dict[str, Any]) -> str:
 
 def normalize_text(value: str) -> str:
     return " ".join(value.split())
-
-
-def redact_sensitive_text(value: str) -> tuple[str, int]:
-    redacted = value
-    count = 0
-    for pattern in SENSITIVE_PATTERNS:
-        redacted, replacements = pattern.subn("[REDACTED]", redacted)
-        count += replacements
-    return redacted, count
 
 
 def pre_handoff_safety(metrics: dict[str, Any], health: dict[str, Any]) -> dict[str, Any]:

@@ -325,7 +325,11 @@ def test_remote_version_warning_preserves_json_stdout(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["source"] == "remote"
-    assert "Warning: remote version differs: local 1.1.0, remote 1.0.1" in result.stderr
+    local_version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    assert (
+        f"Warning: remote version differs: local {local_version}, remote 1.0.1"
+        in result.stderr
+    )
 
 
 def test_remote_health_errors_return_one_with_empty_stdout(tmp_path: Path) -> None:
@@ -445,7 +449,7 @@ def test_remote_operational_failures_keep_stdout_empty(
     assert "remote-stdout-sentinel" not in result.stderr
 
 
-def test_remote_injection_values_remain_inert_and_project_stays_local(
+def test_remote_rejects_unsafe_host_and_project_stays_local(
     tmp_path: Path,
 ) -> None:
     host_sentinel = Path("/tmp/host-injection")
@@ -468,12 +472,12 @@ def test_remote_injection_values_remain_inert_and_project_stays_local(
         "--json",
     )
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "SSH host contains whitespace or control characters" in result.stderr
     assert not host_sentinel.exists()
     assert not project_sentinel.exists()
-    for ssh_arguments in fake_ssh_commands(env):
-        assert ssh_arguments.count(malicious_host) == 1
-        assert malicious_project not in ssh_arguments[-1]
+    assert not Path(env["FAKE_SSH_RECORD"]).exists()
 
 
 def test_remote_rejects_option_like_host_before_ssh_execution(tmp_path: Path) -> None:
@@ -612,9 +616,10 @@ def test_remote_safe_projects_protocol_never_serializes_raw_session_content(
     )
     assert local_result.returncode in {0, 2, 3}, local_result.stderr
     local_payload = json.loads(local_result.stdout)
-    assert sentinels["event"] in local_payload["projects"][0]["metrics"][
-        "compaction_failures"
-    ][0]
+    assert (
+        local_payload["projects"][0]["metrics"]["compaction_failures"]
+        == ["compaction failure or context-window error event was recorded"]
+    )
     assert local_payload["projects"][0]["replaces_session_ids"] == [
         sentinels["replacement"]
     ]
@@ -734,6 +739,111 @@ def test_check_compaction_failure_recommends_handoff() -> None:
     assert any("compaction" in reason for reason in payload["reasons"])
     assert payload["risk_domains"]["compaction"]["status"] == "danger"
     assert payload["risk_domains"]["continuity"]["status"] == "danger"
+
+
+def test_check_compaction_failure_records_canonical_diagnostic_without_raw_text() -> None:
+    result = run_health(
+        "check",
+        str(FIXTURES / "compaction-failed.jsonl"),
+        "--safe-test-mode",
+        "--json",
+        "--warn-items",
+        "20",
+        "--danger-items",
+        "40",
+    )
+
+    assert result.returncode == 3
+    payload = json.loads(result.stdout)
+    serialized = json.dumps(payload)
+
+    assert payload["metrics"]["compaction_failures"] == [
+        "compaction failure or context-window error event was recorded",
+        "compaction failure or context-window error event was recorded",
+    ]
+    assert "maximum length" not in serialized
+    assert "remote compaction v2" not in serialized
+
+
+def test_check_long_thread_warning_records_canonical_diagnostic(tmp_path: Path) -> None:
+    private_path = "/tmp/private-workdir/session-event.log"
+    sentinel = "RAW_WARNING_SENTINEL_33ab"
+    session = tmp_path / "long-thread-warning.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-05-24T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "long-thread-warning", "cwd": "/work/long-thread"},
+            },
+            {
+                "timestamp": "2026-05-24T12:01:00Z",
+                "type": "response_item",
+                "payload": {"type": "compaction", "encrypted_content": "payload"},
+            },
+            {
+                "timestamp": "2026-05-24T12:01:00Z",
+                "type": "response_item",
+                "payload": {"type": "compaction", "encrypted_content": "payload"},
+            },
+            {
+                "timestamp": "2026-05-24T12:01:00Z",
+                "type": "response_item",
+                "payload": {"type": "compaction", "encrypted_content": "payload"},
+            },
+            {
+                "timestamp": "2026-05-24T12:01:00Z",
+                "type": "response_item",
+                "payload": {"type": "compaction", "encrypted_content": "payload"},
+            },
+            {
+                "timestamp": "2026-05-24T12:01:00Z",
+                "type": "response_item",
+                "payload": {"type": "compaction", "encrypted_content": "payload"},
+            },
+            {
+                "timestamp": "2026-05-24T12:01:00Z",
+                "type": "response_item",
+                "payload": {"type": "compaction", "encrypted_content": "payload"},
+            },
+            {
+                "timestamp": "2026-05-24T12:01:00Z",
+                "type": "response_item",
+                "payload": {"type": "compaction", "encrypted_content": "payload"},
+            },
+            {
+                "timestamp": "2026-05-24T12:01:00Z",
+                "type": "event_msg",
+                "payload": {
+                    "type": "warning",
+                    "message": (
+                        f"thread health notice from {private_path}: "
+                        f"{sentinel} long threads and multiple compactions "
+                        "instructing us to start a new thread now"
+                    ),
+                },
+            },
+        ],
+        mtime=1.0,
+    )
+
+    result = run_health(
+        "check",
+        str(session),
+        "--safe-test-mode",
+        "--json",
+    )
+
+    assert result.returncode == 3
+    payload = json.loads(result.stdout)
+    serialized = json.dumps(payload)
+
+    assert payload["metrics"]["long_thread_warnings"] == [
+        "long-thread or context-window warning event was recorded",
+    ]
+    assert private_path not in serialized
+    assert sentinel not in serialized
 
 
 def test_check_many_compactions_warns_about_quality() -> None:

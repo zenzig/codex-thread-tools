@@ -13,8 +13,8 @@ release process.
 | [Installation](installation.md) | You want to choose between `npx`, global npm install, or source checkout. |
 | [Thread health](health.md) | You want local or SSH-host project reports, report modes, risk domains, and token reports. |
 | [Handoff workflow](handoff.md) | You want to preserve durable project context and rotate into a fresh Codex thread. |
-| [Session archive](session-archive.md) | You want to move old session JSONL files to external storage and optionally prune local copies. |
-| [Visual archive](visual-archive.md) | You want to preserve screenshots and videos outside an oversized Codex thread. |
+| [Session archive](session-archive.md) | You want staged, verified cold storage and recoverable local pruning for old session JSONL files. |
+| [Visual archive](visual-archive.md) | You want verified copies of screenshots and videos outside an oversized Codex thread. |
 | [Recovery](recovery.md) | You need to inspect or back up a damaged or oversized session file. |
 | [Compaction](compaction.md) | You want to understand how Codex compaction differs from handoffs and archives. |
 
