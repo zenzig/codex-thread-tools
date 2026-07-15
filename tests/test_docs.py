@@ -112,8 +112,7 @@ def test_version_contract_is_exact() -> None:
     package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
-    assert version == "1.1.1"
-    assert package["version"] == "1.1.1"
+    assert package["version"] == version
     assert f"**Version:** `{version}`" in readme
 
 

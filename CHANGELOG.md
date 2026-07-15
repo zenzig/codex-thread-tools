@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.1.2 - 2026-07-15
+
 - Restore visible changelog links in the root README and documentation index.
 - Update the npm publishing workflow to `actions/setup-python@v6` for the
   supported Node 24 GitHub Actions runtime.
