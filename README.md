@@ -113,7 +113,7 @@ Start at [Documentation](docs/README.md), or jump straight to:
 ## Project
 
 - **Status:** Production
-- **Version:** `1.1.1`
+- **Version:** `1.1.2`
 - **Issues:** [Report a bug or request a feature](https://github.com/zenzig/codex-thread-tools/issues)
 - **Security:** Read the [security policy](SECURITY.md) before reporting a vulnerability.
 - **[Changelog](CHANGELOG.md):** Release history and notable changes.
