@@ -6,6 +6,10 @@
 - Update the npm publishing workflow to `actions/setup-python@v6` for the
   supported Node 24 GitHub Actions runtime.
 - Restore Python 3.9 compatibility for the remote-health test module.
+- Keep a successfully installed archive live when only cleanup of its prior
+  backup fails, and retain that backup for recovery.
+- Report validation-aborted prune entries as restored when rollback succeeds.
+- Use buffered I/O consistently when initializing archive reservation files.
 
 ## 1.1.1 - 2026-07-14
 

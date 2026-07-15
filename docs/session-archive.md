@@ -56,6 +56,9 @@ preflight and delete, the tool rolls files back to their original paths and
 preserves the local session tree. If another file appears at an original path
 before rollback, the new file remains untouched and the captured session stays
 in quarantine; the command reports its location as `recovery_file`.
+When rollback succeeds after a validation failure, the affected session is
+reported as `restored` with the validation diagnostic, rather than as stranded
+in recovery storage.
 
 ## Verify
 
@@ -93,6 +96,10 @@ remains in place until the full replacement is ready. Handled failures preserve
 or restore the prior archive contents before rethrowing, but cleanup failures and
 process or OS crashes are not guaranteed to preserve the previous archive.
 Crash consistency is not guaranteed.
+
+If cleanup of the prior archive fails after the replacement is already live, the
+command succeeds and retains the hidden backup directory for recovery or manual
+removal.
 
 ## Session Archive vs Visual Archive
 

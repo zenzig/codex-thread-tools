@@ -734,8 +734,10 @@ def test_prune_local_sessions_uses_quarantine_and_rolls_back_on_staged_validatio
     assert result["summary"]["failed_count"] == 1
     assert source1.exists()
     assert source2.exists()
-    assert result["sessions"][0]["status"] in {"restored", "failed"}
-    assert result["sessions"][1]["status"] in {"restored", "failed"}
+    assert result["sessions"][0]["status"] == "restored"
+    assert "session source metadata changed" in result["sessions"][0]["error"]
+    assert "recovery_file" not in result["sessions"][0]
+    assert result["sessions"][1]["status"] == "restored"
     assert not any(
         ".codex-thread-tools-quarantine-" in path.name
         for path in (session_root / "2026" / "01" / "02").iterdir()
@@ -759,6 +761,11 @@ def test_format_prune_includes_failed_count_and_file_errors() -> None:
             },
             {"source_file": "/tmp/source2", "status": "missing"},
             {"source_file": "/tmp/source3", "status": "failed", "error": "mismatch"},
+            {
+                "source_file": "/tmp/source4",
+                "status": "restored",
+                "error": "session source metadata changed: hash mismatch",
+            },
         ],
     }
 
@@ -768,6 +775,7 @@ def test_format_prune_includes_failed_count_and_file_errors() -> None:
     assert "FAILED /tmp/source1: staging failed" in output
     assert "Recovery: /tmp/recovery/source1" in output
     assert "FAILED /tmp/source3: mismatch" in output
+    assert "RESTORED /tmp/source4: session source metadata changed: hash mismatch" in output
 
 
 def _load_session_cli() -> object:
@@ -1456,6 +1464,48 @@ def test_staged_directory_recovers_incomplete_unlocked_reservation(
 
     assert reservation.exists()
     assert (target / "manifest.json").read_text(encoding="utf-8") == "new\n"
+
+
+def test_staged_directory_keeps_installed_archive_when_backup_cleanup_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    target = tmp_path / "archive" / "final"
+    target.mkdir(parents=True)
+    (target / "manifest.json").write_text("old\n", encoding="utf-8")
+    original_remove_path = atomic_directory._remove_path
+
+    def fail_backup_cleanup(path: Path) -> None:
+        if path.name.startswith(".codex-thread-tools-backup-"):
+            raise OSError("backup cleanup denied")
+        original_remove_path(path)
+
+    monkeypatch.setattr(atomic_directory, "_remove_path", fail_backup_cleanup)
+
+    with staged_directory(target, replace=True) as staging:
+        (staging / "manifest.json").write_text("new\n", encoding="utf-8")
+
+    assert (target / "manifest.json").read_text(encoding="utf-8") == "new\n"
+    backups = list(target.parent.glob(".codex-thread-tools-backup-*"))
+    assert len(backups) == 1
+    assert (backups[0] / "manifest.json").read_text(encoding="utf-8") == "old\n"
+
+
+def test_reservation_uses_buffered_writes_after_fdopen(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    target = tmp_path / "archive" / "final"
+
+    def forbid_raw_write(*_args, **_kwargs) -> None:
+        raise AssertionError("raw descriptor writes are not allowed after fdopen")
+
+    monkeypatch.setattr(atomic_directory.os, "write", forbid_raw_write)
+
+    with atomic_directory.target_reservation(target):
+        metadata = _reservation_path(target).read_text(encoding="ascii")
+
+    assert f"pid={os.getpid()}" in metadata
 
 
 def test_reservation_metadata_is_written_while_lock_is_held(tmp_path: Path) -> None:

@@ -67,7 +67,11 @@ def staged_directory(target: Path, *, replace: bool) -> Iterator[Path]:
                         ) from restore_exc
                     keep_backup = False
                     raise exc
-                _remove_path(backup)
+                try:
+                    _remove_path(backup)
+                except OSError:
+                    # The replacement is already live; retain the old archive for recovery.
+                    pass
             else:
                 staging.rename(target)
         except BaseException:
@@ -94,7 +98,8 @@ def _acquire_reservation(path: Path) -> IO[str]:
     handle = os.fdopen(fd, "r+", encoding="ascii")
     try:
         if os.fstat(fd).st_size == 0:
-            os.write(fd, b"\0")
+            handle.write("\0")
+            handle.flush()
         _lock_reservation_file(handle, path)
         handle.seek(0)
         handle.truncate()

@@ -277,7 +277,7 @@ def _prune_local_sessions_locked(
             "summary": {
                 "deleted_count": 0,
                 "missing_count": sum(1 for item in results if item["status"] == "missing"),
-                "failed_count": sum(1 for item in results if item["status"] == "failed"),
+                "failed_count": _failed_prune_count(results),
             },
             "sessions": results,
         }
@@ -299,7 +299,7 @@ def _prune_local_sessions_locked(
             "summary": {
                 "deleted_count": 0,
                 "missing_count": sum(1 for item in results if item["status"] == "missing"),
-                "failed_count": sum(1 for item in results if item["status"] == "failed"),
+                "failed_count": _failed_prune_count(results),
             },
             "sessions": results,
         }
@@ -319,7 +319,7 @@ def _prune_local_sessions_locked(
         "summary": {
             "deleted_count": sum(1 for item in results if item["status"] == "deleted"),
             "missing_count": sum(1 for item in results if item["status"] == "missing"),
-            "failed_count": sum(1 for item in results if item["status"] == "failed"),
+            "failed_count": _failed_prune_count(results),
         },
         "sessions": results,
     }
@@ -583,6 +583,8 @@ def format_prune(result: dict[str, Any]) -> str:
             lines.append(f"FAILED {item['source_file']}: {item.get('error', '')}")
             if item.get("recovery_file"):
                 lines.append(f"  Recovery: {item['recovery_file']}")
+        elif item["status"] == "restored" and item.get("error"):
+            lines.append(f"RESTORED {item['source_file']}: {item['error']}")
     return "\n".join(lines)
 
 
@@ -636,13 +638,20 @@ def _rollback_prune_staging(
             continue
         try:
             staged_target.rename(source)
-            if result["status"] == "ready":
-                result["status"] = "restored"
+            result["status"] = "restored"
         except OSError as exc:
             result["status"] = "failed"
             result["error"] = f"failed to restore staged source: {exc}"
             result["recovery_file"] = str(staged_target)
     _remove_empty_directories(quarantine_root)
+
+
+def _failed_prune_count(results: list[dict[str, Any]]) -> int:
+    return sum(
+        1
+        for item in results
+        if item["status"] == "failed" or item.get("error") is not None
+    )
 
 
 def _remove_empty_directories(root: Path) -> None:
