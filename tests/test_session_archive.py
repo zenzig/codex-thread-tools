@@ -1600,6 +1600,90 @@ def test_prune_rollback_preserves_new_file_at_original_path(
     assert recovery_file != source
 
 
+def test_prune_restores_source_after_quarantined_delete_failure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    session_root = tmp_path / "sessions"
+    archive_root = tmp_path / "archive"
+    project = "/work/atomic"
+    source = session_root / "2026" / "01" / "02" / "thread.jsonl"
+    write_session(source, project=project, session_id="thread-1", payload="archive me")
+    created = session_archive.archive_sessions(
+        session_root=session_root,
+        archive_root=archive_root,
+        project=project,
+        older_than=None,
+        min_size=None,
+        archive_name="atomic-test",
+    )
+    manifest_path = Path(created["manifest_file"])
+    original_unlink = Path.unlink
+
+    def fail_quarantined_delete(path: Path, *args, **kwargs):
+        if ".codex-thread-tools-prune-" in str(path) and path.suffix == ".jsonl":
+            raise OSError("delete denied")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_quarantined_delete)
+
+    result = session_archive.prune_local_sessions(
+        manifest_file=manifest_path,
+        confirm_prune_local=True,
+    )
+
+    entry = result["sessions"][0]
+    assert result["summary"]["deleted_count"] == 0
+    assert result["summary"]["failed_count"] == 1
+    assert source.is_file()
+    assert entry["status"] == "restored"
+    assert "failed to delete quarantined source: delete denied" in entry["error"]
+    assert "recovery_file" not in entry
+
+
+def test_prune_keeps_recovery_file_when_delete_failure_cannot_restore_source(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    session_root = tmp_path / "sessions"
+    archive_root = tmp_path / "archive"
+    project = "/work/atomic"
+    source = session_root / "2026" / "01" / "02" / "thread.jsonl"
+    write_session(source, project=project, session_id="thread-1", payload="archive me")
+    created = session_archive.archive_sessions(
+        session_root=session_root,
+        archive_root=archive_root,
+        project=project,
+        older_than=None,
+        min_size=None,
+        archive_name="atomic-test",
+    )
+    manifest_path = Path(created["manifest_file"])
+    original_unlink = Path.unlink
+
+    def replace_source_then_fail_delete(path: Path, *args, **kwargs):
+        if ".codex-thread-tools-prune-" in str(path) and path.suffix == ".jsonl":
+            source.write_text("new active session\n", encoding="utf-8")
+            raise OSError("delete denied")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", replace_source_then_fail_delete)
+
+    result = session_archive.prune_local_sessions(
+        manifest_file=manifest_path,
+        confirm_prune_local=True,
+    )
+
+    entry = result["sessions"][0]
+    assert result["summary"]["deleted_count"] == 0
+    assert result["summary"]["failed_count"] == 1
+    assert source.read_text(encoding="utf-8") == "new active session\n"
+    assert entry["status"] == "failed"
+    assert "new file exists at the original path" in entry["error"]
+    recovery_file = Path(entry["recovery_file"])
+    assert recovery_file.is_file()
+
+
 def test_prune_holds_archive_reservation_through_local_deletion(
     tmp_path: Path,
     monkeypatch,

@@ -56,6 +56,9 @@ preflight and delete, the tool rolls files back to their original paths and
 preserves the local session tree. If another file appears at an original path
 before rollback, the new file remains untouched and the captured session stays
 in quarantine; the command reports its location as `recovery_file`.
+If deletion of a quarantined session fails, the tool uses the same rule: it
+restores the session to its original path when that path is still free, and
+otherwise preserves the quarantined copy as `recovery_file`.
 When rollback succeeds after a validation failure, the affected session is
 reported as `restored` with the validation diagnostic, rather than as stranded
 in recovery storage.

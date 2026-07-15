@@ -310,8 +310,8 @@ def _prune_local_sessions_locked(
             result["status"] = "deleted"
         except OSError as exc:
             result["status"] = "failed"
-            result["error"] = str(exc)
-            result["recovery_file"] = str(staged_target)
+            result["error"] = f"failed to delete quarantined source: {exc}"
+            _restore_pruned_source(_source, staged_target, result)
     _remove_empty_directories(quarantine_root)
     return {
         "report_type": "session_archive_prune",
@@ -626,24 +626,35 @@ def _rollback_prune_staging(
     quarantine_root: Path,
 ) -> None:
     for source, staged_target, result, _item in reversed(staged_entries):
-        if not staged_target.exists():
-            continue
-        if source.exists():
-            result["status"] = "failed"
-            result["error"] = (
-                "a new file exists at the original path; archived source retained "
-                "in recovery quarantine"
-            )
-            result["recovery_file"] = str(staged_target)
-            continue
-        try:
-            staged_target.rename(source)
-            result["status"] = "restored"
-        except OSError as exc:
-            result["status"] = "failed"
-            result["error"] = f"failed to restore staged source: {exc}"
-            result["recovery_file"] = str(staged_target)
+        _restore_pruned_source(source, staged_target, result)
     _remove_empty_directories(quarantine_root)
+
+
+def _restore_pruned_source(source: Path, staged_target: Path, result: dict[str, Any]) -> None:
+    if not staged_target.exists():
+        return
+    if source.exists():
+        _append_prune_error(
+            result,
+            "a new file exists at the original path; archived source retained "
+            "in recovery quarantine",
+        )
+        result["status"] = "failed"
+        result["recovery_file"] = str(staged_target)
+        return
+    try:
+        staged_target.rename(source)
+        result["status"] = "restored"
+        result.pop("recovery_file", None)
+    except OSError as exc:
+        _append_prune_error(result, f"failed to restore staged source: {exc}")
+        result["status"] = "failed"
+        result["recovery_file"] = str(staged_target)
+
+
+def _append_prune_error(result: dict[str, Any], message: str) -> None:
+    existing = result.get("error")
+    result["error"] = f"{existing}; {message}" if existing else message
 
 
 def _failed_prune_count(results: list[dict[str, Any]]) -> int:

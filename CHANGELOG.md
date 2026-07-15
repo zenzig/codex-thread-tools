@@ -10,6 +10,8 @@
   backup fails, and retain that backup for recovery.
 - Report validation-aborted prune entries as restored when rollback succeeds.
 - Use buffered I/O consistently when initializing archive reservation files.
+- Restore a session to its original path after a quarantined delete failure when
+  that path is still free; otherwise retain an explicit recovery file.
 
 ## 1.1.1 - 2026-07-14
 
