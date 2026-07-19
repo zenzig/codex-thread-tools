@@ -5,7 +5,7 @@ import hashlib
 import os
 from pathlib import Path
 import time
-from typing import IO, Iterator
+from typing import Callable, IO, Iterator
 from uuid import uuid4
 
 if os.name == "nt":
@@ -19,13 +19,21 @@ class _RestoreFailedError(RuntimeError):
 
 
 @contextmanager
-def staged_directory(target: Path, *, replace: bool) -> Iterator[Path]:
+def staged_directory(
+    target: Path,
+    *,
+    replace: bool,
+    before_stage: Callable[[], None] | None = None,
+    before_publish: Callable[[], None] | None = None,
+) -> Iterator[Path]:
     """Yield a sibling staging directory and atomically install it on success."""
     target = target.expanduser()
     if target.is_symlink():
         raise ValueError(f"archive target is a symlink: {target}")
 
     target_parent = target.parent
+    if before_stage is not None:
+        before_stage()
     reservation = _reservation_path(target)
     reservation_handle = _acquire_reservation(reservation)
     try:
@@ -43,6 +51,9 @@ def staged_directory(target: Path, *, replace: bool) -> Iterator[Path]:
 
         try:
             yield staging
+
+            if before_publish is not None:
+                before_publish()
 
             if not replace:
                 if target.exists():

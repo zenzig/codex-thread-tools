@@ -41,10 +41,191 @@ def run_health_with_env(
     )
 
 
+def write_session(path: Path, records: list[dict]) -> None:
+    path.write_text(
+        "\n".join(json.dumps(record, separators=(",", ":")) for record in records)
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def assert_json_stdout(result: subprocess.CompletedProcess[str]) -> dict:
     assert "Codex Thread Health" not in result.stdout
     assert "Codex Project Token Usage" not in result.stdout
     return json.loads(result.stdout)
+
+
+def test_check_reports_structural_image_integrity_danger_signals(tmp_path: Path) -> None:
+    session = tmp_path / "integrity-danger.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-07-18T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "integrity-danger", "cwd": "/work/integrity"},
+            },
+            {
+                "timestamp": "2026-07-18T12:01:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_image",
+                            "image_url": "data:image/png;base64,this-is-not-valid",
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": "https://example.com/model-visible.png",
+                        },
+                    ],
+                },
+            },
+        ],
+    )
+
+    result = run_health("check", str(session), "--json")
+
+    assert result.returncode == 3, result.stderr
+    payload = assert_json_stdout(result)
+    metrics = payload["metrics"]
+    assert metrics["invalid_image_urls"] == 1
+    assert metrics["invalid_image_urls_in_compacted_records"] == 0
+    assert metrics["remote_image_urls"] == 1
+    assert metrics["session_integrity_findings"] == 2
+    assert metrics["history_base_present"] is False
+    assert payload["risk_domains"]["visuals"]["status"] == "danger"
+    assert "invalid model-visible image URL can break thread replay" in payload["reasons"]
+    assert "remote model-visible image URL is unsafe for thread replay" in payload["reasons"]
+
+
+def test_check_distinguishes_invalid_image_inside_compacted_history(tmp_path: Path) -> None:
+    session = tmp_path / "integrity-compacted.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-07-18T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "integrity-compacted", "cwd": "/work/integrity"},
+            },
+            {
+                "timestamp": "2026-07-18T12:01:00Z",
+                "type": "compacted",
+                "payload": {
+                    "replacement_history": [
+                        {
+                            "type": "message",
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "input_image",
+                                    "image_url": "data:image/png;base64,this-is-not-valid",
+                                }
+                            ],
+                        }
+                    ]
+                },
+            },
+        ],
+    )
+
+    result = run_health("check", str(session), "--json")
+
+    assert result.returncode == 3, result.stderr
+    payload = assert_json_stdout(result)
+    assert payload["metrics"]["invalid_image_urls"] == 1
+    assert payload["metrics"]["invalid_image_urls_in_compacted_records"] == 1
+    assert (
+        "invalid model-visible image URL exists inside compacted replacement history"
+        in payload["reasons"]
+    )
+
+
+def test_check_reports_history_base_as_additive_metadata(tmp_path: Path) -> None:
+    session = tmp_path / "history-base.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-07-18T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "history-base", "cwd": "/work/integrity"},
+                "history_base": "parent-thread-id",
+            }
+        ],
+    )
+
+    result = run_health("check", str(session), "--json")
+
+    assert result.returncode == 0, result.stderr
+    payload = assert_json_stdout(result)
+    assert payload["metrics"]["history_base_present"] is True
+
+
+def test_health_streams_integrity_without_file_level_rescan(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from codex_thread_tools import thread_health
+    from codex_thread_tools.session_integrity import SessionIntegrityAccumulator
+
+    session = tmp_path / "streamed-integrity.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_image",
+                            "image_url": "data:image/png;base64,not-valid",
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": "https://example.com/image.png",
+                        },
+                    ],
+                },
+            }
+        ],
+    )
+    observed_max_findings: list[int] = []
+
+    class ObservedAccumulator(SessionIntegrityAccumulator):
+        def __init__(self, *, max_findings: int) -> None:
+            observed_max_findings.append(max_findings)
+            super().__init__(max_findings=max_findings)
+
+    def fail_file_level_scan(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("health must not rescan the JSONL file")
+
+    monkeypatch.setattr(
+        thread_health,
+        "scan_session_integrity",
+        fail_file_level_scan,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        thread_health,
+        "SessionIntegrityAccumulator",
+        ObservedAccumulator,
+        raising=False,
+    )
+
+    payload = thread_health.analyze_session_file(session, thread_health.HealthThresholds())
+
+    assert observed_max_findings == [0]
+    assert payload["status"] == "danger"
+    assert payload["metrics"]["invalid_image_urls"] == 1
+    assert payload["metrics"]["remote_image_urls"] == 1
+    assert payload["metrics"]["session_integrity_findings"] == 2
+    assert payload["risk_domains"]["visuals"]["status"] == "danger"
 
 
 def test_remote_help_exposes_connection_and_report_options() -> None:
@@ -602,6 +783,10 @@ def test_remote_safe_projects_protocol_never_serializes_raw_session_content(
         "response_items",
         "compacted_records",
         "visual_artifacts",
+        "invalid_image_urls",
+        "invalid_image_urls_in_compacted_records",
+        "remote_image_urls",
+        "session_integrity_findings",
     }
     assert remote_payload["projects"][0]["replaces_session_ids"] == []
 

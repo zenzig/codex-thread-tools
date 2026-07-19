@@ -22,6 +22,7 @@ import json
 import os
 import shutil
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +31,14 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from codex_thread_tools.cli import add_common_args
+from codex_thread_tools.atomic_directory import staged_directory
+from codex_thread_tools.handoff_summary import (
+    build_handoff_summary,
+    format_handoff_summary,
+    pre_handoff_safety,
+)
 from codex_thread_tools.sessionpaths import default_session_root
+from codex_thread_tools.session_integrity import scan_session_integrity
 from codex_thread_tools.sessionlib import (
     KEEP_EVENT_TYPES,
     die,
@@ -41,8 +49,10 @@ from codex_thread_tools.sessionlib import (
     now_stamp,
     payload_role,
     payload_type,
+    sha256_file,
     record_timestamp,
 )
+from codex_thread_tools.thread_health import HealthThresholds, analyze_session_file
 
 
 def require_codex_closed(allow_running: bool) -> None:
@@ -217,6 +227,356 @@ def inspect_session(args: argparse.Namespace) -> None:
     print(json.dumps(summary, indent=2))
 
 
+def diagnose_session(args: argparse.Namespace) -> int:
+    source = expand_path(args.session_file)
+    ensure_source(source)
+    diagnosis = collect_diagnosis(source, max_findings=args.max_findings)
+
+    if args.json:
+        print(json.dumps(diagnosis, indent=2, sort_keys=True))
+    else:
+        print(format_diagnosis(diagnosis))
+    return diagnosis_exit_code(diagnosis["status"])
+
+
+def format_diagnosis(diagnosis: dict[str, Any]) -> str:
+    safety = diagnosis["pre_handoff_safety"]
+    integrity = diagnosis["integrity"]
+    lines = [
+        "Codex Session Integrity Diagnosis",
+        f"File: {diagnosis['file']}",
+        f"Project: {diagnosis['project'] or 'not recorded'}",
+        f"Session: {diagnosis['session_id'] or 'not recorded'}",
+        f"Status: {diagnosis['status'].upper()}",
+        f"Pre-handoff safety: {safety['status'].upper()}",
+        "",
+        "Integrity",
+        f"Invalid image URLs: {integrity['invalid_image_urls']}",
+        "Invalid image URLs in compacted history: "
+        f"{integrity['invalid_image_urls_in_compacted_records']}",
+        f"Remote image URLs: {integrity['remote_image_urls']}",
+        f"History base present: {'yes' if integrity['history_base_present'] else 'no'}",
+    ]
+    if integrity["findings"]:
+        lines.append("Findings")
+        for finding in integrity["findings"]:
+            location = "compacted history" if finding["compacted"] else "live history"
+            lines.append(
+                f"- {finding['code']} at line {finding['line']} ({location})"
+            )
+    if safety["reasons"]:
+        lines.append("Pre-handoff notes")
+        for reason in safety["reasons"]:
+            lines.append(f"- {reason}")
+    lines.extend(
+        [
+            "",
+            f"Recommended action: {diagnosis['recommended_action']}",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def diagnosis_exit_code(status: str) -> int:
+    if status == "clean":
+        return 0
+    if status == "caution":
+        return 2
+    if status == "danger":
+        return 3
+    return 1
+
+
+def collect_diagnosis(source: Path, *, max_findings: int = 20) -> dict[str, Any]:
+    diagnosis, _health = collect_diagnosis_with_health(
+        source,
+        max_findings=max_findings,
+    )
+    return diagnosis
+
+
+def collect_diagnosis_with_health(
+    source: Path,
+    *,
+    max_findings: int = 20,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    health = analyze_session_file(source, HealthThresholds())
+    integrity = scan_session_integrity(source, max_findings=max_findings)
+    safety = pre_handoff_safety(health["metrics"], health)
+
+    if integrity.invalid_image_urls or integrity.remote_image_urls:
+        status = "danger"
+        recommended_action = "create-recovery-bundle"
+    elif safety["status"] != "clean" or health["status"] != "ok":
+        status = "caution"
+        recommended_action = "review-before-handoff"
+    else:
+        status = "clean"
+        recommended_action = "continue"
+
+    diagnosis = {
+        "report_type": "codex_session_integrity_diagnosis",
+        "file": str(source),
+        "project": health["project"],
+        "session_id": health["session_id"],
+        "status": status,
+        "recommended_action": recommended_action,
+        "pre_handoff_safety": safety,
+        "integrity": {
+            "invalid_image_urls": integrity.invalid_image_urls,
+            "invalid_image_urls_in_compacted_records": (
+                integrity.invalid_image_urls_in_compacted_records
+            ),
+            "remote_image_urls": integrity.remote_image_urls,
+            "remote_image_urls_in_compacted_records": (
+                integrity.remote_image_urls_in_compacted_records
+            ),
+            "history_base_present": integrity.history_base_present,
+            "findings": [asdict(finding) for finding in integrity.findings],
+        },
+    }
+    return diagnosis, health
+
+
+def collect_source_identity(path: Path) -> dict[str, Any]:
+    stat = path.stat()
+    return {
+        "file": str(path),
+        "path": str(path),
+        "device": stat.st_dev,
+        "inode": stat.st_ino,
+        "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+        "sha256": sha256_file(path),
+    }
+
+
+def ensure_source_unchanged(path: Path, expected: dict[str, Any]) -> None:
+    current = collect_source_identity(path)
+    for key in ("file", "device", "inode", "size", "mtime_ns", "sha256"):
+        if current[key] != expected[key]:
+            die("session source changed during bundle creation")
+
+
+def capture_directory_identity(path: Path) -> tuple[int, int]:
+    if path.is_symlink():
+        die(f"bundle output root is a symlink: {path}")
+    if not path.exists():
+        path.mkdir(parents=True)
+    if not path.is_dir():
+        die(f"bundle output root is not a directory: {path}")
+    stat = path.stat()
+    return stat.st_dev, stat.st_ino
+
+
+def ensure_bundle_output_root(
+    path: Path,
+    expected_identity: tuple[int, int],
+) -> None:
+    require_not_live_session_output(path)
+    if path.is_symlink():
+        die(f"bundle output root is a symlink: {path}")
+    if not path.is_dir():
+        die(f"bundle output root is not a directory: {path}")
+    stat = path.stat()
+    if (stat.st_dev, stat.st_ino) != expected_identity:
+        die("bundle output root changed during bundle creation")
+
+
+def _guard_context_text(value: str) -> str:
+    if "data:image/" in value.lower():
+        return "[redacted image data URL]"
+    if len(value) > 500:
+        return value[:500].rstrip() + "..."
+    return value
+
+
+def _write_text(path: Path, text: str) -> None:
+    path.write_text(text, encoding="utf-8")
+
+
+def _write_json(path: Path, payload: Any) -> None:
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def build_bundle_manifest(
+    staging_dir: Path,
+    bundle_dir: Path,
+) -> dict[str, Any]:
+    artifacts = {
+        "integrity-report.json": {
+            "path": str(bundle_dir / "integrity-report.json"),
+            "sha256": sha256_file(staging_dir / "integrity-report.json"),
+            "bytes": (staging_dir / "integrity-report.json").stat().st_size,
+        },
+        "recovery.md": {
+            "path": str(bundle_dir / "recovery.md"),
+            "sha256": sha256_file(staging_dir / "recovery.md"),
+            "bytes": (staging_dir / "recovery.md").stat().st_size,
+        },
+        "handoff-template.md": {
+            "path": str(bundle_dir / "handoff-template.md"),
+            "sha256": sha256_file(staging_dir / "handoff-template.md"),
+            "bytes": (staging_dir / "handoff-template.md").stat().st_size,
+        },
+        "fresh-task-prompt.md": {
+            "path": str(bundle_dir / "fresh-task-prompt.md"),
+            "sha256": sha256_file(staging_dir / "fresh-task-prompt.md"),
+            "bytes": (staging_dir / "fresh-task-prompt.md").stat().st_size,
+        },
+        "visual-decision.md": {
+            "path": str(bundle_dir / "visual-decision.md"),
+            "sha256": sha256_file(staging_dir / "visual-decision.md"),
+            "bytes": (staging_dir / "visual-decision.md").stat().st_size,
+        },
+    }
+    return {
+        "type": "codex_session_recovery_bundle",
+        "version": 1,
+        "created_at": now_iso(),
+        "files": list(artifacts.keys()),
+        "artifacts": artifacts,
+    }
+
+
+def run_bundle(args: argparse.Namespace) -> int:
+    source = expand_path(args.session_file)
+    ensure_source(source)
+    project_root = expand_path(args.project_root)
+    if not project_root.exists():
+        die(f"project root does not exist: {project_root}")
+    if not project_root.is_dir():
+        die(f"project root is not a directory: {project_root}")
+
+    output_root = expand_path(
+        args.output_root or "~/.codex/thread-tools/recovery-bundles"
+    )
+    require_not_live_session_output(output_root)
+    output_root_identity = capture_directory_identity(output_root)
+
+    source_identity = collect_source_identity(source)
+    bundle_dir = output_root / f"{source.stem}-{now_stamp()}"
+
+    def before_stage() -> None:
+        ensure_bundle_output_root(output_root, output_root_identity)
+
+    def before_publish() -> None:
+        ensure_bundle_output_root(output_root, output_root_identity)
+        ensure_source_unchanged(source, source_identity)
+
+    with staged_directory(
+        bundle_dir,
+        replace=args.force,
+        before_stage=before_stage,
+        before_publish=before_publish,
+    ) as staging_dir:
+        diagnosis, health = collect_diagnosis_with_health(source)
+        handoff = build_handoff_summary(source, health=health)
+        for item in handoff["durable_context"]:
+            item["text"] = _guard_context_text(item["text"])
+
+        integrity_report = {
+            "report_type": "codex_session_recovery_bundle_report",
+            "source": source_identity,
+            "project_root": str(project_root),
+            "diagnosis": {
+                "status": diagnosis["status"],
+                "recommended_action": diagnosis["recommended_action"],
+                "pre_handoff_safety": diagnosis["pre_handoff_safety"],
+            },
+            "integrity": diagnosis["integrity"],
+        }
+        _write_json(staging_dir / "integrity-report.json", integrity_report)
+
+        _write_text(
+            staging_dir / "recovery.md",
+            "\n".join(
+                [
+                    "# Recovery Bundle",
+                    "",
+                    f"Session: `{diagnosis['file']}`",
+                    f"Project root: `{project_root}`",
+                    f"Status: `{diagnosis['status'].upper()}`",
+                    "",
+                    "Evidence",
+                    f"- Invalid image URLs: {diagnosis['integrity']['invalid_image_urls']}",
+                    f"- Remote image URLs: {diagnosis['integrity']['remote_image_urls']}",
+                    f"- History base declared: {'yes' if diagnosis['integrity']['history_base_present'] else 'no'}",
+                    "",
+                    "Decision",
+                    "- Create a fresh task instead of resuming or forking this session.",
+                ]
+            )
+            + "\n",
+        )
+
+        handoff_lines = format_handoff_summary(handoff).splitlines()
+        _write_text(
+            staging_dir / "handoff-template.md",
+            "\n".join(
+                [
+                    "# Recovery Handoff Template",
+                    "",
+                    "- Keep this task fresh. Do not resume the prior transcript.",
+                    "",
+                ]
+                + handoff_lines
+                + [
+                    "",
+                    "Checklist",
+                    "- [ ] Verify git status and working tree diffs",
+                    "- [ ] Review the last few commits",
+                    "- [ ] Confirm whether visual artifacts are needed",
+                    "- [ ] Continue in a new task with the redacted summary only",
+                ]
+            )
+            + "\n",
+        )
+        _write_text(
+            staging_dir / "fresh-task-prompt.md",
+            "\n".join(
+                [
+                    "Start a new Codex task from this redacted summary.",
+                    "",
+                    "Do not resume, fork, or trust the broken live transcript. "
+                    "Use this bundle to bootstrap context, then continue from a clean state.",
+                    "",
+                    f"Source session: `{source}`",
+                    f"Bundle: `{bundle_dir}`",
+                ]
+            )
+            + "\n",
+        )
+        _write_text(
+            staging_dir / "visual-decision.md",
+            "\n".join(
+                [
+                    "# Visual Decision",
+                    "",
+                    "Recommended visual action: `Not archived`",
+                    "Decision: if visual context is necessary, run visual-archive scan before new handoff.",
+                ]
+            )
+            + "\n",
+        )
+
+        manifest = build_bundle_manifest(staging_dir, bundle_dir)
+        manifest["project_root"] = str(project_root)
+        manifest["source"] = source_identity
+        manifest["files"] = [
+            "integrity-report.json",
+            "recovery.md",
+            "handoff-template.md",
+            "fresh-task-prompt.md",
+            "visual-decision.md",
+            "manifest.json",
+        ]
+        _write_json(staging_dir / "manifest.json", manifest)
+
+    print(f"bundle: {bundle_dir}")
+    return 0
+
+
 def backup_command(args: argparse.Namespace) -> None:
     require_codex_closed(args.allow_codex_running)
     source = expand_path(args.session_file)
@@ -385,6 +745,16 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument("--largest-lines", type=int, default=8)
     inspect_parser.set_defaults(func=inspect_session)
 
+    diagnose_parser = subparsers.add_parser(
+        "diagnose",
+        help="read-only integrity diagnosis for a session file",
+        description="Read-only integrity diagnosis for a Codex session file.",
+    )
+    diagnose_parser.add_argument("session_file")
+    diagnose_parser.add_argument("--json", action="store_true")
+    diagnose_parser.add_argument("--max-findings", type=int, default=20)
+    diagnose_parser.set_defaults(func=diagnose_session)
+
     backup_parser = subparsers.add_parser("backup", help="hard-link or copy a session backup")
     backup_parser.add_argument("session_file")
     add_common_args(backup_parser, backup_dir=True)
@@ -426,14 +796,27 @@ def build_parser() -> argparse.ArgumentParser:
     rebuild_parser.add_argument("--allow-small-window", action="store_true")
     rebuild_parser.set_defaults(func=rebuild_window)
 
+    bundle_parser = subparsers.add_parser(
+        "bundle",
+        help="write a recovery bundle for source integrity remediation",
+    )
+    bundle_parser.add_argument("session_file")
+    bundle_parser.add_argument("--project-root", required=True)
+    bundle_parser.add_argument(
+        "--output-root",
+        default="~/.codex/thread-tools/recovery-bundles",
+    )
+    bundle_parser.add_argument("--force", action="store_true")
+    bundle_parser.set_defaults(func=run_bundle)
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    args.func(args)
-    return 0
+    result = args.func(args)
+    return result if isinstance(result, int) else 0
 
 
 if __name__ == "__main__":

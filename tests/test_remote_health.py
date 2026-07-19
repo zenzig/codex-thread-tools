@@ -94,6 +94,43 @@ def fixture_remote_projects_report() -> dict:
     }
 
 
+def test_remote_safe_report_allows_integrity_counts_and_safe_diagnostics() -> None:
+    payload = fixture_remote_projects_report()
+    project = payload["projects"][0]
+    project["metrics"].update(
+        {
+            "invalid_image_urls": 1,
+            "invalid_image_urls_in_compacted_records": 1,
+            "remote_image_urls": 0,
+            "session_integrity_findings": 1,
+        }
+    )
+    project["reasons"] = [
+        "invalid model-visible image URL exists inside compacted replacement history"
+    ]
+    project["risk_domains"]["visuals"] = {
+        "status": "danger",
+        "evidence": [
+            "invalid model-visible image URL exists inside compacted replacement history"
+        ],
+    }
+
+    safe = build_remote_safe_report(payload)
+
+    metrics = safe["projects"][0]["metrics"]
+    assert metrics["invalid_image_urls"] == 1
+    assert metrics["invalid_image_urls_in_compacted_records"] == 1
+    assert metrics["remote_image_urls"] == 0
+    assert metrics["session_integrity_findings"] == 1
+    assert validate_projects_report(safe) == safe
+
+
+def test_remote_health_accepts_existing_metric_set_for_older_remote_hosts() -> None:
+    payload = fixture_remote_projects_report()
+
+    assert validate_projects_report(payload) == payload
+
+
 @pytest.fixture
 def projects_payload() -> dict:
     def project_item(path: str, status: str, recommendation: str) -> dict:

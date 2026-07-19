@@ -17,6 +17,7 @@ from codex_thread_tools.sessionlib import (
     record_timestamp,
 )
 from codex_thread_tools.sessionpaths import default_session_root
+from codex_thread_tools.session_integrity import SessionIntegrityAccumulator
 from codex_thread_tools.visual_artifacts import scan_record_visual_metrics
 
 
@@ -139,6 +140,11 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
         "visual_artifact_errors": 0,
         "visual_artifact_skipped": 0,
         "visual_artifacts_in_compacted_records": 0,
+        "invalid_image_urls": 0,
+        "invalid_image_urls_in_compacted_records": 0,
+        "remote_image_urls": 0,
+        "session_integrity_findings": 0,
+        "history_base_present": False,
         "first_timestamp": "",
         "last_timestamp": "",
         "mtime_iso": _iso_from_timestamp(stat.st_mtime),
@@ -148,8 +154,10 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
     session_id = ""
     turn_error_events_since_last_success = 0
     open_turn_events = 0
+    integrity_accumulator = SessionIntegrityAccumulator(max_findings=0)
 
     for line_no, raw, record in iter_jsonl(path):
+        integrity_accumulator.scan_record(record, line_no=line_no)
         metrics["total_records"] += 1
         metrics["max_line_bytes"] = max(metrics["max_line_bytes"], len(raw))
         rtype = record.get("type")
@@ -264,6 +272,16 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
         )
     metrics["unresolved_turn_error_events"] = turn_error_events_since_last_success
     metrics["incomplete_turn_events"] = open_turn_events
+    integrity = integrity_accumulator.result()
+    metrics["invalid_image_urls"] = integrity.invalid_image_urls
+    metrics["invalid_image_urls_in_compacted_records"] = (
+        integrity.invalid_image_urls_in_compacted_records
+    )
+    metrics["remote_image_urls"] = integrity.remote_image_urls
+    metrics["session_integrity_findings"] = (
+        integrity.invalid_image_urls + integrity.remote_image_urls
+    )
+    metrics["history_base_present"] = integrity.history_base_present
 
     project = project or str(path.parent)
     risk_domains = build_risk_domains(metrics, thresholds)
@@ -362,6 +380,16 @@ def compaction_risk(metrics: dict[str, Any], thresholds: HealthThresholds) -> di
 def visuals_risk(metrics: dict[str, Any], _thresholds: HealthThresholds) -> dict[str, Any]:
     danger: list[str] = []
     warn: list[str] = []
+
+    if metrics["invalid_image_urls_in_compacted_records"] > 0:
+        danger.append(
+            "invalid model-visible image URL exists inside compacted replacement history"
+        )
+    elif metrics["invalid_image_urls"] > 0:
+        danger.append("invalid model-visible image URL can break thread replay")
+
+    if metrics["remote_image_urls"] > 0:
+        danger.append("remote model-visible image URL is unsafe for thread replay")
 
     if metrics["visual_embedded_bytes"] >= 300 * 1024 * 1024:
         danger.append("embedded visual payloads exceed 300 MB")

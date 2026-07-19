@@ -21,6 +21,8 @@ Compaction trims what Codex keeps *in context*. It does nothing for the file sit
 
 `codex-thread-tools` is the toolkit for that moment in between: spot the risk before it bites, pull out what's actually worth keeping, and get the rest out of your way — without ever treating raw transcripts as documentation.
 
+Read the background: [The Thread That Ate Itself: What Happens When Your Codex Session Gets Too Big to Open](https://medium.com/@atomicfalls/the-thread-that-ate-itself-what-happens-when-your-codex-session-gets-too-big-to-open-5ee559f263f3).
+
 ## Use it when you want to
 
 - Know whether a task — local or remote — is still healthy enough to keep pushing.
@@ -39,7 +41,7 @@ Compaction trims what Codex keeps *in context*. It does nothing for the file sit
 | Handoff summaries | Redacted drafts — no raw tool payloads along for the ride. |
 | Session archives | Moves old JSONL files into staged, verified archives, with a recovery quarantine before local pruning. |
 | Visual archives | Keeps referenced screenshots and videos alive outside task history. |
-| Recovery | Inspects and backs up sessions that won't open normally. |
+| Recovery | Diagnoses unsafe replay inputs and creates redacted, external recovery bundles. |
 
 Everything defaults to read-only. Anything that copies or prunes files needs an explicit command, a verification step, and a confirmation flag — nothing destructive happens by accident.
 
@@ -107,13 +109,13 @@ Start at [Documentation](docs/README.md), or jump straight to:
 | [Handoff workflow](docs/handoff.md) | Durable context, summaries, markers, remote-handoff distinctions. |
 | [Session archive](docs/session-archive.md) | Staged archive, verification, recovery, and prune workflows. |
 | [Visual archive](docs/visual-archive.md) | Screenshot and video preservation. |
-| [Recovery](docs/recovery.md) | Oversized or damaged session inspection. |
+| [Recovery](docs/recovery.md) | Safe diagnosis and external bundles for damaged sessions. |
 | [Compaction](docs/compaction.md) | Compaction, handoff, and archive boundaries. |
 
 ## Project
 
 - **Status:** Production
-- **Version:** `1.1.2`
+- **Version:** `1.2.0`
 - **Issues:** [Report a bug or request a feature](https://github.com/zenzig/codex-thread-tools/issues)
 - **Security:** Read the [security policy](SECURITY.md) before reporting a vulnerability.
 - **[Changelog](CHANGELOG.md):** Release history and notable changes.

@@ -7,6 +7,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
+MEDIUM_ARTICLE_URL = (
+    "https://medium.com/@atomicfalls/the-thread-that-ate-itself-what-happens-"
+    "when-your-codex-session-gets-too-big-to-open-5ee559f263f3"
+)
 
 
 PUBLIC_DOCS = [
@@ -81,6 +85,7 @@ def test_readme_is_a_concise_open_source_project_overview() -> None:
     assert "npm install -g codex-thread-tools" in text
     assert "codex-thread-tools health remote" in text
     assert "NVM" in text
+    assert text.count(MEDIUM_ARTICLE_URL) == 1
     assert len(text.splitlines()) <= 170
 
 
@@ -123,6 +128,18 @@ def test_handoff_redaction_documentation_is_explicit() -> None:
     assert "review before sharing" in text
 
 
+def test_recovery_documentation_leads_with_safe_diagnosis_and_bundle() -> None:
+    text = (DOCS / "recovery.md").read_text(encoding="utf-8")
+
+    assert "codex-thread-tools recover diagnose" in text
+    assert "codex-thread-tools recover bundle" in text
+    assert "does not modify the source session" in text.lower()
+    assert "outside `~/.codex/sessions`" in text
+    assert "legacy" in text.lower()
+    assert "strip-compacted" in text
+    assert "rebuild-window" in text
+
+
 def test_health_json_and_archive_verification_contract_is_documented() -> None:
     development_text = (DOCS / "development.md").read_text(encoding="utf-8")
     archive_text = (DOCS / "session-archive.md").read_text(encoding="utf-8")
@@ -136,7 +153,7 @@ def test_health_json_and_archive_verification_contract_is_documented() -> None:
 def test_release_compatibility_is_documented() -> None:
     text = (DOCS / "development.md").read_text(encoding="utf-8")
 
-    assert "doesn't change CLI syntax" in text
+    assert "adds `recover diagnose` and `recover bundle`" in text
     assert "runtime dependencies" in text
 
 
