@@ -20,6 +20,7 @@ codex-thread-tools/
 │   ├── handoff_markers.py
 │   ├── handoff_summary.py
 │   ├── session_archive.py
+│   ├── session_integrity.py
 │   ├── sessionlib.py
 │   ├── sessionpaths.py
 │   ├── thread_health.py
@@ -59,16 +60,21 @@ python3 tests/fixtures/build_fixtures.py
 
 The tests do not depend on your real `~/.codex/sessions` folder.
 
-## 1.1.1 Compatibility
+## 1.2.0 Compatibility
 
-Version 1.1.1 doesn't change CLI syntax or add runtime dependencies. Local
-health JSON now uses canonical diagnostics instead of preserving raw event
-snippets from session records.
+Version 1.2.0 adds `recover diagnose` and `recover bundle` without adding
+runtime dependencies or changing existing CLI syntax. Local health JSON keeps
+canonical diagnostics and gains additive integrity metrics; remote health accepts
+prior metric-only report schemas and supplies the new counters when both hosts
+are updated.
 
-Session and visual archive replacements are now staged and transactional for
-handled failure paths. Existing archives are preserved or restored when a
-replacement step fails, but handled-cleanup failures and process/OS crashes are
-not guaranteed to preserve the prior archive.
+Local health JSON uses canonical diagnostics rather than raw event snippets from
+session records.
+
+Recovery bundles are staged and transactional for handled failure paths. They
+leave source sessions unchanged, but process or OS crashes are not guaranteed to preserve a partially written external destination. As with staged archive
+replacement, handled cleanup failures and process or OS crashes are not
+guaranteed to preserve prior external output.
 
 ## Public Repo Hygiene
 

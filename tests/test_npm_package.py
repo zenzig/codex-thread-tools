@@ -72,6 +72,7 @@ def test_npm_cli_help_and_version() -> None:
     assert "health [args...]" in help_result.stdout
     assert "session-archive [args...]" in help_result.stdout
     assert "handoff-summary [args...]" in help_result.stdout
+    assert "recover [args...]" in help_result.stdout
     assert "install-skill" in help_result.stdout
     assert version_result.returncode == 0, version_result.stderr
     assert version_result.stdout.strip() == (ROOT / "VERSION").read_text(
@@ -118,6 +119,27 @@ def test_npm_cli_dispatches_handoff_summary_tool() -> None:
     assert result.returncode == 0, result.stderr
     assert "codex-thread-handoff-summary.py" in result.stdout
     assert "session_file" in result.stdout
+
+
+def test_npm_cli_dispatches_recovery_tool() -> None:
+    result = subprocess.run(
+        [
+            "node",
+            str(ROOT / "bin" / "codex-thread-tools.js"),
+            "recover",
+            "diagnose",
+            "--help",
+        ],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "read-only integrity diagnosis" in result.stdout.lower()
+    assert "--max-findings" in result.stdout
 
 
 def test_handoff_summary_imports_with_macos_system_python() -> None:
@@ -219,5 +241,8 @@ def test_npm_pack_excludes_generated_and_local_artifacts() -> None:
     assert "codex_thread_tools/session_archive.py" in paths
     assert "codex_thread_tools/thread_health.py" in paths
     assert "codex_thread_tools/remote_health.py" in paths
+    assert "codex_thread_tools/session_integrity.py" in paths
     assert "tools/codex-session-archive.py" in paths
     assert "tools/codex-thread-health.py" in paths
+    assert "tools/recover-codex-thread-starter.py" in paths
+    assert "docs/recovery.md" in paths

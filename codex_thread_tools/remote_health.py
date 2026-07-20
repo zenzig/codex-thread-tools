@@ -28,12 +28,19 @@ UTC_TIMESTAMP_PATTERN = re.compile(
 )
 REMOTE_HEALTH_PROTOCOL = 1
 SUMMARY_KEYS = ("projects", "ok", "warn", "danger", "retired")
-REMOTE_METRIC_KEYS = (
+REMOTE_REQUIRED_METRIC_KEYS = (
     "bytes",
     "response_items",
     "compacted_records",
     "visual_artifacts",
 )
+REMOTE_OPTIONAL_METRIC_KEYS = (
+    "invalid_image_urls",
+    "invalid_image_urls_in_compacted_records",
+    "remote_image_urls",
+    "session_integrity_findings",
+)
+REMOTE_METRIC_KEYS = REMOTE_REQUIRED_METRIC_KEYS + REMOTE_OPTIONAL_METRIC_KEYS
 REMOTE_DOMAIN_KEYS = ("load", "visuals", "compaction", "limits", "continuity")
 REQUIRED_PROJECT_KEYS = (
     "project",
@@ -75,6 +82,9 @@ CANONICAL_DIAGNOSTICS = {
     "large session file contains embedded visual payloads",
     "visual references exist inside compacted replacement history",
     "some visual references could not be read or decoded",
+    "invalid model-visible image URL can break thread replay",
+    "invalid model-visible image URL exists inside compacted replacement history",
+    "remote model-visible image URL is unsafe for thread replay",
     "active token estimate is above 90% of context window",
     "active token estimate is above 70% of context window",
     "unresolved turn abort or error event was recorded",
@@ -281,7 +291,12 @@ def build_remote_safe_report(report: dict[str, Any]) -> dict[str, Any]:
                 "recommendation",
             ),
             "metrics": {
-                key: _nonnegative_int(metrics.get(key), f"metrics.{key}")
+                key: _nonnegative_int(
+                    metrics.get(key, 0)
+                    if key in REMOTE_OPTIONAL_METRIC_KEYS
+                    else metrics.get(key),
+                    f"metrics.{key}",
+                )
                 for key in REMOTE_METRIC_KEYS
             },
             "reasons": _canonical_diagnostics(item.get("reasons")),
@@ -368,8 +383,11 @@ def validate_projects_report(value: object) -> dict[str, Any]:
         ):
             raise RemoteHealthError("invalid remote health report: invalid underlying status")
         metrics = project["metrics"]
-        if not isinstance(metrics, dict) or set(metrics) != set(REMOTE_METRIC_KEYS) or any(
-            not _is_int(metrics.get(key)) for key in REMOTE_METRIC_KEYS
+        if (
+            not isinstance(metrics, dict)
+            or not set(REMOTE_REQUIRED_METRIC_KEYS).issubset(metrics)
+            or not set(metrics).issubset(REMOTE_METRIC_KEYS)
+            or any(not _is_int(metrics.get(key)) for key in metrics)
         ):
             raise RemoteHealthError("invalid remote health report: invalid metrics")
         reasons = project["reasons"]

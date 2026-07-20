@@ -39,10 +39,11 @@ def build_handoff_summary(
     session_file: Path,
     *,
     thresholds: HealthThresholds | None = None,
+    health: dict[str, Any] | None = None,
     max_items: int = 8,
     max_text_chars: int = 500,
 ) -> dict[str, Any]:
-    health = analyze_session_file(session_file, thresholds or HealthThresholds())
+    health = health or analyze_session_file(session_file, thresholds or HealthThresholds())
     redactions = {
         "tool_payloads_omitted": 0,
         "bulky_payloads_omitted": 0,

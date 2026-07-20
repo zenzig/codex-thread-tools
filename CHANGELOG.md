@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 1.2.0 - 2026-07-18
+
+- Add structural detection for malformed or remote model-visible image URLs,
+  including replayable custom/function tool outputs and image values retained
+  inside compacted replacement history.
+- Add `recover diagnose` for read-only integrity reports and `recover bundle`
+  for staged, external, redacted recovery artifacts that leave the source JSONL
+  unchanged.
+- Include integrity counts in local health and privacy-safe remote health
+  reports, while retaining compatibility with older remote report schemas.
+- Stream integrity analysis through health checks instead of reopening a large
+  session for a second structural scan.
+- Restore the linked Medium article in the README, which npm renders on the
+  package page.
+
 ## 1.1.2 - 2026-07-15
 
 - Restore visible changelog links in the root README and documentation index.

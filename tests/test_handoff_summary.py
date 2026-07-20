@@ -5,7 +5,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from codex_thread_tools import handoff_summary
 from codex_thread_tools.redaction import redact_sensitive_text
+from codex_thread_tools.thread_health import HealthThresholds, analyze_session_file
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -27,6 +29,33 @@ def write_session(path: Path, records: list[dict]) -> None:
         "\n".join(json.dumps(record, separators=(",", ":")) for record in records) + "\n",
         encoding="utf-8",
     )
+
+
+def test_summary_reuses_supplied_health_without_rescanning(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    session = tmp_path / "summary.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-06-26T10:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "summary-session", "cwd": "/work/summary"},
+            }
+        ],
+    )
+    health = analyze_session_file(session, HealthThresholds())
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> dict:
+        raise AssertionError("health must be reused")
+
+    monkeypatch.setattr(handoff_summary, "analyze_session_file", fail_if_called)
+
+    summary = handoff_summary.build_handoff_summary(session, health=health)
+
+    assert summary["session_id"] == "summary-session"
 
 
 def test_summary_keeps_durable_context_and_redacts_tool_payloads(tmp_path: Path) -> None:
