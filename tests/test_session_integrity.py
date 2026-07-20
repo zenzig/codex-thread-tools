@@ -393,6 +393,153 @@ def test_image_like_prose_and_tool_output_are_ignored_when_noncanonical(tmp_path
     assert result.findings == ()
 
 
+def test_tool_call_output_image_with_invalid_non_data_url_is_reported_as_tool_output_image(tmp_path: Path) -> None:
+    path = tmp_path / "session.jsonl"
+    write_session(
+        path,
+        [
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "custom_tool_call_output",
+                    "output": [
+                        {
+                            "type": "input_image",
+                            "image_url": "not-a-data-url",
+                        }
+                    ],
+                },
+            },
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call_output",
+                    "output": [
+                        {
+                            "type": "input_image",
+                            "image_url": "",
+                        }
+                    ],
+                },
+            },
+        ],
+    )
+
+    result = scan_session_integrity(path)
+
+    assert result.invalid_image_urls == 2
+    assert result.invalid_image_urls_in_compacted_records == 0
+    assert result.remote_image_urls == 0
+    assert result.remote_image_urls_in_compacted_records == 0
+    assert result.findings == (
+        SessionIntegrityFinding(
+            kind="tool_output_image",
+            line=1,
+            compacted=False,
+            code=INVALID_INLINE_IMAGE_CODE,
+        ),
+        SessionIntegrityFinding(
+            kind="tool_output_image",
+            line=2,
+            compacted=False,
+            code=INVALID_INLINE_IMAGE_CODE,
+        ),
+    )
+    for finding in result.findings:
+        assert set(asdict(finding).keys()) == {"kind", "line", "compacted", "code"}
+
+
+@pytest.mark.parametrize(
+    ("payload_type", "image_item", "expected_code"),
+    [
+        (
+            "custom_tool_call_output",
+            {"type": "input_image", "image_url": "not-a-data-url"},
+            INVALID_INLINE_IMAGE_CODE,
+        ),
+        (
+            "function_call_output",
+            {"type": "InputImage", "image_url": ""},
+            INVALID_INLINE_IMAGE_CODE,
+        ),
+        (
+            "custom_tool_call_output",
+            {"type": "inputImage", "imageUrl": "https://example.com/image.png"},
+            REMOTE_IMAGE_CODE,
+        ),
+    ],
+)
+def test_compacted_tool_call_output_images_are_scanned_as_replayable_input(
+    tmp_path: Path,
+    payload_type: str,
+    image_item: dict[str, str],
+    expected_code: str,
+) -> None:
+    path = tmp_path / "session.jsonl"
+    write_session(
+        path,
+        [
+            {
+                "type": "compacted",
+                "payload": {
+                    "replacement_history": [
+                        {
+                            "type": payload_type,
+                            "output": [image_item],
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+
+    result = scan_session_integrity(path)
+
+    assert result.invalid_image_urls == int(expected_code == INVALID_INLINE_IMAGE_CODE)
+    assert result.invalid_image_urls_in_compacted_records == int(
+        expected_code == INVALID_INLINE_IMAGE_CODE
+    )
+    assert result.remote_image_urls == int(expected_code == REMOTE_IMAGE_CODE)
+    assert result.remote_image_urls_in_compacted_records == int(
+        expected_code == REMOTE_IMAGE_CODE
+    )
+    assert result.findings == (
+        SessionIntegrityFinding(
+            kind="tool_output_image",
+            line=1,
+            compacted=True,
+            code=expected_code,
+        ),
+    )
+
+
+def test_noncanonical_output_schema_with_input_image_is_ignored(tmp_path: Path) -> None:
+    path = tmp_path / "session.jsonl"
+    write_session(
+        path,
+        [
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "tool_output",
+                    "output": [
+                        {
+                            "type": "input_image",
+                            "image_url": "not-a-data-url",
+                        }
+                    ],
+                },
+            }
+        ],
+    )
+
+    result = scan_session_integrity(path)
+
+    assert result.invalid_image_urls == 0
+    assert result.remote_image_urls == 0
+    assert result.findings == ()
+
+
 def test_event_msg_with_message_payload_is_ignored(tmp_path: Path) -> None:
     path = tmp_path / "session.jsonl"
     write_session(

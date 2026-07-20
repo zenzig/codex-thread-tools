@@ -16,6 +16,12 @@ codex-thread-tools recover diagnose ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 Use `--json` for scripts. A clean report exits `0`, a caution-only report exits
 `2`, and an unsafe replay input exits `3`.
 
+Diagnosis checks canonical message image inputs and the image items carried in
+Codex `custom_tool_call_output` and `function_call_output` records. Those
+outputs can become part of a later replayed model input. It deliberately does
+not treat arbitrary `image_url` keys in tool payloads or tool schemas as a
+replay defect.
+
 When diagnosis recommends a bundle, create a sanitized recovery artifact next:
 
 ```bash

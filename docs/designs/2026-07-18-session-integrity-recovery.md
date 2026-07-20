@@ -65,15 +65,15 @@ canonical model-visible image fields:
 
 - `image_url` in `input_image` / `InputImage` content.
 - `imageUrl` in app-server `inputImage` content.
+- The same input-image shapes in Codex `custom_tool_call_output` and
+  `function_call_output` `output` lists, because they can become part of a
+  later model replay.
 
-It must not flag arbitrary prose that happens to contain an image-looking URL.
-Each finding carries:
-
-- Stable code, such as `invalid-image-data-url` or `remote-image-url`.
-- JSONL line number and JSON pointer.
-- Record type and whether the value is inside compacted history.
-- Payload character count and estimated decoded byte count.
-- SHA-256 fingerprint of the value, never the value itself.
+It must not recursively inspect arbitrary tool payloads, schemas, or prose
+that happens to contain an image-looking URL. Each finding carries only a
+stable code, JSONL line number, input kind, and compacted-history context.
+It never includes the image URL, image data, transcript text, or a payload
+fingerprint.
 
 Validation accepts a non-empty `data:image/<subtype>;base64,<payload>` URL only
 when its Base64 syntax and padding are valid. HTTP(S), non-image media types,
@@ -81,11 +81,9 @@ empty payloads, invalid Base64, and malformed data URL structure are findings.
 The validator performs bounded structural checks without retaining full image
 payloads in reports.
 
-The module also records:
-
-- Incomplete active turns.
-- Whether the source session declares `history_base` metadata.
-- Count and total size of valid versus invalid embedded image payloads.
+The diagnosis also combines the image findings with pre-handoff safety signals,
+including incomplete active turns and whether the source session declares
+`history_base` metadata.
 
 Any malformed model-visible image produces `DANGER`. An invalid image in a
 compacted record explicitly says that the defect can still be replayed after
@@ -173,8 +171,8 @@ Tests will be written before implementation and cover:
   non-image types, empty payloads, and remote URLs.
 - Canonical-field-only detection, ensuring prose and arbitrary tool text are
   not false positives.
-- Compact-history classification, line numbers, JSON pointers, fingerprints,
-  and redaction of raw values.
+- Compact-history classification, line numbers, pointer-only findings, and
+  redaction of raw values.
 - Health `DANGER` classification and stable additive JSON output.
 - Recovery-bundle content, source identity verification, no-overwrite behavior,
   source-change failure, and live-session output rejection.

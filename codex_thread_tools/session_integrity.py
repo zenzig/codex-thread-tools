@@ -14,6 +14,10 @@ INPUT_IMAGE_URL_KEY_BY_TYPE = {
     "inputImage": "imageUrl",
 }
 CANONICAL_INPUT_IMAGE_KIND = "input_image"
+TOOL_OUTPUT_IMAGE_KIND = "tool_output_image"
+REPLAYABLE_TOOL_OUTPUT_TYPES = frozenset(
+    {"custom_tool_call_output", "function_call_output"}
+)
 INLINE_DATA_URL_RE = re.compile(
     r"^data:(?P<mime>image/[A-Za-z0-9.+-]+);base64,(?P<data>[A-Za-z0-9+/=]+)$"
 )
@@ -116,10 +120,10 @@ def _scan_live_record(
         return
 
     payload = record.get("payload")
-    if not isinstance(payload, dict) or not _is_canonical_message_payload(payload):
+    if not isinstance(payload, dict):
         return
 
-    _scan_message_payload(
+    _scan_replayable_payload(
         payload,
         line_no=line_no,
         compacted=compacted,
@@ -129,7 +133,7 @@ def _scan_live_record(
     )
 
 
-def _scan_message_payload(
+def _scan_replayable_payload(
     payload: dict[str, Any],
     *,
     line_no: int,
@@ -138,11 +142,16 @@ def _scan_message_payload(
     findings: list[SessionIntegrityFinding],
     max_findings: int,
 ) -> None:
-    content = payload.get("content")
-    if not isinstance(content, list):
+    if _is_canonical_message_payload(payload):
+        items = payload["content"]
+        finding_kind = CANONICAL_INPUT_IMAGE_KIND
+    elif _is_replayable_tool_output_payload(payload):
+        items = payload["output"]
+        finding_kind = TOOL_OUTPUT_IMAGE_KIND
+    else:
         return
 
-    for item in content:
+    for item in items:
         if not isinstance(item, dict):
             continue
         kind = item.get("type")
@@ -158,7 +167,7 @@ def _scan_message_payload(
                 state["remote_image_urls_in_compacted_records"] += 1
             _append_finding(
                 findings,
-                CANONICAL_INPUT_IMAGE_KIND,
+                finding_kind,
                 line_no,
                 compacted,
                 REMOTE_IMAGE_CODE,
@@ -172,7 +181,7 @@ def _scan_message_payload(
                 state["invalid_image_urls_in_compacted_records"] += 1
             _append_finding(
                 findings,
-                CANONICAL_INPUT_IMAGE_KIND,
+                finding_kind,
                 line_no,
                 compacted,
                 INVALID_INLINE_IMAGE_CODE,
@@ -194,9 +203,7 @@ def _scan_replacement_history(
     for nested in replacement_history:
         if not isinstance(nested, dict):
             continue
-        if not _is_canonical_message_payload(nested):
-            continue
-        _scan_message_payload(
+        _scan_replayable_payload(
             nested,
             line_no=line_no,
             compacted=True,
@@ -208,6 +215,13 @@ def _scan_replacement_history(
 
 def _is_canonical_message_payload(payload: dict[str, Any]) -> bool:
     return payload.get("type") == "message" and isinstance(payload.get("content"), list)
+
+
+def _is_replayable_tool_output_payload(payload: dict[str, Any]) -> bool:
+    return (
+        payload.get("type") in REPLAYABLE_TOOL_OUTPUT_TYPES
+        and isinstance(payload.get("output"), list)
+    )
 
 
 def _extract_image_url(item: dict[str, Any]) -> Any:

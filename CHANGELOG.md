@@ -5,7 +5,8 @@
 ## 1.2.0 - 2026-07-18
 
 - Add structural detection for malformed or remote model-visible image URLs,
-  including image values retained inside compacted replacement history.
+  including replayable custom/function tool outputs and image values retained
+  inside compacted replacement history.
 - Add `recover diagnose` for read-only integrity reports and `recover bundle`
   for staged, external, redacted recovery artifacts that leave the source JSONL
   unchanged.
