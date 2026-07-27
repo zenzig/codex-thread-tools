@@ -175,7 +175,11 @@ def notice_lines(item: dict[str, Any]) -> list[str]:
 
 
 def project_action_label(item: dict[str, Any]) -> str:
-    action = item.get("action", {})
+    if "action" not in item:
+        return REMOTE_STATE_UNAVAILABLE
+    action = item.get("action")
+    if not isinstance(action, dict):
+        return REMOTE_STATE_UNAVAILABLE
     status = str(action.get("status", "continue"))
     return {
         "continue": "Continue",
@@ -204,17 +208,19 @@ def project_scale_label(item: dict[str, Any]) -> str:
     return status_label(str(scale.get("status", "ok")))
 
 
-def continuation_label(item: dict[str, Any]) -> str:
+def continuation_label(item: dict[str, Any], *, force_unavailable: bool = False) -> str:
     details = item.get("continuation_risk")
     if not isinstance(details, dict):
-        return status_label("ok")
+        return REMOTE_STATE_UNAVAILABLE if force_unavailable else status_label("ok")
     return status_label(str(details.get("status", "ok")))
 
 
-def project_lineage_label(item: dict[str, Any]) -> str:
+def project_lineage_label(
+    item: dict[str, Any], *, force_unavailable: bool = False
+) -> str:
     details = item.get("handoff_lineage")
     if not isinstance(details, dict):
-        return "Not Recorded"
+        return REMOTE_STATE_UNAVAILABLE if force_unavailable else "Not Recorded"
     status = str(details.get("status", "not-recorded"))
     labels = {
         "not-recorded": "Not recorded",
@@ -223,6 +229,26 @@ def project_lineage_label(item: dict[str, Any]) -> str:
         "source-retired": "Source retired",
     }
     return labels.get(status, status_label(status))
+
+
+def is_missing_protocol_state_axes(item: dict[str, Any]) -> bool:
+    return (
+        not isinstance(item.get("task_state"), dict)
+        and not isinstance(item.get("continuation_risk"), dict)
+        and not isinstance(item.get("scale"), dict)
+        and not isinstance(item.get("notices"), list)
+        and not isinstance(item.get("handoff_lineage"), dict)
+        and not isinstance(item.get("action"), dict)
+    )
+
+
+def is_remote_protocol_no_state_axes(result: dict[str, Any]) -> bool:
+    if result.get("source") != "remote":
+        return False
+    projects = result.get("projects")
+    if not isinstance(projects, list):
+        return False
+    return all(is_missing_protocol_state_axes(item) for item in projects)
 
 
 def should_render_action_summary(item: dict[str, Any]) -> bool:
@@ -280,17 +306,7 @@ def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
             f"Projects: {format_count(summary['projects'])}",
         ]
     )
-    add_remote_state_block = False
-    if mode != "compact" and result.get("source") == "remote":
-        add_remote_state_block = all(
-            not isinstance(item.get("task_state"), dict)
-            and not isinstance(item.get("continuation_risk"), dict)
-            and not isinstance(item.get("scale"), dict)
-            and not isinstance(item.get("notices"), list)
-            and not isinstance(item.get("handoff_lineage"), dict)
-            and not isinstance(item.get("action"), dict)
-            for item in result["projects"]
-        )
+    remote_protocol_without_state_axes = is_remote_protocol_no_state_axes(result)
 
     if mode == "verbose":
         if result["projects"]:
@@ -300,7 +316,7 @@ def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
                 lines.append("")
         return "\n".join(lines).rstrip()
 
-    if add_remote_state_block:
+    if remote_protocol_without_state_axes and result["projects"]:
         lines.extend(
             [
                 "",
@@ -314,9 +330,20 @@ def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
         )
 
     lines.extend(["", "Project Summary"])
-    lines.extend(render_project_table(result["projects"], size_format))
+    lines.extend(
+        render_project_table(
+            result["projects"],
+            size_format,
+            force_remote_unavailable=remote_protocol_without_state_axes,
+        )
+    )
     if mode == "compact":
+        if remote_protocol_without_state_axes:
+            lines.append("Update the remote codex-thread-tools installation for state-first details.")
         return "\n".join(lines)
+
+    if remote_protocol_without_state_axes:
+        lines.append("Update the remote codex-thread-tools installation for state-first details.")
 
     detail_items = [
         item for item in result["projects"] if should_render_action_summary(item)
@@ -378,15 +405,20 @@ def check_verbose(result: dict[str, Any], size_format: str) -> str:
     return "\n".join(line for line in lines if line)
 
 
-def render_project_table(projects: list[dict[str, Any]], size_format: str) -> list[str]:
+def render_project_table(
+    projects: list[dict[str, Any]],
+    size_format: str,
+    *,
+    force_remote_unavailable: bool = False,
+) -> list[str]:
     rows = []
     for item in projects:
         rows.append(
             [
                 format_project(item["project"], 24),
                 project_task_line(item),
-                continuation_label(item),
-                project_lineage_label(item),
+                continuation_label(item, force_unavailable=force_remote_unavailable),
+                project_lineage_label(item, force_unavailable=force_remote_unavailable),
                 project_action_label(item),
                 project_scale_label(item),
             ]

@@ -338,6 +338,17 @@ def remote_projects_report(*statuses: str) -> dict:
     }
 
 
+def remote_state_axes_keys() -> tuple[str, ...]:
+    return (
+        "task_state",
+        "continuation_risk",
+        "scale",
+        "notices",
+        "handoff_lineage",
+        "action",
+    )
+
+
 def state_project(
     project: str,
     status: str,
@@ -566,14 +577,7 @@ def test_remote_pretty_state_first_fallback_for_protocol_without_state_axes(
     tmp_path: Path,
 ) -> None:
     report = remote_projects_report("ok")
-    for key in (
-        "task_state",
-        "continuation_risk",
-        "scale",
-        "notices",
-        "handoff_lineage",
-        "action",
-    ):
+    for key in remote_state_axes_keys():
         report["projects"][0].pop(key, None)
     env = fake_ssh_env(tmp_path, report)
 
@@ -586,11 +590,33 @@ def test_remote_pretty_state_first_fallback_for_protocol_without_state_axes(
         "standard",
     )
     assert pretty.returncode == 0, pretty.stderr
+    summary = pretty.stdout.split("Project Summary", 1)[1]
+    header = next(line for line in summary.splitlines() if line.strip().startswith("Project"))
+    columns = ("Project", "Task", "Continue", "Lineage", "Action", "Scale")
+    for first, second in zip(columns, columns[1:]):
+        assert header.index(first) < header.index(second)
+    assert summary.count(f"{codex_thread_health.REMOTE_STATE_UNAVAILABLE}") == 5
     assert "Task: Unavailable from this remote host" in pretty.stdout
     assert "Continuation: Unavailable from this remote host" in pretty.stdout
     assert (
         "Update the remote codex-thread-tools installation for state-first details."
         in pretty.stdout
+    )
+    assert "Project Summary" in pretty.stdout
+
+    compact = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--mode",
+        "compact",
+    )
+    assert compact.returncode == 0, compact.stderr
+    assert "Project Summary" in compact.stdout
+    assert (
+        "Update the remote codex-thread-tools installation for state-first details."
+        in compact.stdout
     )
 
     json_payload = run_health_with_env(
@@ -614,6 +640,59 @@ def test_remote_pretty_state_first_fallback_for_protocol_without_state_axes(
         "action",
     ):
         assert key not in project
+
+
+def test_remote_pretty_empty_protocol_without_state_axes_is_still_renderable(
+    tmp_path: Path,
+) -> None:
+    report = remote_projects_report()
+    report["projects"] = []
+    env = fake_ssh_env(tmp_path, report)
+
+    standard = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--mode",
+        "standard",
+    )
+    assert standard.returncode == 0, standard.stderr
+    assert "Projects: 0" in standard.stdout
+    assert "Project Summary" in standard.stdout
+    assert (
+        "Update the remote codex-thread-tools installation for state-first details."
+        in standard.stdout
+    )
+
+    compact = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--mode",
+        "compact",
+    )
+    assert compact.returncode == 0, compact.stderr
+    assert "Projects: 0" in compact.stdout
+    assert "Project Summary" in compact.stdout
+    assert (
+        "Update the remote codex-thread-tools installation for state-first details."
+        in compact.stdout
+    )
+
+    remote_json = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--json",
+    )
+    assert remote_json.returncode == 0, remote_json.stderr
+    payload = json.loads(remote_json.stdout)
+    assert payload["source"] == "remote"
+    assert payload["host"] == "node1.atomicfalls.com"
+    assert payload["projects"] == []
 
 
 def test_remote_forwards_explicit_thresholds_only(tmp_path: Path) -> None:
@@ -2026,11 +2105,47 @@ def test_projects_pretty_state_first_table_shape_and_action_summary() -> None:
         mode="standard",
         size_format="bytes",
     )
+    summary = standard.split("Project Summary", 1)[1]
+    header = next(line for line in summary.splitlines() if line.strip().startswith("Project"))
+    columns = ("Project", "Task", "Continue", "Lineage", "Action", "Scale")
+    for first, second in zip(columns, columns[1:]):
+        assert header.index(first) < header.index(second)
     assert "Prepare handoff: /work/project-watch" in standard
     assert "- active token estimate is above 70% of context window" in standard
     assert "Handoff now: /work/project-danger" in standard
     assert "Use replacement: /work/project-retired" in standard
     assert "Continue: /work/project-replacement-active" not in standard
+
+
+def test_projects_pretty_does_not_render_action_summary_for_activity_warning() -> None:
+    result = {
+        "summary": {
+            "projects": 1,
+            "ok": 0,
+            "warn": 1,
+            "danger": 0,
+            "retired": 0,
+        },
+        "projects": [
+            state_project(
+                "/work/project-activity-warning",
+                "warn",
+                "active",
+                "latest recorded turn has no terminal event",
+                "ok",
+                "continue",
+                "not-recorded",
+                scale_status="warn",
+                items="warn",
+                handoff=False,
+            )
+        ],
+        "session_root": "/tmp/work",
+    }
+    result["projects"][0]["notices"] = ["activity-only notice: token usage is steady"]
+    standard = codex_thread_health.projects_pretty(result, mode="standard", size_format="bytes")
+    assert "Project Summary" in standard
+    assert "Action Summary" not in standard
 
 
 def test_safe_test_mode_refuses_live_session_root() -> None:
