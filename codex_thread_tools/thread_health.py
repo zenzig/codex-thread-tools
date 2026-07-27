@@ -32,7 +32,38 @@ COMPACTION_FAILURE_DIAGNOSTIC = (
 )
 LONG_THREAD_DIAGNOSTIC = "long-thread or context-window warning event was recorded"
 
+ACTIVE_TURN_DIAGNOSTIC = "active turn has no terminal completion, abort, or error event"
+COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC = (
+    "visual references exist inside compacted replacement history"
+)
+RECOVERED_CONTINUITY_WARNING_DIAGNOSTIC = (
+    "historical turn abort or error event was recovered by later completion"
+)
+
+TASK_STATES = ("active", "completed", "interrupted", "unknown")
+CONTINUATION_RISK_STATES = ("ok", "watch", "danger")
+SCALE_LEVELS = ("ok", "notice", "watch", "danger")
+HANDOFF_LINEAGE_STATES = (
+    "not-recorded",
+    "replacement-active",
+    "source-retired",
+    "incomplete",
+)
+ACTION_STATES = (
+    "continue",
+    "finish-current-turn",
+    "prepare-handoff",
+    "handoff-now",
+    "use-replacement",
+)
+
 STATUS_RANK = {"ok": 0, "warn": 1, "danger": 2}
+SCALE_RANK = {"ok": 0, "notice": 1, "watch": 2, "danger": 3}
+NOTICE_DIAGNOSTICS = {
+    ACTIVE_TURN_DIAGNOSTIC,
+    COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC,
+    RECOVERED_CONTINUITY_WARNING_DIAGNOSTIC,
+}
 
 COMPACTION_FAILURE_TERMS = (
     "compaction failed",
@@ -286,6 +317,12 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
     project = project or str(path.parent)
     risk_domains = build_risk_domains(metrics, thresholds)
     decision = decide_health(metrics, thresholds, risk_domains)
+    task_state = task_state_for_metrics(metrics)
+    notices = notices_for_domains(risk_domains)
+    continuation_risk = continuation_risk_for_domains(risk_domains)
+    scale = scale_for_metrics(metrics, thresholds)
+    handoff_lineage = base_handoff_lineage()
+    action = action_for_state(task_state, continuation_risk, handoff_lineage)
     return {
         "file": str(path),
         "project": project,
@@ -296,7 +333,13 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
         "overall_assessment": decision["overall_assessment"],
         "reasons": decision["reasons"],
         "risk_domains": risk_domains,
+        "task_state": task_state,
+        "notices": notices,
+        "continuation_risk": continuation_risk,
         "handoff_readiness": handoff_readiness(metrics, decision),
+        "scale": scale,
+        "handoff_lineage": handoff_lineage,
+        "action": action,
         "metrics": metrics,
     }
 
@@ -403,7 +446,7 @@ def visuals_risk(metrics: dict[str, Any], _thresholds: HealthThresholds) -> dict
         danger.append("large session file contains embedded visual payloads")
 
     if metrics["visual_artifacts_in_compacted_records"] > 0:
-        warn.append("visual references exist inside compacted replacement history")
+        warn.append(COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC)
 
     if metrics["visual_artifact_errors"] > 0:
         warn.append("some visual references could not be read or decoded")
@@ -448,9 +491,9 @@ def continuity_risk(metrics: dict[str, Any]) -> dict[str, Any]:
     if metrics["unresolved_turn_error_events"] > 0:
         danger.append("unresolved turn abort or error event was recorded")
     elif metrics["recovered_turn_error_events"] > 0:
-        warn.append("historical turn abort or error event was recovered by later completion")
+        warn.append(RECOVERED_CONTINUITY_WARNING_DIAGNOSTIC)
     if metrics["incomplete_turn_events"] > 0:
-        warn.append("active turn has no terminal completion, abort, or error event")
+        warn.append(ACTIVE_TURN_DIAGNOSTIC)
     if metrics["session_meta_records"] == 0:
         danger.append("no session_meta record found")
     if (
@@ -500,6 +543,150 @@ def decide_health(
         "recommendation": "continue",
         "overall_assessment": "continue",
         "reasons": [],
+    }
+
+
+def task_state_for_metrics(metrics: dict[str, Any]) -> dict[str, str]:
+    if metrics["incomplete_turn_events"] > 0:
+        return {
+            "status": "active",
+            "reason": "latest recorded turn has no terminal event",
+        }
+    if metrics["latest_turn_event"] == "turn_complete":
+        return {
+            "status": "completed",
+            "reason": "latest recorded turn completed",
+        }
+    if metrics["latest_turn_event"] in {"turn_aborted", "error"}:
+        return {
+            "status": "interrupted",
+            "reason": "latest recorded turn ended without completion",
+        }
+    return {
+        "status": "unknown",
+        "reason": "no tracked turn lifecycle event found",
+    }
+
+
+def notices_for_domains(
+    risk_domains: dict[str, dict[str, Any]],
+) -> list[str]:
+    notices: list[str] = []
+    for name in ("load", "visuals", "compaction", "limits", "continuity"):
+        details = risk_domains.get(name)
+        if not details:
+            continue
+        for evidence in details["evidence"]:
+            if evidence in NOTICE_DIAGNOSTICS:
+                notices.append(evidence)
+    return dedupe(notices)
+
+
+def continuation_risk_for_domains(
+    risk_domains: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    status = "ok"
+    reasons: list[str] = []
+    for name in ("load", "visuals", "compaction", "limits", "continuity"):
+        details = risk_domains.get(name)
+        if not details:
+            continue
+        relevant = [
+            evidence
+            for evidence in details["evidence"]
+            if evidence not in NOTICE_DIAGNOSTICS
+        ]
+        reasons.extend(relevant)
+        if relevant and STATUS_RANK[details["status"]] > STATUS_RANK[status]:
+            status = details["status"]
+
+    return {
+        "status": "watch" if status == "warn" else status,
+        "reasons": dedupe(reasons),
+    }
+
+
+def scale_for_metrics(
+    metrics: dict[str, Any],
+    thresholds: HealthThresholds,
+) -> dict[str, Any]:
+    def threshold_status(value: int, warn: int, danger: int) -> str:
+        if value >= danger:
+            return "danger"
+        if value >= warn:
+            return "watch"
+        return "ok"
+
+    size = threshold_status(metrics["bytes"], thresholds.warn_bytes, thresholds.danger_bytes)
+    items = threshold_status(
+        metrics["response_items"],
+        thresholds.warn_items,
+        thresholds.danger_items,
+    )
+    compactions = "ok"
+    if metrics["compaction_items"] > thresholds.max_healthy_compactions:
+        compactions = "watch"
+    visuals = (
+        "notice" if metrics["visual_artifacts_in_compacted_records"] > 0 else "ok"
+    )
+
+    worst_status = "ok"
+    for status in (size, items, compactions, visuals):
+        if SCALE_RANK[status] > SCALE_RANK[worst_status]:
+            worst_status = status
+
+    return {
+        "status": worst_status,
+        "size": size,
+        "items": items,
+        "compactions": compactions,
+        "visuals": visuals,
+    }
+
+
+def base_handoff_lineage() -> dict[str, Any]:
+    return {
+        "status": "not-recorded",
+        "source_session_ids": [],
+        "total_handoffs": 0,
+    }
+
+
+def action_for_state(
+    task_state: dict[str, str],
+    continuation_risk: dict[str, Any],
+    handoff_lineage: dict[str, Any],
+) -> dict[str, str]:
+    ACTION_REASONS = {
+        "continue": "no continuation risk requires a handoff",
+        "finish-current-turn": (
+            "task is active; no continuation risk requires a handoff"
+        ),
+        "prepare-handoff": (
+            "continuation risk should be addressed with a deliberate handoff"
+        ),
+        "handoff-now": (
+            "continuation risk requires a fresh thread before continuing"
+        ),
+        "use-replacement": (
+            "this source session was retired by a completed handoff"
+        ),
+    }
+
+    if handoff_lineage["status"] == "source-retired":
+        status = "use-replacement"
+    elif continuation_risk["status"] == "danger":
+        status = "handoff-now"
+    elif continuation_risk["status"] == "watch":
+        status = "prepare-handoff"
+    elif task_state["status"] == "active":
+        status = "finish-current-turn"
+    else:
+        status = "continue"
+
+    return {
+        "status": status,
+        "reason": ACTION_REASONS[status],
     }
 
 

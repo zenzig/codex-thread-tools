@@ -14,6 +14,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "sessions"
 
+ACTIVE_TURN_DIAGNOSTIC = (
+    "active turn has no terminal completion, abort, or error event"
+)
+COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC = (
+    "visual references exist inside compacted replacement history"
+)
+
 
 def run_health(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -1992,8 +1999,120 @@ def test_check_visual_compacted_fixture_warns_about_visuals_inside_compaction() 
     assert result.returncode == 2, result.stderr
     payload = json.loads(result.stdout)
     assert payload["metrics"]["visual_artifacts_in_compacted_records"] == 1
+    assert payload["status"] == "warn"
+    assert payload["recommendation"] == "monitor"
     assert payload["risk_domains"]["visuals"]["status"] == "warn"
     assert any("visual" in reason for reason in payload["reasons"])
+    assert payload["continuation_risk"]["status"] == "ok"
+    assert payload["notices"] == [COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC]
+    assert payload["action"] == {
+        "status": "continue",
+        "reason": "no continuation risk requires a handoff",
+    }
+
+
+def test_check_response_items_warning_scale_requests_prepared_handoff(
+    tmp_path: Path,
+) -> None:
+    session = tmp_path / "warningscale-response-items.jsonl"
+    records = [
+        {
+            "timestamp": "2026-05-24T12:00:00Z",
+            "type": "session_meta",
+            "payload": {
+                "id": "response-items-warning-scale",
+                "cwd": "/work/warningscale",
+            },
+        }
+    ]
+    for index in range(9):
+        records.append(
+            {
+                "timestamp": "2026-05-24T12:00:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": str(index)}],
+                },
+            }
+        )
+    write_session(session, records)
+
+    result = run_health(
+        "check",
+        str(session),
+        "--safe-test-mode",
+        "--warn-items",
+        "8",
+        "--danger-items",
+        "12",
+        "--json",
+    )
+
+    assert result.returncode == 2, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "warn"
+    assert payload["recommendation"] == "monitor"
+    assert payload["reasons"] == [
+        "response_items is 9, at or above warning threshold"
+    ]
+    assert payload["continuation_risk"] == {
+        "status": "watch",
+        "reasons": ["response_items is 9, at or above warning threshold"],
+    }
+    assert payload["action"] == {
+        "status": "prepare-handoff",
+        "reason": "continuation risk should be addressed with a deliberate handoff",
+    }
+
+
+def test_replay_integrity_failure_requires_handoff_now(tmp_path: Path) -> None:
+    session = tmp_path / "replay-failure.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-05-24T12:00:00Z",
+                "type": "session_meta",
+                "payload": {
+                    "id": "replay-failure",
+                    "cwd": "/work/replay-failure",
+                },
+            },
+            {
+                "timestamp": "2026-05-24T12:01:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_image",
+                            "image_url": "data:image/png;base64,this-is-not-valid",
+                        }
+                    ],
+                },
+            },
+        ],
+    )
+
+    result = run_health(
+        "check",
+        str(session),
+        "--safe-test-mode",
+        "--json",
+    )
+
+    assert result.returncode == 3, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "danger"
+    assert payload["recommendation"] == "handoff-now"
+    assert payload["reasons"] == [
+        "invalid model-visible image URL can break thread replay"
+    ]
+    assert payload["continuation_risk"]["status"] == "danger"
+    assert payload["action"]["status"] == "handoff-now"
 
 
 def test_visual_health_estimates_large_embedded_payload_without_hashing(
@@ -2165,16 +2284,7 @@ def test_incomplete_turn_blocks_clean_handoff_recommendation(tmp_path: Path) -> 
                 "timestamp": "2026-06-02T12:01:00Z",
                 "type": "event_msg",
                 "payload": {"type": "turn_started"},
-            },
-            {
-                "timestamp": "2026-06-02T12:01:30Z",
-                "type": "response_item",
-                "payload": {
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [{"type": "output_text", "text": "Still working."}],
-                },
-            },
+            }
         ],
     )
 
@@ -2185,6 +2295,19 @@ def test_incomplete_turn_blocks_clean_handoff_recommendation(tmp_path: Path) -> 
     assert payload["status"] == "warn"
     assert payload["recommendation"] == "monitor"
     assert payload["handoff_readiness"]["status"] == "recommended"
+    assert payload["task_state"] == {
+        "status": "active",
+        "reason": "latest recorded turn has no terminal event",
+    }
+    assert payload["continuation_risk"] == {
+        "status": "ok",
+        "reasons": [],
+    }
+    assert payload["notices"] == [ACTIVE_TURN_DIAGNOSTIC]
+    assert payload["action"] == {
+        "status": "finish-current-turn",
+        "reason": "task is active; no continuation risk requires a handoff",
+    }
     assert payload["metrics"]["incomplete_turn_events"] == 1
     assert payload["metrics"]["latest_turn_event"] == "turn_started"
     assert payload["risk_domains"]["continuity"]["status"] == "warn"
