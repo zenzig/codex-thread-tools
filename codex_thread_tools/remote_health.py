@@ -10,6 +10,17 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Any, Callable
 
+from codex_thread_tools.thread_health import (
+    ACTIVE_TURN_DIAGNOSTIC,
+    COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC,
+    RECOVERED_CONTINUITY_WARNING_DIAGNOSTIC,
+    TASK_STATES as VALID_TASK_STATES,
+    CONTINUATION_RISK_STATES as VALID_CONTINUATION_RISK_STATES,
+    SCALE_LEVELS as VALID_SCALE_LEVELS,
+    HANDOFF_LINEAGE_STATES as VALID_HANDOFF_LINEAGE_STATES,
+    ACTION_STATES as VALID_ACTION_STATES,
+)
+
 
 class RemoteHealthError(ValueError):
     """Expected remote-health operational failure."""
@@ -56,7 +67,34 @@ REQUIRED_PROJECT_KEYS = (
     "replaces_session_ids",
     "retired_by_handoff",
 )
-OPTIONAL_PROJECT_KEYS = ("underlying_status",)
+OPTIONAL_PROJECT_KEYS = (
+    "underlying_status",
+    "task_state",
+    "continuation_risk",
+    "scale",
+    "notices",
+    "handoff_lineage",
+    "action",
+)
+STATE_DETAIL_FILTERED = "state detail omitted by remote privacy filter"
+CANONICAL_TASK_STATE_REASONS = {
+    "latest recorded turn has no terminal event",
+    "latest recorded turn completed",
+    "latest recorded turn ended without completion",
+    "no tracked turn lifecycle event found",
+}
+CANONICAL_ACTION_REASONS = {
+    "no continuation risk requires a handoff",
+    "task is active; no continuation risk requires a handoff",
+    "continuation risk should be addressed with a deliberate handoff",
+    "continuation risk requires a fresh thread before continuing",
+    "this source session was retired by a completed handoff",
+}
+CANONICAL_NOTICES = {
+    ACTIVE_TURN_DIAGNOSTIC,
+    COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC,
+    RECOVERED_CONTINUITY_WARNING_DIAGNOSTIC,
+}
 REPORT_KEYS = ("remote_health_protocol", "session_root", "summary", "projects")
 STATUS_VALUES = {"ok", "warn", "danger", "retired"}
 RECOMMENDATION_VALUES = {
@@ -176,6 +214,13 @@ def _is_canonical_diagnostic(value: object) -> bool:
     )
 
 
+def _is_canonical_state_detail(value: object, allowed: set[str]) -> bool:
+    return (
+        isinstance(value, str)
+        and (value in allowed or value == STATE_DETAIL_FILTERED)
+    )
+
+
 def _is_enum(value: object, allowed: set[str]) -> bool:
     return isinstance(value, str) and value in allowed
 
@@ -212,6 +257,12 @@ def _enum(value: object, allowed: set[str], field: str) -> str:
     if not isinstance(value, str) or value not in allowed:
         raise RemoteHealthError(f"cannot build remote-safe health report: invalid {field}")
     return value
+
+
+def _state_detail(value: object, allowed: set[str]) -> str:
+    if not _is_canonical_state_detail(value, allowed):
+        return STATE_DETAIL_FILTERED
+    return str(value)
 
 
 def _nonnegative_int(value: object, field: str) -> int:
@@ -332,6 +383,96 @@ def build_remote_safe_report(report: dict[str, Any]) -> dict[str, Any]:
             safe_item["underlying_status"] = _enum(
                 item["underlying_status"], STATUS_VALUES, "underlying_status"
             )
+        if "task_state" in item:
+            task_state = item.get("task_state")
+            if not isinstance(task_state, dict):
+                raise RemoteHealthError(
+                    "cannot build remote-safe health report: invalid task state"
+                )
+            safe_item["task_state"] = {
+                "status": _enum(
+                    task_state.get("status"),
+                    set(VALID_TASK_STATES),
+                    "task_state.status",
+                ),
+                "reason": _state_detail(
+                    task_state.get("reason"), CANONICAL_TASK_STATE_REASONS
+                ),
+            }
+        if "continuation_risk" in item:
+            continuation_risk = item.get("continuation_risk")
+            if not isinstance(continuation_risk, dict):
+                raise RemoteHealthError(
+                    "cannot build remote-safe health report: invalid continuation risk"
+                )
+            safe_item["continuation_risk"] = {
+                "status": _enum(
+                    continuation_risk.get("status"),
+                    set(VALID_CONTINUATION_RISK_STATES),
+                    "continuation_risk.status",
+                ),
+                "reasons": _canonical_diagnostics(continuation_risk.get("reasons")),
+            }
+        if "scale" in item:
+            scale = item.get("scale")
+            if not isinstance(scale, dict):
+                raise RemoteHealthError(
+                    "cannot build remote-safe health report: invalid scale"
+                )
+            safe_item["scale"] = {
+                "status": _enum(scale.get("status"), set(VALID_SCALE_LEVELS), "scale.status"),
+                "size": _enum(scale.get("size"), set(VALID_SCALE_LEVELS), "scale.size"),
+                "items": _enum(scale.get("items"), set(VALID_SCALE_LEVELS), "scale.items"),
+                "compactions": _enum(
+                    scale.get("compactions"), set(VALID_SCALE_LEVELS), "scale.compactions"
+                ),
+                "visuals": _enum(
+                    scale.get("visuals"), set(VALID_SCALE_LEVELS), "scale.visuals"
+                ),
+            }
+        if "notices" in item:
+            safe_item["notices"] = _canonical_diagnostics(item.get("notices"))
+        if "handoff_lineage" in item:
+            lineage = item.get("handoff_lineage")
+            if not isinstance(lineage, dict):
+                raise RemoteHealthError(
+                    "cannot build remote-safe health report: invalid handoff lineage"
+                )
+            source_session_ids = lineage.get("source_session_ids", [])
+            if not isinstance(source_session_ids, list):
+                raise RemoteHealthError(
+                    "cannot build remote-safe health report: invalid handoff lineage source ids"
+                )
+            safe_item["handoff_lineage"] = {
+                "status": _enum(
+                    lineage.get("status"),
+                    set(VALID_HANDOFF_LINEAGE_STATES),
+                    "handoff_lineage.status",
+                ),
+                "source_session_ids": [
+                    value for value in source_session_ids if _is_codex_session_id(value)
+                ],
+                "total_handoffs": _nonnegative_int(
+                    lineage.get("total_handoffs", 0),
+                    "handoff_lineage.total_handoffs",
+                ),
+            }
+        if "action" in item:
+            action = item.get("action")
+            if not isinstance(action, dict):
+                raise RemoteHealthError(
+                    "cannot build remote-safe health report: invalid action"
+                )
+            safe_item["action"] = {
+                "status": _enum(
+                    action.get("status"),
+                    set(VALID_ACTION_STATES),
+                    "action.status",
+                ),
+                "reason": _state_detail(
+                    action.get("reason"), CANONICAL_ACTION_REASONS
+                ),
+            }
         safe_projects.append(safe_item)
 
     return {
@@ -382,6 +523,85 @@ def validate_projects_report(value: object) -> dict[str, Any]:
             project["underlying_status"], STATUS_VALUES
         ):
             raise RemoteHealthError("invalid remote health report: invalid underlying status")
+        if "task_state" in project:
+            details = project["task_state"]
+            if not isinstance(details, dict) or set(details) != {"status", "reason"}:
+                raise RemoteHealthError("invalid remote health report: invalid task state")
+            if not _is_enum(details["status"], set(VALID_TASK_STATES)):
+                raise RemoteHealthError(
+                    "invalid remote health report: invalid task_state status"
+                )
+            if not _is_canonical_state_detail(
+                details["reason"], CANONICAL_TASK_STATE_REASONS
+            ):
+                raise RemoteHealthError(
+                    "invalid remote health report: invalid task_state reason"
+                )
+        if "continuation_risk" in project:
+            details = project["continuation_risk"]
+            if (
+                not isinstance(details, dict)
+                or set(details) != {"status", "reasons"}
+                or not _is_enum(details["status"], set(VALID_CONTINUATION_RISK_STATES))
+                or not isinstance(details["reasons"], list)
+                or any(not _is_canonical_diagnostic(value) for value in details["reasons"])
+            ):
+                raise RemoteHealthError(
+                    "invalid remote health report: invalid continuation_risk"
+                )
+        if "scale" in project:
+            details = project["scale"]
+            if not isinstance(details, dict):
+                raise RemoteHealthError("invalid remote health report: invalid scale")
+            if set(details) != {"status", "size", "items", "compactions", "visuals"}:
+                raise RemoteHealthError("invalid remote health report: invalid scale")
+            if any(
+                key not in set(VALID_SCALE_LEVELS)
+                for key in (
+                    details["status"],
+                    details["size"],
+                    details["items"],
+                    details["compactions"],
+                    details["visuals"],
+                )
+            ):
+                raise RemoteHealthError("invalid remote health report: invalid scale")
+        if "notices" in project:
+            notices = project["notices"]
+            if (
+                not isinstance(notices, list)
+                or any(
+                    not _is_canonical_diagnostic(item) and item not in CANONICAL_NOTICES
+                    for item in notices
+                )
+            ):
+                raise RemoteHealthError("invalid remote health report: invalid notices")
+        if "handoff_lineage" in project:
+            details = project["handoff_lineage"]
+            if (
+                not isinstance(details, dict)
+                or set(details) != {"status", "source_session_ids", "total_handoffs"}
+                or not _is_enum(details["status"], set(VALID_HANDOFF_LINEAGE_STATES))
+                or not isinstance(details["total_handoffs"], int)
+                or details["total_handoffs"] < 0
+                or not isinstance(details["source_session_ids"], list)
+                or any(not _is_codex_session_id(item) for item in details["source_session_ids"])
+            ):
+                raise RemoteHealthError(
+                    "invalid remote health report: invalid handoff_lineage"
+                )
+        if "action" in project:
+            details = project["action"]
+            if not isinstance(details, dict) or set(details) != {"status", "reason"}:
+                raise RemoteHealthError("invalid remote health report: invalid action")
+            if not _is_enum(details["status"], set(VALID_ACTION_STATES)):
+                raise RemoteHealthError("invalid remote health report: invalid action")
+            if not _is_canonical_state_detail(
+                details["reason"], CANONICAL_ACTION_REASONS
+            ):
+                raise RemoteHealthError(
+                    "invalid remote health report: invalid action reason"
+                )
         metrics = project["metrics"]
         if (
             not isinstance(metrics, dict)

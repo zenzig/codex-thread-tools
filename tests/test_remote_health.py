@@ -21,7 +21,10 @@ from codex_thread_tools.remote_health import (
     select_remote_project,
     validate_projects_report,
 )
-from codex_thread_tools.thread_health import COMPACTION_FAILURE_DIAGNOSTIC
+from codex_thread_tools.thread_health import (
+    COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC,
+    COMPACTION_FAILURE_DIAGNOSTIC,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,7 +48,37 @@ def fixture_projects_report() -> dict:
         check=False,
     )
     assert result.returncode in {0, 2, 3}, result.stderr
-    return json.loads(result.stdout)
+    payload = json.loads(result.stdout)
+    if payload["projects"]:
+        payload["projects"][0].update(
+            {
+                "task_state": {
+                    "status": "active",
+                    "reason": "latest recorded turn has no terminal event",
+                },
+                "continuation_risk": {"status": "ok", "reasons": []},
+                "scale": {
+                    "status": "watch",
+                    "size": "ok",
+                    "items": "ok",
+                    "compactions": "ok",
+                    "visuals": "notice",
+                },
+                "notices": [COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC],
+                "handoff_lineage": {
+                    "status": "replacement-active",
+                    "source_session_ids": [
+                        "019f47ef-8568-7300-9e7c-59c81c9ccdcf"
+                    ],
+                    "total_handoffs": 2,
+                },
+                "action": {
+                    "status": "finish-current-turn",
+                    "reason": "task is active; no continuation risk requires a handoff",
+                },
+            }
+        )
+    return payload
 
 
 def fixture_remote_projects_report() -> dict:
@@ -123,6 +156,71 @@ def test_remote_safe_report_allows_integrity_counts_and_safe_diagnostics() -> No
     assert metrics["remote_image_urls"] == 0
     assert metrics["session_integrity_findings"] == 1
     assert validate_projects_report(safe) == safe
+
+
+def test_remote_safe_report_preserves_state_axes() -> None:
+    payload = fixture_projects_report()
+    safe = build_remote_safe_report(payload)
+    safe_project = safe["projects"][0]
+
+    assert safe_project["task_state"]["status"] == "active"
+    assert safe_project["continuation_risk"] == {
+        "status": "ok",
+        "reasons": [],
+    }
+    assert safe_project["scale"]["visuals"] == "notice"
+    assert safe_project["notices"] == [COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC]
+    assert safe_project["handoff_lineage"]["source_session_ids"] == [
+        "019f47ef-8568-7300-9e7c-59c81c9ccdcf"
+    ]
+    assert safe_project["action"]["status"] == "finish-current-turn"
+
+
+def test_remote_safe_report_filters_noncanonical_state_details() -> None:
+    payload = fixture_projects_report()
+    payload["projects"][0]["task_state"] = {
+        "status": "active",
+        "reason": "raw-task-state-reason",
+    }
+    payload["projects"][0]["continuation_risk"]["reasons"] = [
+        "raw-continuation-risk-reason",
+    ]
+    payload["projects"][0]["scale"]["visuals"] = "danger"
+    payload["projects"][0]["notices"] = [
+        "visual references exist inside compacted replacement history",
+        "raw-notice-reason",
+    ]
+    payload["projects"][0]["action"] = {
+        "status": "finish-current-turn",
+        "reason": "raw-action-reason",
+    }
+
+    safe = build_remote_safe_report(payload)
+    safe_project = safe["projects"][0]
+
+    assert safe_project["task_state"]["status"] == "active"
+    assert safe_project["continuation_risk"] == {
+        "status": "ok",
+        "reasons": ["additional health signal omitted by remote privacy filter"],
+    }
+    assert safe_project["scale"]["visuals"] == "danger"
+    assert safe_project["notices"] == [
+        "visual references exist inside compacted replacement history",
+        "additional health signal omitted by remote privacy filter",
+    ]
+    assert safe_project["handoff_lineage"]["source_session_ids"] == [
+        "019f47ef-8568-7300-9e7c-59c81c9ccdcf"
+    ]
+    assert safe_project["action"]["status"] == "finish-current-turn"
+    assert (
+        safe_project["action"]["reason"]
+        == "state detail omitted by remote privacy filter"
+    )
+    serialized = json.dumps(safe)
+    assert "raw-task-state-reason" not in serialized
+    assert "raw-continuation-risk-reason" not in serialized
+    assert "raw-notice-reason" not in serialized
+    assert "raw-action-reason" not in serialized
 
 
 def test_remote_health_accepts_existing_metric_set_for_older_remote_hosts() -> None:
@@ -395,6 +493,74 @@ def test_validate_projects_report_accepts_fixture_payload() -> None:
     validated = validate_projects_report(payload)
 
     assert validated == payload
+
+
+def test_validate_projects_report_accepts_legacy_protocol_1_payload_without_state_axes() -> None:
+    payload = fixture_remote_projects_report()
+    for project in payload["projects"]:
+        project.pop("underlying_status", None)
+        project.pop("task_state", None)
+        project.pop("continuation_risk", None)
+        project.pop("scale", None)
+        project.pop("notices", None)
+        project.pop("handoff_lineage", None)
+        project.pop("action", None)
+
+    assert validate_projects_report(payload) == payload
+
+
+@pytest.mark.parametrize(
+    ("case", "update", "contains_sentinel"),
+    [
+        (
+            "unrecognized enum",
+            lambda project: project["task_state"].__setitem__(
+                "status", "invalid-state"
+            ),
+            False,
+        ),
+        (
+            "raw diagnostic",
+            lambda project: project["continuation_risk"].__setitem__(
+                "reasons", ["raw-continuation-risk-reason"]
+            ),
+            True,
+        ),
+        (
+            "negative lineage count",
+            lambda project: project["handoff_lineage"].__setitem__(
+                "total_handoffs", -1
+            ),
+            False,
+        ),
+        (
+            "invalid source session id",
+            lambda project: project["handoff_lineage"].__setitem__(
+                "source_session_ids", ["not-a-session-id"]
+            ),
+            False,
+        ),
+        (
+            "unexpected nested key",
+            lambda project: project["action"].__setitem__("unexpected", "value"),
+            False,
+        ),
+    ],
+)
+def test_validate_projects_report_rejects_invalid_state_axes(
+    case: str,
+    update,
+    contains_sentinel: bool,
+) -> None:
+    payload = build_remote_safe_report(fixture_projects_report())
+    project = payload["projects"][0]
+    update(project)
+    with pytest.raises(RemoteHealthError) as error:
+        validate_projects_report(payload)
+
+    assert "invalid remote health report" in str(error.value)
+    if contains_sentinel:
+        assert "raw-continuation-risk-reason" not in str(error.value)
 
 
 def test_validate_projects_report_rejects_summary_that_disagrees_with_projects() -> None:

@@ -419,6 +419,35 @@ def test_remote_pretty_identifies_source_and_host(tmp_path: Path) -> None:
     assert "Host: node1.atomicfalls.com" in result.stdout
 
 
+def test_remote_json_does_not_invent_state_axes_for_protocol_1_payload(tmp_path: Path) -> None:
+    env = fake_ssh_env(tmp_path, remote_projects_report("ok"))
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    project = payload["projects"][0]
+    assert payload["source"] == "remote"
+    assert payload["host"] == "node1.atomicfalls.com"
+    assert project["status"] == "ok"
+    for key in (
+        "task_state",
+        "continuation_risk",
+        "scale",
+        "notices",
+        "handoff_lineage",
+        "action",
+    ):
+        assert key not in project
+    assert "source" not in json.loads(env["FAKE_SSH_REPORT"])["projects"][0]
+
+
 @pytest.mark.parametrize(
     ("mode", "expected"),
     [
