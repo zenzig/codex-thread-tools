@@ -54,6 +54,17 @@ def test_health_docs_cover_remote_health_contract() -> None:
     assert "fails closed" in text.lower()
 
 
+def test_health_docs_capture_state_first_reporting_model() -> None:
+    text = (DOCS / "health.md").read_text(encoding="utf-8")
+
+    assert "Task state and continuation risk are separate" in text
+    assert "active turn" in text
+    assert "continuation risk" in text.lower()
+    assert "codex-thread-tools health --mode standard" in text
+    assert "codex-thread-tools health remote --host" in text
+    assert "older remote host" in text.lower()
+
+
 def test_readme_is_a_concise_open_source_project_overview() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     headings = {

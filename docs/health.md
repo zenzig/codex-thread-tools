@@ -17,9 +17,25 @@ used as a fallback.
 | Status | Meaning | What to do |
 | --- | --- | --- |
 | `OK` | No major risk signals were found. | Keep working. |
-| `WARN` | One risk area needs attention. | Continue, but prepare a handoff if the task will keep growing. |
-| `DANGER` | Strong risk signals were found. | Make a handoff and start a fresh thread. |
+| `WARN` | One risk area needs attention. | Finish the current turn; then continue with increased scrutiny or a deliberate handoff. |
+| `DANGER` | Strong risk signals were found. | Handoff before continuing. |
 | `RETIRED` | The session was already handed off and is no longer active. | Use the replacement thread or the handoff file. |
+
+Task state and continuation risk are separate. Health separates task lifecycle
+state from continuation risk. A thread can be in an
+active turn and still be safe to finish; handoff guidance is based on whether
+continuation risk is low, rising, or high.
+
+| Task State | Continuation Risk | Action |
+| --- | --- | --- |
+| `active` | `ok` | Finish the current turn, then continue. |
+| `active` | `watch` | Finish the current turn and prepare a deliberate handoff. |
+| `active` | `danger` | Handoff before continuing. |
+| `retired` | Any | Use the replacement thread or handoff summary. |
+
+For historical compacted visual references, the report emits notice-level output by
+themselves so they can be reviewed without being treated as unsafe continuity
+signals.
 
 The health check is read-only. It does not edit, delete, trim, or repair any
 Codex thread.
@@ -32,6 +48,12 @@ Compact dashboard:
 
 ```bash
 codex-thread-tools health --mode compact
+```
+
+Standard table output:
+
+```bash
+codex-thread-tools health --mode standard
 ```
 
 Full diagnostic output:
@@ -49,7 +71,8 @@ codex-thread-tools health --json
 ```
 
 JSON output ignores pretty display options and is the stable scripting
-interface.
+interface. Legacy fields and exit behavior remain unchanged; compatible clients can
+also read new state-first fields such as task lifecycle and continuation risk.
 
 ## Remote Project Health
 
@@ -89,6 +112,9 @@ codex-thread-tools health remote --host node1.example.com \
   --mode verbose --size-format human
 ```
 
+Older remote hosts continue to return legacy health output for now; upgrade the
+remote host to protocol 1 to receive the state-first fields.
+
 Use JSON for scripts or other tooling:
 
 ```bash
@@ -112,6 +138,8 @@ the same `codex-thread-tools` version on both machines before retrying.
 
 This command is read-only and limited to remote project health. Remote token,
 archive, recovery, visual, and handoff operations are excluded.
+
+Legacy status labels and legacy exit codes are unchanged.
 
 ### Remote Exit Codes
 
