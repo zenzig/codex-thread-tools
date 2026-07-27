@@ -534,6 +534,20 @@ def test_validate_projects_report_accepts_legacy_protocol_1_payload_without_stat
             False,
         ),
         (
+            "true lineage count",
+            lambda project: project["handoff_lineage"].__setitem__(
+                "total_handoffs", True
+            ),
+            False,
+        ),
+        (
+            "false lineage count",
+            lambda project: project["handoff_lineage"].__setitem__(
+                "total_handoffs", False
+            ),
+            False,
+        ),
+        (
             "invalid source session id",
             lambda project: project["handoff_lineage"].__setitem__(
                 "source_session_ids", ["not-a-session-id"]

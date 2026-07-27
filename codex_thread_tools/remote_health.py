@@ -582,7 +582,7 @@ def validate_projects_report(value: object) -> dict[str, Any]:
                 not isinstance(details, dict)
                 or set(details) != {"status", "source_session_ids", "total_handoffs"}
                 or not _is_enum(details["status"], set(VALID_HANDOFF_LINEAGE_STATES))
-                or not isinstance(details["total_handoffs"], int)
+                or not _is_int(details["total_handoffs"])
                 or details["total_handoffs"] < 0
                 or not isinstance(details["source_session_ids"], list)
                 or any(not _is_codex_session_id(item) for item in details["source_session_ids"])
