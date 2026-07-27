@@ -1283,6 +1283,12 @@ def test_projects_reports_replacement_thread_when_source_was_handed_off(tmp_path
     assert project_payload["file"] == str(new_session)
     assert project_payload["status"] == "ok"
     assert project_payload["replaces_session_ids"] == ["old-session"]
+    assert project_payload["handoff_lineage"] == {
+        "status": "replacement-active",
+        "source_session_ids": ["old-session"],
+        "total_handoffs": 1,
+    }
+    assert project_payload["action"]["status"] in {"continue", "finish-current-turn"}
     assert project_payload["handoff_summary"]["total_handoffs"] == 1
     assert project_payload["handoff_summary"]["retired_source_sessions"] == 1
     assert project_payload["handoff_summary"]["latest_handoff_file"] == handoff_file
@@ -1379,6 +1385,12 @@ def test_projects_reports_backfilled_sidecar_replacement_thread(tmp_path: Path) 
     assert project_payload["file"] == str(new_session)
     assert project_payload["status"] == "ok"
     assert project_payload["replaces_session_ids"] == ["old-session"]
+    assert project_payload["handoff_lineage"] == {
+        "status": "replacement-active",
+        "source_session_ids": ["old-session"],
+        "total_handoffs": 1,
+    }
+    assert project_payload["action"]["status"] in {"continue", "finish-current-turn"}
 
 
 def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -> None:
@@ -1436,6 +1448,15 @@ def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -
     assert payload["recommendation"] == "use-replacement-thread"
     assert payload["underlying_status"] == "danger"
     assert payload["handoff_readiness"]["status"] == "completed"
+    assert payload["handoff_lineage"] == {
+        "status": "source-retired",
+        "source_session_ids": ["source-session"],
+        "total_handoffs": 1,
+    }
+    assert payload["action"] == {
+        "status": "use-replacement",
+        "reason": "this source session was retired by a completed handoff",
+    }
     assert payload["retired_by_handoff"]["handoff_file"] == handoff_file
     assert payload["retired_by_handoff"]["handoff_sequence"] == 3
     assert payload["handoff_summary"]["total_handoffs"] == 1
@@ -1453,6 +1474,73 @@ def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -
     assert "Session role: Retired by handoff" in pretty.stdout
     assert "Domain risks:" not in pretty.stdout
     assert "Why: session was retired by completed handoff" in pretty.stdout
+
+
+def test_projects_reports_incomplete_replacement_prompt_marker_evidence(tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    old_session = session_root / "2026" / "06" / "02" / "old.jsonl"
+    new_session = session_root / "2026" / "06" / "03" / "new.jsonl"
+    project = "/work/handoff-project-partial"
+    handoff_file = "/work/handoff-project-partial/documentation/agent-handoffs/2026-06-03.md"
+
+    write_session(
+        old_session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "old-session", "cwd": project},
+            },
+        ],
+    )
+    write_session(
+        new_session,
+        [
+            {
+                "timestamp": "2026-06-03T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "new-session", "cwd": project},
+            },
+            {
+                "timestamp": "2026-06-03T12:01:00Z",
+                "type": "event_msg",
+                "payload": {"type": "user_message", "message": (
+                    "Codex thread handoff marker:\n"
+                    "source_session_id: old-session\n"
+                    f"handoff_file: {handoff_file}\n"
+                    f"project: {project}\n"
+                    "handoff_sequence: 1"
+                )},
+            },
+            {
+                "timestamp": "2026-06-03T12:02:00Z",
+                "type": "event_msg",
+                "payload": {"type": "task_complete"},
+            },
+        ],
+    )
+
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--safe-test-mode",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    project_payload = payload["projects"][0]
+    assert project_payload["session_id"] == "new-session"
+    assert project_payload["file"] == str(new_session)
+    assert project_payload["status"] == "ok"
+    assert project_payload["replaces_session_ids"] == ["old-session"]
+    assert project_payload["handoff_lineage"] == {
+        "status": "incomplete",
+        "source_session_ids": ["old-session"],
+        "total_handoffs": 0,
+    }
+    assert project_payload["action"]["status"] in {"continue", "finish-current-turn"}
 
 
 def test_projects_with_only_retired_sessions_exit_ok(tmp_path: Path) -> None:
