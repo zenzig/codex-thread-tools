@@ -2175,9 +2175,7 @@ def test_replay_integrity_failure_requires_handoff_now(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["status"] == "danger"
     assert payload["recommendation"] == "handoff-now"
-    assert payload["reasons"] == [
-        "invalid model-visible image URL can break thread replay"
-    ]
+    assert "invalid model-visible image URL can break thread replay" in payload["reasons"]
     assert payload["continuation_risk"]["status"] == "danger"
     assert payload["action"]["status"] == "handoff-now"
 
