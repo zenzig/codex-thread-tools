@@ -344,14 +344,10 @@ def annotate_result_with_handoff_context(
     completed_replaces = [
         marker["source_session_id"]
         for marker in markers
-        if marker["project"] == result["project"]
-        and (
-            marker.get("source_session_id") in prompt_replaces
-        or marker.get("replacement_session_id") == result["session_id"]
+        if marker.get("replacement_session_id") == result["session_id"]
         or (
             marker.get("replacement_session_file")
             and path_key(marker["replacement_session_file"]) == path_key(result["file"])
-        )
         )
     ]
     completed_replaces = [value for value in completed_replaces if value]

@@ -1255,6 +1255,8 @@ def test_projects_reports_replacement_thread_when_source_was_handed_off(tmp_path
                 "project": project,
                 "source_session_id": "old-session",
                 "source_session_file": str(old_session),
+                "replacement_session_id": "new-session",
+                "replacement_session_file": str(new_session),
                 "handoff_file": handoff_file,
                 "handoff_sequence": 1,
             },
@@ -1539,6 +1541,108 @@ def test_projects_reports_incomplete_replacement_prompt_marker_evidence(tmp_path
         "status": "incomplete",
         "source_session_ids": ["old-session"],
         "total_handoffs": 0,
+    }
+    assert project_payload["action"]["status"] in {"continue", "finish-current-turn"}
+
+
+def test_projects_prompt_marker_does_not_upgrade_to_active_replacement_for_other_completed_sidecar(tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    marker_file = tmp_path / "markers" / "handoff-markers.jsonl"
+    old_session = session_root / "2026" / "06" / "02" / "old.jsonl"
+    new_session = session_root / "2026" / "06" / "03" / "new.jsonl"
+    other_session = session_root / "2026" / "06" / "03" / "other.jsonl"
+    project = "/work/handoff-project-two-candidates"
+    handoff_file = "/work/handoff-project-two-candidates/documentation/agent-handoffs/2026-06-03.md"
+
+    write_session(
+        old_session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "old-session", "cwd": project},
+            },
+        ],
+    )
+    write_session(
+        other_session,
+        [
+            {
+                "timestamp": "2026-06-03T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "other-session", "cwd": project},
+            },
+        ],
+        mtime=150,
+    )
+    write_session(
+        new_session,
+        [
+            {
+                "timestamp": "2026-06-03T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "new-session", "cwd": project},
+            },
+            {
+                "timestamp": "2026-06-03T12:01:00Z",
+                "type": "event_msg",
+                "payload": {"type": "user_message", "message": (
+                    "Codex thread handoff marker:\n"
+                    "source_session_id: old-session\n"
+                    f"handoff_file: {handoff_file}\n"
+                    f"project: {project}\n"
+                    "handoff_sequence: 1"
+                )},
+            },
+            {
+                "timestamp": "2026-06-03T12:02:00Z",
+                "type": "event_msg",
+                "payload": {"type": "task_complete"},
+            },
+        ],
+        mtime=200,
+    )
+    marker_file.parent.mkdir(parents=True)
+    marker_file.write_text(
+        json.dumps(
+            {
+                "type": "handoff_completed",
+                "created_at": "2026-06-03T12:00:00Z",
+                "project": project,
+                "source_session_id": "old-session",
+                "source_session_file": str(old_session),
+                "replacement_session_id": "other-session",
+                "replacement_session_file": str(other_session),
+                "handoff_file": handoff_file,
+                "handoff_sequence": 1,
+            },
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--handoff-marker-file",
+        str(marker_file),
+        "--safe-test-mode",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    project_payload = payload["projects"][0]
+    assert project_payload["session_id"] == "new-session"
+    assert project_payload["file"] == str(new_session)
+    assert project_payload["status"] == "ok"
+    assert project_payload["replaces_session_ids"] == ["old-session"]
+    assert project_payload["handoff_lineage"] == {
+        "status": "incomplete",
+        "source_session_ids": ["old-session"],
+        "total_handoffs": 1,
     }
     assert project_payload["action"]["status"] in {"continue", "finish-current-turn"}
 
