@@ -91,6 +91,150 @@ def handoff_label(value: str) -> str:
     return labels.get(value, status_label(value))
 
 
+REMOTE_STATE_UNAVAILABLE = "Unavailable from this remote host"
+REMOTE_STATE_UPDATE_MESSAGE = (
+    "Update the remote codex-thread-tools installation for state-first details."
+)
+
+
+def task_state_line(item: dict[str, Any]) -> str:
+    details = item.get("task_state")
+    if not isinstance(details, dict):
+        return f"Task: {REMOTE_STATE_UNAVAILABLE}"
+    status = details.get("status", "unknown")
+    reason = details.get("reason", "")
+    label = status_label(str(status)).title()
+    if reason:
+        return f"Task: {label} - {reason}"
+    return f"Task: {label}"
+
+
+def continuation_line(item: dict[str, Any]) -> str:
+    details = item.get("continuation_risk")
+    if not isinstance(details, dict):
+        return f"Continuation: {REMOTE_STATE_UNAVAILABLE}"
+    return f"Continuation: {status_label(details.get('status', 'ok'))}"
+
+
+def lineage_line(item: dict[str, Any]) -> str:
+    details = item.get("handoff_lineage")
+    if not isinstance(details, dict):
+        return f"Handoff: {REMOTE_STATE_UNAVAILABLE}"
+    status = str(details.get("status", "not-recorded"))
+    labels = {
+        "not-recorded": "Not recorded",
+        "replacement-active": "Replacement active",
+        "incomplete": "Incomplete replacement",
+        "source-retired": "Source retired",
+    }
+    return f"Handoff: {labels.get(status, status_label(status).title())}"
+
+
+def action_sentence(status: str) -> str:
+    return {
+        "continue": "Continue in the current thread.",
+        "finish-current-turn": "Finish the current turn, then continue.",
+        "prepare-handoff": (
+            "Finish the current turn and prepare a deliberate handoff."
+        ),
+        "handoff-now": (
+            "Create a handoff and start a fresh Codex thread before continuing."
+        ),
+        "use-replacement": "Use the active replacement thread or the handoff file.",
+    }[status]
+
+
+def action_line(item: dict[str, Any]) -> str:
+    details = item.get("action")
+    if not isinstance(details, dict):
+        return f"Action: {REMOTE_STATE_UNAVAILABLE}"
+    return f"Action: {action_sentence(str(details.get('status', 'continue')))}"
+
+
+def scale_lines(item: dict[str, Any], size_format: str) -> list[str]:
+    details = item.get("scale")
+    if not isinstance(details, dict):
+        return ["Scale", f"  {REMOTE_STATE_UNAVAILABLE}"]
+    return [
+        "Scale",
+        f"  status: {status_label(str(details.get('status', 'ok')))}",
+        f"  size: {status_label(str(details.get('size', 'ok')))}",
+        f"  items: {status_label(str(details.get('items', 'ok')))}",
+        f"  compactions: {status_label(str(details.get('compactions', 'ok')))}",
+        f"  visuals: {status_label(str(details.get('visuals', 'ok')))}",
+    ]
+
+
+def notice_lines(item: dict[str, Any]) -> list[str]:
+    notices = item.get("notices")
+    if notices is None:
+        return ["Notices", f"  {REMOTE_STATE_UNAVAILABLE}"]
+    if not notices:
+        return ["Notices", "  none"]
+    return ["Notices", *[f"  - {note}" for note in notices]]
+
+
+def project_action_label(item: dict[str, Any]) -> str:
+    action = item.get("action", {})
+    status = str(action.get("status", "continue"))
+    return {
+        "continue": "Continue",
+        "finish-current-turn": "Finish turn",
+        "prepare-handoff": "Prepare handoff",
+        "handoff-now": "Handoff now",
+        "use-replacement": "Use replacement",
+    }.get(status, status_label(status).title())
+
+
+def project_task_line(item: dict[str, Any]) -> str:
+    details = item.get("task_state")
+    if not isinstance(details, dict):
+        return REMOTE_STATE_UNAVAILABLE
+    status = details.get("status", "unknown")
+    reason = details.get("reason")
+    if reason:
+        return f"{status_label(str(status)).title()} - {reason}"
+    return status_label(str(status)).title()
+
+
+def project_scale_label(item: dict[str, Any]) -> str:
+    scale = item.get("scale")
+    if not isinstance(scale, dict):
+        return REMOTE_STATE_UNAVAILABLE
+    return status_label(str(scale.get("status", "ok")))
+
+
+def continuation_label(item: dict[str, Any]) -> str:
+    details = item.get("continuation_risk")
+    if not isinstance(details, dict):
+        return status_label("ok")
+    return status_label(str(details.get("status", "ok")))
+
+
+def project_lineage_label(item: dict[str, Any]) -> str:
+    details = item.get("handoff_lineage")
+    if not isinstance(details, dict):
+        return "Not Recorded"
+    status = str(details.get("status", "not-recorded"))
+    labels = {
+        "not-recorded": "Not recorded",
+        "replacement-active": "Replacement active",
+        "incomplete": "Incomplete replacement",
+        "source-retired": "Source retired",
+    }
+    return labels.get(status, status_label(status))
+
+
+def should_render_action_summary(item: dict[str, Any]) -> bool:
+    continuation = item.get("continuation_risk", {}).get("status")
+    if continuation in {"watch", "danger"}:
+        return True
+    lineage = item.get("handoff_lineage", {}).get("status")
+    if lineage in {"incomplete", "source-retired"}:
+        return True
+    return False
+
+
 def domain_lines(risk_domains: dict[str, dict[str, Any]], indent: str = "") -> list[str]:
     lines = [f"{indent}Domain risks:"]
     for name in ("load", "visuals", "compaction", "limits", "continuity"):
@@ -127,22 +271,27 @@ def maybe_pretty(
 
 def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
     summary = result["summary"]
-    status = summary_status(summary)
     lines = ["Codex Thread Health"]
     if result.get("source") == "remote":
         lines.extend(["Source: REMOTE", f"Host: {result['host']}"])
     lines.extend(
         [
             f"Session folder: {result['session_root']}",
-            (
-                f"Overall: {status_label(status)} "
-                f"({summary['ok']} ok, {summary['warn']} warn, "
-                f"{summary['danger']} danger, {summary.get('retired', 0)} retired)"
-            ),
             f"Projects: {format_count(summary['projects'])}",
-            f"Next step: {next_step(status)}",
         ]
     )
+    add_remote_state_block = False
+    if mode != "compact" and result.get("source") == "remote":
+        add_remote_state_block = all(
+            not isinstance(item.get("task_state"), dict)
+            and not isinstance(item.get("continuation_risk"), dict)
+            and not isinstance(item.get("scale"), dict)
+            and not isinstance(item.get("notices"), list)
+            and not isinstance(item.get("handoff_lineage"), dict)
+            and not isinstance(item.get("action"), dict)
+            for item in result["projects"]
+        )
+
     if mode == "verbose":
         if result["projects"]:
             lines.extend(["", "Attention Required"])
@@ -151,15 +300,26 @@ def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
                 lines.append("")
         return "\n".join(lines).rstrip()
 
+    if add_remote_state_block:
+        lines.extend(
+            [
+                "",
+                "Current State",
+                task_state_line(result["projects"][0]),
+                continuation_line(result["projects"][0]),
+                lineage_line(result["projects"][0]),
+                action_line(result["projects"][0]),
+                "Update the remote codex-thread-tools installation for state-first details.",
+            ]
+        )
+
     lines.extend(["", "Project Summary"])
     lines.extend(render_project_table(result["projects"], size_format))
     if mode == "compact":
         return "\n".join(lines)
 
     detail_items = [
-        item
-        for item in result["projects"]
-        if item["status"] != "ok" or has_handoff_metadata(item)
+        item for item in result["projects"] if should_render_action_summary(item)
     ]
     if detail_items:
         lines.extend(["", "Action Summary"])
@@ -173,36 +333,17 @@ def check_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
 
     lines = [
         "Codex Thread Health",
-        f"Overall: {status_label(result['status'])}",
-        f"Next step: {next_step(result['status'])}",
+        "Current State",
+        task_state_line(result),
+        continuation_line(result),
+        lineage_line(result),
+        action_line(result),
+        "",
     ]
-    if mode != "compact" and result["status"] != "retired":
-        lines.extend(["", "Domain Risks"])
-        lines.extend(render_domain_table(result.get("risk_domains", {})))
-    key_facts = [
-        f"Recommendation: {result['recommendation']}",
-        f"Continuation health: {status_label(result.get('continuation_status', result['status']))}",
-        (
-            "Handoff readiness: "
-            f"{handoff_label(result.get('handoff_readiness', {}).get('status', ''))}"
-        ),
-        handoff_summary_line(result),
-        replacement_line(result),
-        retired_line(result),
-        underlying_health_line(result),
-        f"Project: {result['project']}",
-        f"File: {result['file']}",
-        f"Size: {size_summary(result['metrics'], size_format)}",
-    ]
-    lines.extend(
-        [
-            "",
-            "Key Facts",
-            *[line for line in key_facts if line],
-        ]
-    )
+    lines.extend(scale_lines(result, size_format))
+    lines.extend(notice_lines(result))
     if mode != "compact":
-        lines.extend(["", *format_reasons(result["reasons"], indent="")])
+        lines.extend(format_reasons(result["reasons"], indent=""))
     return "\n".join(lines)
 
 
@@ -212,6 +353,12 @@ def check_verbose(result: dict[str, Any], size_format: str) -> str:
         f"Overall: {status_label(result['status'])}",
         f"Recommendation: {result['recommendation']}",
         f"Next step: {next_step(result['status'])}",
+        task_state_line(result),
+        continuation_line(result),
+        lineage_line(result),
+        action_line(result),
+        *scale_lines(result, size_format),
+        *notice_lines(result),
         f"Continuation health: {status_label(result.get('continuation_status', result['status']))}",
         (
             "Handoff readiness: "
@@ -236,24 +383,22 @@ def render_project_table(projects: list[dict[str, Any]], size_format: str) -> li
     for item in projects:
         rows.append(
             [
-                status_label(item["status"]),
                 format_project(item["project"], 24),
-                format_bytes(item["metrics"]["bytes"], size_format),
-                format_count(item["metrics"]["response_items"]),
-                format_count(item["metrics"]["compacted_records"]),
-                format_count(item["metrics"]["visual_artifacts"]),
-                handoff_label(item.get("handoff_readiness", {}).get("status", "")),
+                project_task_line(item),
+                continuation_label(item),
+                project_lineage_label(item),
+                project_action_label(item),
+                project_scale_label(item),
             ]
         )
     return render_table(
         (
-            "Status",
             "Project",
-            "Size",
-            "Items",
-            "Compactions",
-            "Visuals",
-            "Handoff",
+            "Task",
+            "Continue",
+            "Lineage",
+            "Action",
+            "Scale",
         ),
         rows,
     )
@@ -263,6 +408,10 @@ def project_detail_lines(item: dict[str, Any], *, size_format: str) -> list[str]
     lines = [
         f"{status_label(item['status'])}: {item['project']}",
         f"  Recommendation: {item['recommendation']}",
+        f"  {task_state_line(item)}",
+        f"  {continuation_line(item)}",
+        f"  {lineage_line(item)}",
+        f"  {action_line(item)}",
         f"  Continuation health: {status_label(item.get('continuation_status', item['status']))}",
         (
             "  Handoff readiness: "
@@ -283,6 +432,8 @@ def project_detail_lines(item: dict[str, Any], *, size_format: str) -> list[str]
     if item.get("underlying_status"):
         lines.append(f"  Underlying health: {status_label(item['underlying_status'])}")
     lines.append(f"  Size: {size_summary(item['metrics'], size_format)}")
+    lines.extend(scale_lines(item, size_format)[1:])
+    lines.extend(notice_lines(item)[1:])
     if item["status"] != "retired":
         lines.extend(domain_lines(item.get("risk_domains", {}), indent="  "))
     lines.extend(format_reasons(item["reasons"]))
@@ -295,11 +446,11 @@ def render_action_summary(projects: list[dict[str, Any]]) -> list[str]:
     for item in projects:
         if lines:
             lines.append("")
-        lines.append(f"{status_label(item['status'])}: {format_project(item['project'], 56)}")
-        lines.append(f"  Action: {action_for_item(item)}")
-        lines.append("  Why:")
+        lines.append(f"{project_action_label(item)}: {format_project(item['project'], 56)}")
         for reason in action_reasons(item):
-            lines.extend(wrap_bullet(reason, width=100, initial_indent="    - ", subsequent_indent="      "))
+            lines.extend(wrap_bullet(reason, width=100, initial_indent="  - ", subsequent_indent="    "))
+        if not item.get("reasons"):
+            lines.append("  - none")
     return lines
 
 
