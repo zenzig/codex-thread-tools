@@ -626,9 +626,26 @@ def scale_for_metrics(
     compactions = "ok"
     if metrics["compaction_items"] > thresholds.max_healthy_compactions:
         compactions = "watch"
-    visuals = (
-        "notice" if metrics["visual_artifacts_in_compacted_records"] > 0 else "ok"
-    )
+
+    visuals = "ok"
+    if metrics["invalid_image_urls_in_compacted_records"] > 0:
+        visuals = "danger"
+    elif metrics["invalid_image_urls"] > 0:
+        visuals = "danger"
+    elif metrics["remote_image_urls"] > 0:
+        visuals = "danger"
+    elif metrics["visual_embedded_bytes"] >= 300 * 1024 * 1024:
+        visuals = "danger"
+    elif metrics["largest_visual_artifact_bytes"] >= 50 * 1024 * 1024:
+        visuals = "danger"
+    elif metrics["bytes"] >= 512 * 1024 * 1024 and metrics["visual_embedded_artifacts"] > 0:
+        visuals = "danger"
+    elif metrics["visual_embedded_bytes"] >= 50 * 1024 * 1024:
+        visuals = "watch"
+    elif metrics["visual_artifact_errors"] > 0:
+        visuals = "watch"
+    elif metrics["visual_artifacts_in_compacted_records"] > 0:
+        visuals = "notice"
 
     worst_status = "ok"
     for status in (size, items, compactions, visuals):

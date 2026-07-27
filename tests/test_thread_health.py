@@ -2061,9 +2061,76 @@ def test_check_response_items_warning_scale_requests_prepared_handoff(
         "status": "watch",
         "reasons": ["response_items is 9, at or above warning threshold"],
     }
+    assert payload["scale"] == {
+        "status": "watch",
+        "size": "ok",
+        "items": "watch",
+        "compactions": "ok",
+        "visuals": "ok",
+    }
     assert payload["action"] == {
         "status": "prepare-handoff",
         "reason": "continuation risk should be addressed with a deliberate handoff",
+    }
+
+
+def test_check_visual_embedded_warning_scale_marks_watch() -> None:
+    from codex_thread_tools import thread_health
+    from codex_thread_tools.thread_health import HealthThresholds, analyze_session_file
+
+    def visual_metrics_stub(record: dict[str, object]) -> dict[str, int | float]:
+        return {
+            "visual_artifacts": 1,
+            "visual_embedded_artifacts": 1,
+            "visual_local_references": 0,
+            "visual_video_artifacts": 0,
+            "visual_embedded_bytes": 51 * 1024 * 1024,
+            "largest_visual_artifact_bytes": 49 * 1024 * 1024,
+            "visual_artifact_errors": 0,
+            "visual_artifact_skipped": 0,
+        }
+
+    session = Path("/tmp") / "visual-embedded-warning-scale.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {
+                    "id": "visual-embedded-warning-scale",
+                    "cwd": "/work/visual-warning-scale",
+                    },
+                },
+            {
+                "timestamp": "2026-06-02T12:01:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "visual threshold fixture"}],
+                },
+            },
+        ],
+    )
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        thread_health,
+        "scan_record_visual_metrics",
+        visual_metrics_stub,
+    )
+    try:
+        payload = analyze_session_file(session, HealthThresholds())
+    finally:
+        monkeypatch.undo()
+
+    assert payload["scale"] == {
+        "status": "watch",
+        "size": "ok",
+        "items": "ok",
+        "compactions": "ok",
+        "visuals": "watch",
     }
 
 
@@ -2233,8 +2300,15 @@ def test_historical_turn_abort_recovered_by_completion_warns(tmp_path: Path) -> 
     assert payload["metrics"]["turn_aborted_events"] == 1
     assert payload["metrics"]["recovered_turn_error_events"] == 1
     assert payload["metrics"]["unresolved_turn_error_events"] == 0
-    assert any("recovered" in reason for reason in payload["reasons"])
-    assert not any("turn abort or error event was recorded" == reason for reason in payload["reasons"])
+    assert payload["notices"] == [
+        "historical turn abort or error event was recovered by later completion"
+    ]
+    assert payload["continuation_risk"] == {"status": "ok", "reasons": []}
+    assert payload["action"] == {
+        "status": "continue",
+        "reason": "no continuation risk requires a handoff",
+    }
+    assert payload["scale"]["status"] == "ok"
 
 
 def test_latest_turn_abort_remains_danger(tmp_path: Path) -> None:
