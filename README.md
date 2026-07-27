@@ -95,11 +95,6 @@ Health separates task lifecycle from continuation risk. An active turn can be sa
 Install the same package on both ends, then:
 
 ```bash
-codex-thread-tools health remote --host user@remote-host \
-  --project /path/to/project
-```
-
-```bash
 codex-thread-tools health remote --host user@example-host \
   --project /srv/project
 ```

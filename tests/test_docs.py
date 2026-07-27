@@ -41,7 +41,7 @@ def test_health_docs_cover_remote_health_contract() -> None:
     text = (DOCS / "health.md").read_text(encoding="utf-8")
 
     assert "health remote --host" in text
-    assert "--project /home/you/project" in text
+    assert "--project /srv/project" in text
     assert "non-interactive SSH" in text
     assert "login shell" in text
     assert "NVM" in text
@@ -52,6 +52,8 @@ def test_health_docs_cover_remote_health_contract() -> None:
     assert "remote token" in text.lower()
     assert "post-parse health-result codes" in text.lower()
     assert "fails closed" in text.lower()
+    assert "node1.example.com" not in text
+    assert "user@remote-host" not in text
 
 
 def test_health_docs_capture_state_first_reporting_model() -> None:
@@ -95,6 +97,10 @@ def test_readme_is_a_concise_open_source_project_overview() -> None:
         assert link in text
     assert "npm install -g codex-thread-tools" in text
     assert "codex-thread-tools health remote" in text
+    assert "user@example-host" in text
+    assert "/srv/project" in text
+    assert "user@remote-host" not in text
+    assert "/path/to/project" not in text
     assert "NVM" in text
     assert text.count(MEDIUM_ARTICLE_URL) == 1
     assert len(text.splitlines()) <= 170
@@ -164,8 +170,10 @@ def test_health_json_and_archive_verification_contract_is_documented() -> None:
 def test_release_compatibility_is_documented() -> None:
     text = (DOCS / "development.md").read_text(encoding="utf-8")
 
-    assert "adds `recover diagnose` and `recover bundle`" in text
+    assert "protocol 1 accepts older remote reports that omit state fields" in text
+    assert "additive fields" in text
     assert "runtime dependencies" in text
+    assert "Version 1.2.0 adds `recover diagnose` and `recover bundle`" not in text
 
 
 def test_archive_force_modes_document_staged_replacement_limits() -> None:

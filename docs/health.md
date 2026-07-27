@@ -82,7 +82,7 @@ same package on both machines and verify both versions before running a report:
 ```bash
 npm install -g codex-thread-tools@latest
 codex-thread-tools --version
-ssh node1.example.com codex-thread-tools --version
+ssh user@example-host codex-thread-tools --version
 ```
 
 The command first looks for the remote package in non-interactive SSH. If it is
@@ -95,20 +95,20 @@ token.
 Run an all-project report on the SSH host:
 
 ```bash
-codex-thread-tools health remote --host node1.example.com
+codex-thread-tools health remote --host user@example-host
 ```
 
 Select one project by its exact recorded path:
 
 ```bash
-codex-thread-tools health remote --host node1.example.com \
-  --project /home/you/project
+codex-thread-tools health remote --host user@example-host \
+  --project /srv/project
 ```
 
 Use verbose output with human-readable sizes:
 
 ```bash
-codex-thread-tools health remote --host node1.example.com \
+codex-thread-tools health remote --host user@example-host \
   --mode verbose --size-format human
 ```
 
@@ -118,7 +118,7 @@ remote host to protocol 1 to receive the state-first fields.
 Use JSON for scripts or other tooling:
 
 ```bash
-codex-thread-tools health remote --host node1.example.com --json
+codex-thread-tools health remote --host user@example-host --json
 ```
 
 Analysis occurs remotely against the SSH host's session root. Before
@@ -159,11 +159,11 @@ report.
 - **Host unreachable or timed out:** Confirm the host name, network route, and
   SSH service. The command uses a ten-second connection timeout by default;
   use `--connect-timeout` to adjust it.
-- **Public-key rejected:** Test `ssh node1.example.com` directly and fix the
+- **Public-key rejected:** Test `ssh user@example-host` directly and fix the
   key, agent, host alias, or server account in your normal OpenSSH setup.
 - **Package not found:** The tool checks both non-interactive SSH and the
   account's login shell. Confirm the package is installed for that account with
-  `ssh node1.example.com "bash -lc 'command -v codex-thread-tools && codex-thread-tools --version'"`.
+  `ssh user@example-host "bash -lc 'command -v codex-thread-tools && codex-thread-tools --version'"`.
 - **Incompatible or protocol-missing versions:** Install the same version on
   both machines. A differing major version fails with exit code `1`. A minor or
   patch difference is normally a warning, but a remote version without the
