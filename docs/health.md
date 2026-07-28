@@ -64,6 +64,15 @@ codex-thread-tools health --mode verbose --size-format both
 
 `--size-format` accepts `bytes`, `human`, or `both`.
 
+For a single session, standard output shows measured file size and its warning
+threshold, response items and their warning threshold, installed compaction
+checkpoints, and visual references. Request-only compaction records do not count
+as installed checkpoint pressure.
+
+Remote verbose reports show the remote measurements and remote-computed scale
+state, but omit local threshold labels because the remote host can use different
+environment defaults.
+
 For machine-readable output:
 
 ```bash

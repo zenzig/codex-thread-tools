@@ -6,7 +6,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from codex_thread_tools.handoff_markers import marker_aware_active_sessions_by_project
+from codex_thread_tools.handoff_markers import (
+    handoff_lineage_for_result,
+    marker_aware_active_sessions_by_project,
+    retired_marker_for_result,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -152,6 +156,29 @@ def test_project_selection_uses_newest_root_and_falls_back_to_newest_child(
         new_child,
         new_root,
     ]
+
+
+def test_path_matched_retirement_uses_marker_source_session_id() -> None:
+    source_file = "/work/session.jsonl"
+    marker_source_id = "11111111-1111-1111-1111-111111111111"
+    result = {
+        "file": source_file,
+        "session_id": "22222222-2222-2222-2222-222222222222",
+        "handoff_summary": {"total_handoffs": 1},
+    }
+    marker = {
+        "source_session_id": marker_source_id,
+        "source_session_file": source_file,
+    }
+
+    retired = retired_marker_for_result(result, [marker])
+
+    assert retired is marker
+    assert handoff_lineage_for_result(result, retired, [], []) == {
+        "status": "source-retired",
+        "source_session_ids": [marker_source_id],
+        "total_handoffs": 1,
+    }
 
 
 def run_marker(*args: str) -> subprocess.CompletedProcess[str]:

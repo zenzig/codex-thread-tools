@@ -274,7 +274,7 @@ def handoff_lineage_for_result(
     if retired:
         return {
             "status": "source-retired",
-            "source_session_ids": [result["session_id"]],
+            "source_session_ids": [retired["source_session_id"]],
             "total_handoffs": result["handoff_summary"]["total_handoffs"],
         }
     if completed_replaces:

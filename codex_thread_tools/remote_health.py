@@ -13,6 +13,7 @@ from typing import Any, Callable
 from codex_thread_tools.thread_health import (
     ACTIVE_TURN_DIAGNOSTIC,
     COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC,
+    INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC,
     RECOVERED_CONTINUITY_WARNING_DIAGNOSTIC,
     TASK_STATES as VALID_TASK_STATES,
     CONTINUATION_RISK_STATES as VALID_CONTINUATION_RISK_STATES,
@@ -46,6 +47,7 @@ REMOTE_REQUIRED_METRIC_KEYS = (
     "visual_artifacts",
 )
 REMOTE_OPTIONAL_METRIC_KEYS = (
+    "installed_compaction_checkpoints",
     "invalid_image_urls",
     "invalid_image_urls_in_compacted_records",
     "remote_image_urls",
@@ -114,6 +116,7 @@ CANONICAL_DIAGNOSTICS = {
     "latest compacted checkpoint lacks replacement_history",
     "multiple compactions plus long-thread quality warning recorded",
     "legacy compacted records without replacement_history exist",
+    INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC,
     "embedded visual payloads exceed 300 MB",
     "embedded visual payloads exceed 50 MB",
     "one visual artifact is at least 50 MB",
@@ -571,7 +574,11 @@ def validate_projects_report(value: object) -> dict[str, Any]:
             if (
                 not isinstance(notices, list)
                 or any(
-                    not _is_canonical_diagnostic(item) and item not in CANONICAL_NOTICES
+                    not isinstance(item, str)
+                    or (
+                        item not in CANONICAL_NOTICES
+                        and item != FILTERED_DIAGNOSTIC
+                    )
                     for item in notices
                 )
             ):

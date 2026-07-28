@@ -10,6 +10,12 @@
   fields while older remote reports remain accepted.
 - Clarify action semantics so active safe turns are finished, watch states trigger
   deliberate handoff prep, and danger states require handoff before continuing.
+- Distinguish request-only compaction records from installed checkpoints when
+  calculating scale and continuation risk.
+- Show measured size, response items, installed checkpoints, visuals, and effective
+  thresholds in standard single-session reports.
+- Fail closed on malformed remote notice values and preserve marker source identity
+  when retirement is matched by session-file path.
 - Keep legacy JSON payload fields and exit codes unchanged.
 
 ## 1.2.0 - 2026-07-18

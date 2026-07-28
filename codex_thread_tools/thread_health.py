@@ -39,6 +39,9 @@ COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC = (
 RECOVERED_CONTINUITY_WARNING_DIAGNOSTIC = (
     "historical turn abort or error event was recovered by later completion"
 )
+INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC = (
+    "installed compaction checkpoints exceed healthy threshold"
+)
 
 TASK_STATES = ("active", "completed", "interrupted", "unknown")
 CONTINUATION_RISK_STATES = ("ok", "watch", "danger")
@@ -319,8 +322,8 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
     decision = decide_health(metrics, thresholds, risk_domains)
     task_state = task_state_for_metrics(metrics)
     notices = notices_for_domains(risk_domains)
-    continuation_risk = continuation_risk_for_domains(risk_domains)
     scale = scale_for_metrics(metrics, thresholds)
+    continuation_risk = continuation_risk_for_domains(risk_domains, scale)
     handoff_lineage = base_handoff_lineage()
     action = action_for_state(task_state, continuation_risk, handoff_lineage)
     return {
@@ -584,6 +587,7 @@ def notices_for_domains(
 
 def continuation_risk_for_domains(
     risk_domains: dict[str, dict[str, Any]],
+    scale: dict[str, str],
 ) -> dict[str, Any]:
     status = "ok"
     reasons: list[str] = []
@@ -599,6 +603,11 @@ def continuation_risk_for_domains(
         reasons.extend(relevant)
         if relevant and STATUS_RANK[details["status"]] > STATUS_RANK[status]:
             status = details["status"]
+
+    if scale["compactions"] == "watch":
+        reasons.append(INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC)
+        if STATUS_RANK["warn"] > STATUS_RANK[status]:
+            status = "warn"
 
     return {
         "status": "watch" if status == "warn" else status,
@@ -624,7 +633,10 @@ def scale_for_metrics(
         thresholds.danger_items,
     )
     compactions = "ok"
-    if metrics["compaction_items"] > thresholds.max_healthy_compactions:
+    if (
+        metrics["installed_compaction_checkpoints"]
+        > thresholds.max_healthy_compactions
+    ):
         compactions = "watch"
 
     visuals = "ok"

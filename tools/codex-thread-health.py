@@ -151,17 +151,45 @@ def action_line(item: dict[str, Any]) -> str:
     return f"Action: {action_sentence(str(details.get('status', 'continue')))}"
 
 
-def scale_lines(item: dict[str, Any], size_format: str) -> list[str]:
+def scale_lines(
+    item: dict[str, Any],
+    size_format: str,
+    thresholds: HealthThresholds | None = None,
+) -> list[str]:
     details = item.get("scale")
     if not isinstance(details, dict):
         return ["Scale", f"  {REMOTE_STATE_UNAVAILABLE}"]
+    metrics = item.get("metrics")
+    if not isinstance(metrics, dict):
+        return ["Scale", f"  {REMOTE_STATE_UNAVAILABLE}"]
+    installed_compactions = metrics.get("installed_compaction_checkpoints")
+    compaction_value = format_count(
+        installed_compactions
+        if isinstance(installed_compactions, int)
+        and not isinstance(installed_compactions, bool)
+        else None
+    )
+    compaction_line = f"  Compactions: {compaction_value}"
+    if thresholds is not None and compaction_value != "not recorded":
+        compaction_line += (
+            f" of {format_count(thresholds.max_healthy_compactions)} healthy maximum"
+        )
+    size_line = f"  Size: {format_bytes(metrics['bytes'], size_format)}"
+    items_line = f"  Items: {format_count(metrics['response_items'])}"
+    if thresholds is not None:
+        size_line += (
+            f" of {format_bytes(thresholds.warn_bytes, size_format)} warning threshold"
+        )
+        items_line += (
+            f" of {format_count(thresholds.warn_items)} warning threshold"
+        )
     return [
         "Scale",
-        f"  status: {status_label(str(details.get('status', 'ok')))}",
-        f"  size: {status_label(str(details.get('size', 'ok')))}",
-        f"  items: {status_label(str(details.get('items', 'ok')))}",
-        f"  compactions: {status_label(str(details.get('compactions', 'ok')))}",
-        f"  visuals: {status_label(str(details.get('visuals', 'ok')))}",
+        f"  Status: {status_label(str(details.get('status', 'ok')))}",
+        size_line,
+        items_line,
+        compaction_line,
+        f"  Visuals: {format_count(metrics['visual_artifacts'])}",
     ]
 
 
@@ -294,17 +322,33 @@ def maybe_pretty(
     fmt: str,
     mode: str = "standard",
     size_format: str = "bytes",
+    thresholds: HealthThresholds | None = None,
 ) -> str:
     if fmt == "json":
         return json.dumps(result, indent=2)
     if result.get("report_type") == "token_usage":
         return tokens_pretty(result, mode=mode, size_format=size_format)
     if "projects" in result:
-        return projects_pretty(result, mode=mode, size_format=size_format)
-    return check_pretty(result, mode=mode, size_format=size_format)
+        return projects_pretty(
+            result,
+            mode=mode,
+            size_format=size_format,
+            thresholds=thresholds,
+        )
+    return check_pretty(
+        result,
+        mode=mode,
+        size_format=size_format,
+        thresholds=thresholds,
+    )
 
 
-def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
+def projects_pretty(
+    result: dict[str, Any],
+    mode: str,
+    size_format: str,
+    thresholds: HealthThresholds | None = None,
+) -> str:
     summary = result["summary"]
     lines = ["Codex Thread Health"]
     if result.get("source") == "remote":
@@ -322,7 +366,13 @@ def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
         if result["projects"]:
             lines.extend(["", "Attention Required"])
             for item in result["projects"]:
-                lines.extend(project_detail_lines(item, size_format=size_format))
+                lines.extend(
+                    project_detail_lines(
+                        item,
+                        size_format=size_format,
+                        thresholds=thresholds,
+                    )
+                )
                 lines.append("")
         return "\n".join(lines).rstrip()
 
@@ -363,9 +413,18 @@ def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
     return "\n".join(lines).rstrip()
 
 
-def check_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
+def check_pretty(
+    result: dict[str, Any],
+    mode: str,
+    size_format: str,
+    thresholds: HealthThresholds | None = None,
+) -> str:
     if mode == "verbose":
-        return check_verbose(result, size_format=size_format)
+        return check_verbose(
+            result,
+            size_format=size_format,
+            thresholds=thresholds,
+        )
 
     lines = [
         "Codex Thread Health",
@@ -376,7 +435,7 @@ def check_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
         action_line(result),
         "",
     ]
-    lines.extend(scale_lines(result, size_format))
+    lines.extend(scale_lines(result, size_format, thresholds))
     lines.extend(notice_lines(result))
     if mode != "compact":
         continuation = result.get("continuation_risk")
@@ -387,7 +446,11 @@ def check_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
     return "\n".join(lines)
 
 
-def check_verbose(result: dict[str, Any], size_format: str) -> str:
+def check_verbose(
+    result: dict[str, Any],
+    size_format: str,
+    thresholds: HealthThresholds | None = None,
+) -> str:
     lines = [
         "Codex Thread Health",
         f"Overall: {status_label(result['status'])}",
@@ -397,7 +460,7 @@ def check_verbose(result: dict[str, Any], size_format: str) -> str:
         continuation_line(result),
         lineage_line(result),
         action_line(result),
-        *scale_lines(result, size_format),
+        *scale_lines(result, size_format, thresholds),
         *notice_lines(result),
         f"Continuation health: {status_label(result.get('continuation_status', result['status']))}",
         (
@@ -447,7 +510,12 @@ def render_project_table(
     )
 
 
-def project_detail_lines(item: dict[str, Any], *, size_format: str) -> list[str]:
+def project_detail_lines(
+    item: dict[str, Any],
+    *,
+    size_format: str,
+    thresholds: HealthThresholds | None = None,
+) -> list[str]:
     lines = [
         f"{status_label(item['status'])}: {item['project']}",
         f"  Overall: {status_label(item['status'])}",
@@ -484,7 +552,7 @@ def project_detail_lines(item: dict[str, Any], *, size_format: str) -> list[str]
         lines.append(f"  Underlying health: {status_label(item['underlying_status'])}")
     lines.append(f"  Size: {size_summary(item['metrics'], size_format)}")
     lines.append(turn_events_line(item["metrics"], indent="  "))
-    lines.extend(scale_lines(item, size_format)[1:])
+    lines.extend(scale_lines(item, size_format, thresholds)[1:])
     lines.extend(notice_lines(item)[1:])
     if item["status"] != "retired":
         lines.extend(domain_lines(item.get("risk_domains", {}), indent="  "))
@@ -749,11 +817,20 @@ def check_command(args: argparse.Namespace) -> int:
     ensure_file(source)
 
     progress(args, f"Analyzing session: {source} ({format_bytes(source.stat().st_size, args.size_format)})")
-    result = analyze_session_file(source, apply_threshold_overrides(args))
+    thresholds = apply_threshold_overrides(args)
+    result = analyze_session_file(source, thresholds)
     markers = handoff_markers_for_args(args)
     replacements = replacement_prompt_markers([source])
     annotate_result_with_handoff_context(result, markers, replacements)
-    print(maybe_pretty(result, args.format, args.mode, args.size_format))
+    print(
+        maybe_pretty(
+            result,
+            args.format,
+            args.mode,
+            args.size_format,
+            thresholds,
+        )
+    )
     return exit_code_for_status(result["status"])
 
 
@@ -783,7 +860,15 @@ def projects_command(args: argparse.Namespace) -> int:
     if args.remote_safe_json:
         print(json.dumps(build_remote_safe_report(result), indent=2))
     else:
-        print(maybe_pretty(result, args.format, args.mode, args.size_format))
+        print(
+            maybe_pretty(
+                result,
+                args.format,
+                args.mode,
+                args.size_format,
+                thresholds,
+            )
+        )
     if summary["danger"]:
         return 3
     if summary["warn"]:
@@ -841,7 +926,14 @@ def remote_command(args: argparse.Namespace) -> int:
     result = add_remote_metadata(selected, args.host)
     if version_warning:
         print(f"Warning: {version_warning}", file=sys.stderr)
-    print(maybe_pretty(result, args.format, args.mode, args.size_format))
+    print(
+        maybe_pretty(
+            result,
+            args.format,
+            args.mode,
+            args.size_format,
+        )
+    )
     summary = result["summary"]
     if summary["danger"]:
         return 3

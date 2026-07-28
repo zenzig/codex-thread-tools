@@ -24,6 +24,7 @@ from codex_thread_tools.remote_health import (
 from codex_thread_tools.thread_health import (
     COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC,
     COMPACTION_FAILURE_DIAGNOSTIC,
+    INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC,
 )
 
 
@@ -221,6 +222,7 @@ def test_remote_safe_report_filters_noncanonical_state_details() -> None:
     assert "raw-continuation-risk-reason" not in serialized
     assert "raw-notice-reason" not in serialized
     assert "raw-action-reason" not in serialized
+    assert validate_projects_report(safe) == safe
 
 
 def test_remote_health_accepts_existing_metric_set_for_older_remote_hosts() -> None:
@@ -598,6 +600,26 @@ def test_validate_projects_report_rejects_untrusted_scale_values(value: object) 
     assert "scale-dict-sentinel" not in message
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        ["notice-list-sentinel"],
+        {"notice-dict-sentinel": "value"},
+    ],
+)
+def test_validate_projects_report_rejects_untrusted_notice_values(value: object) -> None:
+    payload = build_remote_safe_report(fixture_projects_report())
+    payload["projects"][0]["notices"] = [value]
+
+    with pytest.raises(RemoteHealthError) as error:
+        validate_projects_report(payload)
+
+    message = str(error.value)
+    assert message == "invalid remote health report: invalid notices"
+    assert "notice-list-sentinel" not in message
+    assert "notice-dict-sentinel" not in message
+
+
 def test_validate_projects_report_rejects_summary_that_disagrees_with_projects() -> None:
     payload = fixture_remote_projects_report()
     payload["projects"][0]["status"] = "danger"
@@ -763,6 +785,22 @@ def test_remote_safe_builder_preserves_canonical_compaction_diagnostics() -> Non
         "additional health signal omitted by remote privacy filter",
         COMPACTION_FAILURE_DIAGNOSTIC,
     ]
+
+
+def test_remote_safe_builder_preserves_installed_compaction_pressure() -> None:
+    payload = fixture_projects_report()
+    payload["projects"][0]["continuation_risk"] = {
+        "status": "watch",
+        "reasons": [INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC],
+    }
+
+    safe = build_remote_safe_report(payload)
+
+    assert safe["projects"][0]["continuation_risk"] == {
+        "status": "watch",
+        "reasons": [INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC],
+    }
+    assert validate_projects_report(safe) == safe
 
 
 def make_runner(

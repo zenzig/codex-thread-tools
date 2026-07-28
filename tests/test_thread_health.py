@@ -28,6 +28,9 @@ ACTIVE_TURN_DIAGNOSTIC = (
 COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC = (
     "visual references exist inside compacted replacement history"
 )
+INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC = (
+    "installed compaction checkpoints exceed healthy threshold"
+)
 
 
 def run_health(*args: str) -> subprocess.CompletedProcess[str]:
@@ -573,6 +576,47 @@ def test_remote_pretty_modes_render_safe_report_schema(
     assert expected in result.stdout
 
 
+def test_remote_verbose_scale_does_not_use_local_thresholds(tmp_path: Path) -> None:
+    project = state_project(
+        "/home/user/project",
+        "ok",
+        "completed",
+        "latest recorded turn completed",
+        "ok",
+        "continue",
+        "not-recorded",
+    )
+    project["metrics"]["installed_compaction_checkpoints"] = 2
+    report = {
+        "remote_health_protocol": 1,
+        "session_root": "/home/user/.codex/sessions",
+        "summary": {"projects": 1, "ok": 1, "warn": 0, "danger": 0, "retired": 0},
+        "projects": [project],
+    }
+    env = fake_ssh_env(tmp_path, report)
+    env["CODEX_SIZE_WARN_BYTES"] = "12345"
+    env["CODEX_SIZE_WARN_ITEMS"] = "123"
+    env["CODEX_MAX_HEALTHY_COMPACTIONS"] = "12"
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "user@example-host",
+        "--mode",
+        "verbose",
+        "--size-format",
+        "bytes",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "  Size: 1,024 bytes" in result.stdout
+    assert "  Items: 10" in result.stdout
+    assert "  Compactions: 2" in result.stdout
+    assert "warning threshold" not in result.stdout
+    assert "healthy maximum" not in result.stdout
+
+
 def test_remote_pretty_state_first_fallback_for_protocol_without_state_axes(
     tmp_path: Path,
 ) -> None:
@@ -1030,6 +1074,7 @@ def test_remote_safe_projects_protocol_never_serializes_raw_session_content(
         "bytes",
         "response_items",
         "compacted_records",
+        "installed_compaction_checkpoints",
         "visual_artifacts",
         "invalid_image_urls",
         "invalid_image_urls_in_compacted_records",
@@ -1343,6 +1388,39 @@ def test_opaque_compaction_items_alone_are_not_health_risk(tmp_path: Path) -> No
     assert payload["metrics"]["latest_compaction_state"] == "request-only"
     assert payload["risk_domains"]["compaction"]["status"] == "ok"
     assert payload["handoff_readiness"]["status"] == "not-needed"
+    assert payload["scale"]["compactions"] == "ok"
+    assert payload["scale"]["status"] == "ok"
+    assert payload["continuation_risk"] == {"status": "ok", "reasons": []}
+    assert payload["action"] == {
+        "status": "continue",
+        "reason": "no continuation risk requires a handoff",
+    }
+
+
+def test_installed_compaction_pressure_prepares_handoff_without_legacy_escalation() -> None:
+    result = run_health(
+        "check",
+        str(FIXTURES / "compaction-success.jsonl"),
+        "--safe-test-mode",
+        "--max-healthy-compactions",
+        "0",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["metrics"]["installed_compaction_checkpoints"] == 1
+    assert payload["scale"]["compactions"] == "watch"
+    assert payload["scale"]["status"] == "watch"
+    assert payload["continuation_risk"] == {
+        "status": "watch",
+        "reasons": [INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC],
+    }
+    assert payload["action"] == {
+        "status": "prepare-handoff",
+        "reason": "continuation risk should be addressed with a deliberate handoff",
+    }
 
 
 def test_projects_uses_latest_session_per_project_without_live_root() -> None:
@@ -2016,6 +2094,81 @@ def test_check_pretty_state_first_standard_vs_verbose(tmp_path: Path) -> None:
     assert "Why: active turn has no terminal completion, abort, or error event" in verbose.stdout
 
 
+def test_check_pretty_scale_shows_measurements_and_effective_thresholds() -> None:
+    from codex_thread_tools.thread_health import HealthThresholds
+
+    item = state_project(
+        "/work/scale-details",
+        "ok",
+        "completed",
+        "latest recorded turn completed",
+        "ok",
+        "continue",
+        "not-recorded",
+    )
+    item["metrics"].update(
+        {
+            "bytes": 1_536,
+            "response_items": 10,
+            "installed_compaction_checkpoints": 2,
+            "visual_artifacts": 3,
+        }
+    )
+    thresholds = HealthThresholds(
+        warn_bytes=2_048,
+        danger_bytes=4_096,
+        warn_items=20,
+        danger_items=40,
+        max_healthy_compactions=3,
+    )
+
+    rendered = codex_thread_health.check_pretty(
+        item,
+        mode="standard",
+        size_format="both",
+        thresholds=thresholds,
+    )
+
+    assert "  Size: 1.5 KiB (1,536 bytes) of 2.0 KiB (2,048 bytes) warning threshold" in rendered
+    assert "  Items: 10 of 20 warning threshold" in rendered
+    assert "  Compactions: 2 of 3 healthy maximum" in rendered
+    assert "  Visuals: 3" in rendered
+
+
+def test_remote_verbose_scale_omits_unsynchronized_local_thresholds() -> None:
+    item = state_project(
+        "/work/remote-scale-details",
+        "ok",
+        "completed",
+        "latest recorded turn completed",
+        "ok",
+        "continue",
+        "not-recorded",
+    )
+    item["metrics"]["installed_compaction_checkpoints"] = 2
+    result = {
+        "source": "remote",
+        "host": "user@example-host",
+        "session_root": "/home/user/.codex/sessions",
+        "summary": {"projects": 1, "ok": 1, "warn": 0, "danger": 0, "retired": 0},
+        "projects": [item],
+    }
+
+    rendered = codex_thread_health.projects_pretty(
+        result,
+        mode="verbose",
+        size_format="human",
+        thresholds=None,
+    )
+
+    assert "  Size: 1.0 KiB" in rendered
+    assert "  Items: 10" in rendered
+    assert "  Compactions: 2" in rendered
+    assert "  Visuals: 0" in rendered
+    assert "warning threshold" not in rendered
+    assert "healthy maximum" not in rendered
+
+
 def test_check_pretty_standard_uses_filtered_continuation_reasons() -> None:
     result = state_project(
         "/work/filtered-reasons",
@@ -2489,10 +2642,10 @@ def test_size_format_applies_to_health_output() -> None:
 
     assert human.returncode == 0, human.stderr
     assert "bytes" not in human.stdout
-    assert "MiB" not in human.stdout
-    assert "KiB" not in human.stdout
+    assert "KiB" in human.stdout
+    assert "MiB warning threshold" in human.stdout
     assert both.returncode == 0, both.stderr
-    assert "bytes)" in both.stdout or "status:" in both.stdout
+    assert "bytes)" in both.stdout
 
 
 def test_format_json_alias_keeps_stdout_machine_readable() -> None:
