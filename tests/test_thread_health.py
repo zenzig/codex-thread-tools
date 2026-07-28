@@ -642,10 +642,7 @@ def test_remote_pretty_state_first_fallback_for_protocol_without_state_axes(
     assert summary.count(f"{codex_thread_health.REMOTE_STATE_UNAVAILABLE}") == 5
     assert "Task: Unavailable from this remote host" in pretty.stdout
     assert "Continuation: Unavailable from this remote host" in pretty.stdout
-    assert (
-        "Update the remote codex-thread-tools installation for state-first details."
-        in pretty.stdout
-    )
+    assert pretty.stdout.count(codex_thread_health.REMOTE_STATE_UPDATE_MESSAGE) == 1
     assert "Project Summary" in pretty.stdout
 
     compact = run_health_with_env(
@@ -658,10 +655,7 @@ def test_remote_pretty_state_first_fallback_for_protocol_without_state_axes(
     )
     assert compact.returncode == 0, compact.stderr
     assert "Project Summary" in compact.stdout
-    assert (
-        "Update the remote codex-thread-tools installation for state-first details."
-        in compact.stdout
-    )
+    assert compact.stdout.count(codex_thread_health.REMOTE_STATE_UPDATE_MESSAGE) == 1
 
     json_payload = run_health_with_env(
         env,
@@ -2282,7 +2276,7 @@ def test_projects_pretty_state_first_table_shape_and_action_summary() -> None:
             state_project(
                 "/work/project-watch",
                 "warn",
-                "complete",
+                "completed",
                 "latest recorded turn completed",
                 "watch",
                 "prepare-handoff",
@@ -2293,7 +2287,7 @@ def test_projects_pretty_state_first_table_shape_and_action_summary() -> None:
             state_project(
                 "/work/project-danger",
                 "danger",
-                "complete",
+                "completed",
                 "latest recorded turn completed",
                 "danger",
                 "handoff-now",
@@ -2304,7 +2298,7 @@ def test_projects_pretty_state_first_table_shape_and_action_summary() -> None:
             state_project(
                 "/work/project-replacement-active",
                 "ok",
-                "complete",
+                "completed",
                 "latest recorded turn completed",
                 "ok",
                 "continue",
@@ -2314,7 +2308,7 @@ def test_projects_pretty_state_first_table_shape_and_action_summary() -> None:
             state_project(
                 "/work/project-retired",
                 "retired",
-                "complete",
+                "completed",
                 "latest recorded turn completed",
                 "ok",
                 "use-replacement",

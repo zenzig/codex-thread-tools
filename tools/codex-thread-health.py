@@ -385,7 +385,7 @@ def projects_pretty(
                 continuation_line(result["projects"][0]),
                 lineage_line(result["projects"][0]),
                 action_line(result["projects"][0]),
-                "Update the remote codex-thread-tools installation for state-first details.",
+                REMOTE_STATE_UPDATE_MESSAGE,
             ]
         )
 
@@ -397,12 +397,12 @@ def projects_pretty(
         )
     )
     if mode == "compact":
-        if remote_state_axes_missing:
-            lines.append("Update the remote codex-thread-tools installation for state-first details.")
+        if remote_state_axes_missing and not remote_protocol_without_state_axes:
+            lines.append(REMOTE_STATE_UPDATE_MESSAGE)
         return "\n".join(lines)
 
-    if remote_state_axes_missing:
-        lines.append("Update the remote codex-thread-tools installation for state-first details.")
+    if remote_state_axes_missing and not remote_protocol_without_state_axes:
+        lines.append(REMOTE_STATE_UPDATE_MESSAGE)
 
     detail_items = [
         item for item in result["projects"] if should_render_action_summary(item)
