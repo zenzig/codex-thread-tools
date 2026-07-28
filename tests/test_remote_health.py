@@ -577,6 +577,27 @@ def test_validate_projects_report_rejects_invalid_state_axes(
         assert "raw-continuation-risk-reason" not in str(error.value)
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        ["scale-list-sentinel"],
+        {"scale-dict-sentinel": "value"},
+        None,
+    ],
+)
+def test_validate_projects_report_rejects_untrusted_scale_values(value: object) -> None:
+    payload = build_remote_safe_report(fixture_projects_report())
+    payload["projects"][0]["scale"]["status"] = value
+
+    with pytest.raises(RemoteHealthError) as error:
+        validate_projects_report(payload)
+
+    message = str(error.value)
+    assert message == "invalid remote health report: invalid scale"
+    assert "scale-list-sentinel" not in message
+    assert "scale-dict-sentinel" not in message
+
+
 def test_validate_projects_report_rejects_summary_that_disagrees_with_projects() -> None:
     payload = fixture_remote_projects_report()
     payload["projects"][0]["status"] = "danger"

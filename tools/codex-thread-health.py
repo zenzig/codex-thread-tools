@@ -208,19 +208,17 @@ def project_scale_label(item: dict[str, Any]) -> str:
     return status_label(str(scale.get("status", "ok")))
 
 
-def continuation_label(item: dict[str, Any], *, force_unavailable: bool = False) -> str:
+def continuation_label(item: dict[str, Any]) -> str:
     details = item.get("continuation_risk")
     if not isinstance(details, dict):
-        return REMOTE_STATE_UNAVAILABLE if force_unavailable else status_label("ok")
+        return REMOTE_STATE_UNAVAILABLE
     return status_label(str(details.get("status", "ok")))
 
 
-def project_lineage_label(
-    item: dict[str, Any], *, force_unavailable: bool = False
-) -> str:
+def project_lineage_label(item: dict[str, Any]) -> str:
     details = item.get("handoff_lineage")
     if not isinstance(details, dict):
-        return REMOTE_STATE_UNAVAILABLE if force_unavailable else "Not Recorded"
+        return REMOTE_STATE_UNAVAILABLE
     status = str(details.get("status", "not-recorded"))
     labels = {
         "not-recorded": "Not recorded",
@@ -248,7 +246,18 @@ def is_remote_protocol_no_state_axes(result: dict[str, Any]) -> bool:
     projects = result.get("projects")
     if not isinstance(projects, list):
         return False
-    return all(is_missing_protocol_state_axes(item) for item in projects)
+    return bool(projects) and all(
+        is_missing_protocol_state_axes(item) for item in projects
+    )
+
+
+def remote_state_axes_are_missing(result: dict[str, Any]) -> bool:
+    if result.get("source") != "remote":
+        return False
+    projects = result.get("projects")
+    if not isinstance(projects, list) or not projects:
+        return False
+    return any(is_missing_protocol_state_axes(item) for item in projects)
 
 
 def should_render_action_summary(item: dict[str, Any]) -> bool:
@@ -307,6 +316,7 @@ def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
         ]
     )
     remote_protocol_without_state_axes = is_remote_protocol_no_state_axes(result)
+    remote_state_axes_missing = remote_state_axes_are_missing(result)
 
     if mode == "verbose":
         if result["projects"]:
@@ -316,7 +326,7 @@ def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
                 lines.append("")
         return "\n".join(lines).rstrip()
 
-    if remote_protocol_without_state_axes and result["projects"]:
+    if remote_protocol_without_state_axes:
         lines.extend(
             [
                 "",
@@ -334,15 +344,14 @@ def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
         render_project_table(
             result["projects"],
             size_format,
-            force_remote_unavailable=remote_protocol_without_state_axes,
         )
     )
     if mode == "compact":
-        if remote_protocol_without_state_axes:
+        if remote_state_axes_missing:
             lines.append("Update the remote codex-thread-tools installation for state-first details.")
         return "\n".join(lines)
 
-    if remote_protocol_without_state_axes:
+    if remote_state_axes_missing:
         lines.append("Update the remote codex-thread-tools installation for state-first details.")
 
     detail_items = [
@@ -370,7 +379,11 @@ def check_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
     lines.extend(scale_lines(result, size_format))
     lines.extend(notice_lines(result))
     if mode != "compact":
-        lines.extend(format_reasons(result["reasons"], indent=""))
+        continuation = result.get("continuation_risk")
+        if isinstance(continuation, dict):
+            reasons = continuation.get("reasons")
+            if isinstance(reasons, list) and reasons:
+                lines.extend(format_reasons(reasons, indent=""))
     return "\n".join(lines)
 
 
@@ -408,8 +421,6 @@ def check_verbose(result: dict[str, Any], size_format: str) -> str:
 def render_project_table(
     projects: list[dict[str, Any]],
     size_format: str,
-    *,
-    force_remote_unavailable: bool = False,
 ) -> list[str]:
     rows = []
     for item in projects:
@@ -417,8 +428,8 @@ def render_project_table(
             [
                 format_project(item["project"], 24),
                 project_task_line(item),
-                continuation_label(item, force_unavailable=force_remote_unavailable),
-                project_lineage_label(item, force_unavailable=force_remote_unavailable),
+                continuation_label(item),
+                project_lineage_label(item),
                 project_action_label(item),
                 project_scale_label(item),
             ]
@@ -439,7 +450,9 @@ def render_project_table(
 def project_detail_lines(item: dict[str, Any], *, size_format: str) -> list[str]:
     lines = [
         f"{status_label(item['status'])}: {item['project']}",
+        f"  Overall: {status_label(item['status'])}",
         f"  Recommendation: {item['recommendation']}",
+        f"  Next step: {next_step(item['status'])}",
         f"  {task_state_line(item)}",
         f"  {continuation_line(item)}",
         f"  {lineage_line(item)}",
@@ -461,9 +474,16 @@ def project_detail_lines(item: dict[str, Any], *, size_format: str) -> list[str]
         lines.append(f"  Replacement for: {', '.join(item['replaces_session_ids'])}")
     if item.get("retired_by_handoff"):
         lines.append("  Session role: Retired by handoff")
+    lineage = item.get("handoff_lineage")
+    if isinstance(lineage, dict) and lineage.get("source_session_ids"):
+        lines.append(
+            "  Lineage sources: "
+            + ", ".join(str(value) for value in lineage["source_session_ids"])
+        )
     if item.get("underlying_status"):
         lines.append(f"  Underlying health: {status_label(item['underlying_status'])}")
     lines.append(f"  Size: {size_summary(item['metrics'], size_format)}")
+    lines.append(turn_events_line(item["metrics"], indent="  "))
     lines.extend(scale_lines(item, size_format)[1:])
     lines.extend(notice_lines(item)[1:])
     if item["status"] != "retired":
@@ -479,9 +499,10 @@ def render_action_summary(projects: list[dict[str, Any]]) -> list[str]:
         if lines:
             lines.append("")
         lines.append(f"{project_action_label(item)}: {format_project(item['project'], 56)}")
-        for reason in action_reasons(item):
+        reasons = action_reasons(item)
+        for reason in reasons:
             lines.extend(wrap_bullet(reason, width=100, initial_indent="  - ", subsequent_indent="    "))
-        if not item.get("reasons"):
+        if not reasons:
             lines.append("  - none")
     return lines
 
@@ -510,8 +531,18 @@ def action_reasons(item: dict[str, Any]) -> list[str]:
         pieces.append("Retired by handoff")
     if item.get("underlying_status"):
         pieces.append(f"Underlying health: {status_label(item['underlying_status'])}")
-    pieces.extend(item.get("reasons") or [])
-    return pieces or ["none"]
+    lineage = item.get("handoff_lineage")
+    if isinstance(lineage, dict) and lineage.get("source_session_ids"):
+        pieces.append(
+            "Lineage sources: "
+            + ", ".join(str(value) for value in lineage["source_session_ids"])
+        )
+    continuation = item.get("continuation_risk")
+    if isinstance(continuation, dict):
+        reasons = continuation.get("reasons")
+        if isinstance(reasons, list):
+            pieces.extend(reasons)
+    return pieces
 
 
 def wrap_bullet(
@@ -564,6 +595,26 @@ def size_summary(metrics: dict[str, Any], size_format: str) -> str:
         f"{format_count(metrics['response_items'])} response items, "
         f"{format_count(metrics['compacted_records'])} compacted checkpoints, "
         f"{format_count(metrics['visual_artifacts'])} visual refs"
+    )
+
+
+def turn_events_line(metrics: dict[str, Any], *, indent: str = "") -> str:
+    fields = (
+        "turn_started_events",
+        "turn_complete_events",
+        "turn_aborted_events",
+        "error_events",
+        "turn_terminal_events",
+        "incomplete_turn_events",
+    )
+    if not all(isinstance(metrics.get(field), int) for field in fields):
+        return f"{indent}Turn events: not recorded"
+    return (
+        f"{indent}Turn events: {metrics['turn_started_events']} started, "
+        f"{metrics['turn_complete_events']} completed, "
+        f"{metrics['turn_aborted_events']} aborted, {metrics['error_events']} errors, "
+        f"{metrics['turn_terminal_events']} terminal, "
+        f"{metrics['incomplete_turn_events']} incomplete"
     )
 
 

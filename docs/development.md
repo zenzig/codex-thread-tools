@@ -66,8 +66,6 @@ Version 1.3.0 keeps protocol-compatibility with existing scripts while adding
 state-first local and remote health results. protocol 1 accepts older remote
 reports that omit state fields and also accepts new reports with validated additive
 fields. Existing runtime dependencies and CLI compatibility are unchanged.
-protocol 1 accepts older remote reports that omit state fields and newer reports
-that include validated additive fields.
 
 Local health JSON uses canonical diagnostics rather than raw event snippets from
 session records.

@@ -26,12 +26,12 @@ state from continuation risk. A thread can be in an
 active turn and still be safe to finish; handoff guidance is based on whether
 continuation risk is low, rising, or high.
 
-| Task State | Continuation Risk | Action |
-| --- | --- | --- |
-| `active` | `ok` | Finish the current turn, then continue. |
-| `active` | `watch` | Finish the current turn and prepare a deliberate handoff. |
-| `active` | `danger` | Handoff before continuing. |
-| `retired` | Any | Use the replacement thread or handoff summary. |
+| Task State | Continuation Risk | Handoff Lineage | Action |
+| --- | --- | --- | --- |
+| `active` | `ok` | Any | Finish the current turn, then continue. |
+| `active` | `watch` | Any | Finish the current turn and prepare a deliberate handoff. |
+| `active` | `danger` | Any | Handoff before continuing. |
+| Any | Any | `source-retired` | Use the replacement thread or handoff summary. |
 
 For historical compacted visual references, the report emits notice-level output by
 themselves so they can be reviewed without being treated as unsafe continuity
@@ -112,8 +112,7 @@ codex-thread-tools health remote --host user@example-host \
   --mode verbose --size-format human
 ```
 
-Older remote hosts continue to return legacy health output for now; upgrade the
-remote host to protocol 1 to receive the state-first fields.
+Older remote hosts continue to return legacy health output for now; upgrade codex-thread-tools to version 1.3.0 or newer to receive the state-first fields.
 
 Use JSON for scripts or other tooling:
 

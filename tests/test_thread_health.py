@@ -660,10 +660,7 @@ def test_remote_pretty_empty_protocol_without_state_axes_is_still_renderable(
     assert standard.returncode == 0, standard.stderr
     assert "Projects: 0" in standard.stdout
     assert "Project Summary" in standard.stdout
-    assert (
-        "Update the remote codex-thread-tools installation for state-first details."
-        in standard.stdout
-    )
+    assert "Update the remote codex-thread-tools installation for state-first details." not in standard.stdout
 
     compact = run_health_with_env(
         env,
@@ -676,10 +673,7 @@ def test_remote_pretty_empty_protocol_without_state_axes_is_still_renderable(
     assert compact.returncode == 0, compact.stderr
     assert "Projects: 0" in compact.stdout
     assert "Project Summary" in compact.stdout
-    assert (
-        "Update the remote codex-thread-tools installation for state-first details."
-        in compact.stdout
-    )
+    assert "Update the remote codex-thread-tools installation for state-first details." not in compact.stdout
 
     remote_json = run_health_with_env(
         env,
@@ -1722,7 +1716,8 @@ def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -
     assert "Task: Interrupted - latest recorded turn ended without completion" in pretty.stdout
     assert "Action: Use the active replacement thread or the handoff file." in pretty.stdout
     assert "Domain risks:" not in pretty.stdout
-    assert "Why: session was retired by completed handoff" in pretty.stdout
+    assert "Why: unresolved turn abort or error event was recorded" in pretty.stdout
+    assert "Why: session was retired by completed handoff" not in pretty.stdout
 
 
 def test_projects_reports_incomplete_replacement_prompt_marker_evidence(tmp_path: Path) -> None:
@@ -2003,6 +1998,7 @@ def test_check_pretty_state_first_standard_vs_verbose(tmp_path: Path) -> None:
     assert "Notices" in standard.stdout
     assert "Current State" in standard.stdout
     assert "Overall:" not in standard.stdout.split("Current State")[0]
+    assert "Why: active turn has no terminal completion, abort, or error event" not in standard.stdout
 
     verbose = run_health(
         "check",
@@ -2017,6 +2013,96 @@ def test_check_pretty_state_first_standard_vs_verbose(tmp_path: Path) -> None:
     assert "Handoff readiness: Recommended" in verbose.stdout
     assert "Domain risks:" in verbose.stdout
     assert "Handoff:" in verbose.stdout
+    assert "Why: active turn has no terminal completion, abort, or error event" in verbose.stdout
+
+
+def test_check_pretty_standard_uses_filtered_continuation_reasons() -> None:
+    result = state_project(
+        "/work/filtered-reasons",
+        "warn",
+        "completed",
+        "latest recorded turn completed",
+        "watch",
+        "prepare-handoff",
+        "not-recorded",
+        scale_status="watch",
+    )
+    result["reasons"] = ["legacy aggregate reason"]
+    result["continuation_risk"]["reasons"] = [
+        "active token estimate is above 70% of context window"
+    ]
+
+    rendered = codex_thread_health.check_pretty(
+        result,
+        mode="standard",
+        size_format="bytes",
+    )
+
+    assert "Why: active token estimate is above 70% of context window" in rendered
+    assert "legacy aggregate reason" not in rendered
+
+
+def test_projects_pretty_marks_missing_axes_per_remote_project() -> None:
+    report = remote_projects_report("ok", "ok")
+    report["source"] = "remote"
+    report["host"] = "node1.atomicfalls.com"
+    report["projects"][0].update(
+        {
+            "task_state": {
+                "status": "completed",
+                "reason": "latest recorded turn completed",
+            },
+            "continuation_risk": {"status": "ok", "reasons": []},
+            "scale": {
+                "status": "ok",
+                "size": "ok",
+                "items": "ok",
+                "compactions": "ok",
+                "visuals": "ok",
+            },
+            "notices": [],
+            "handoff_lineage": {
+                "status": "not-recorded",
+                "source_session_ids": [],
+                "total_handoffs": 0,
+            },
+            "action": {
+                "status": "continue",
+                "reason": "no continuation risk requires a handoff",
+            },
+        }
+    )
+
+    rendered = codex_thread_health.projects_pretty(
+        report,
+        mode="standard",
+        size_format="bytes",
+    )
+
+    unavailable = codex_thread_health.REMOTE_STATE_UNAVAILABLE
+    project_two_row = next(line for line in rendered.splitlines() if "project-2" in line)
+    assert project_two_row.count(unavailable) == 5
+    assert "Update the remote codex-thread-tools installation for state-first details." in rendered
+
+
+def test_projects_pretty_empty_updated_remote_report_has_no_upgrade_guidance() -> None:
+    report = remote_projects_report()
+    report.update(
+        {
+            "source": "remote",
+            "host": "node1.atomicfalls.com",
+            "projects": [],
+            "summary": {"projects": 0, "ok": 0, "warn": 0, "danger": 0, "retired": 0},
+        }
+    )
+
+    rendered = codex_thread_health.projects_pretty(
+        report,
+        mode="standard",
+        size_format="bytes",
+    )
+
+    assert "Update the remote codex-thread-tools installation for state-first details." not in rendered
 
 
 def test_projects_pretty_state_first_table_shape_and_action_summary() -> None:
@@ -2261,6 +2347,27 @@ def test_projects_action_summary_expands_full_reasons() -> None:
     assert "compaction failure o..." not in action_summary
 
 
+def test_projects_action_summary_uses_lineage_metadata_before_none() -> None:
+    item = state_project(
+        "/work/incomplete-lineage",
+        "ok",
+        "completed",
+        "latest recorded turn completed",
+        "ok",
+        "continue",
+        "incomplete",
+    )
+    item["reasons"] = ["legacy project action reason"]
+    item["continuation_risk"]["reasons"] = []
+
+    rendered = codex_thread_health.render_action_summary([item])
+
+    rendered_text = "\n".join(rendered)
+    assert "Lineage sources: 11111111-1111-1111-1111-111111111111" in rendered_text
+    assert "legacy project action reason" not in rendered_text
+    assert "  - none" not in rendered_text
+
+
 def test_projects_verbose_keeps_diagnostic_blocks() -> None:
     result = run_health(
         "projects",
@@ -2284,6 +2391,45 @@ def test_projects_verbose_keeps_diagnostic_blocks() -> None:
     assert "Handoff readiness:" in result.stdout
     assert "Domain risks:" in result.stdout
     assert "File:" in result.stdout
+
+
+def test_projects_verbose_keeps_legacy_aggregate_and_full_state_details() -> None:
+    item = state_project(
+        "/work/verbose-project",
+        "warn",
+        "completed",
+        "latest recorded turn completed",
+        "watch",
+        "prepare-handoff",
+        "incomplete",
+        scale_status="watch",
+    )
+    item["metrics"].update(
+        {
+            "turn_started_events": 3,
+            "turn_complete_events": 1,
+            "turn_aborted_events": 1,
+            "error_events": 1,
+            "turn_terminal_events": 2,
+            "incomplete_turn_events": 1,
+        }
+    )
+    result = {
+        "session_root": "/tmp/work",
+        "summary": {"projects": 1, "ok": 0, "warn": 1, "danger": 0, "retired": 0},
+        "projects": [item],
+    }
+
+    rendered = codex_thread_health.projects_pretty(
+        result,
+        mode="verbose",
+        size_format="bytes",
+    )
+
+    assert "Overall: WARN" in rendered
+    assert "Next step: You can continue, but make a handoff soon if this task will keep growing." in rendered
+    assert "Turn events: 3 started, 1 completed, 1 aborted, 1 errors, 2 terminal, 1 incomplete" in rendered
+    assert "Lineage sources: 11111111-1111-1111-1111-111111111111" in rendered
 
 
 def test_health_output_modes_parse_for_all_commands() -> None:

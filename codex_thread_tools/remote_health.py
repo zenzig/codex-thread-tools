@@ -555,9 +555,9 @@ def validate_projects_report(value: object) -> dict[str, Any]:
                 raise RemoteHealthError("invalid remote health report: invalid scale")
             if set(details) != {"status", "size", "items", "compactions", "visuals"}:
                 raise RemoteHealthError("invalid remote health report: invalid scale")
-            if any(
-                key not in set(VALID_SCALE_LEVELS)
-                for key in (
+            if not all(
+                _is_enum(value, set(VALID_SCALE_LEVELS))
+                for value in (
                     details["status"],
                     details["size"],
                     details["items"],
