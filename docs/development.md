@@ -60,13 +60,12 @@ python3 tests/fixtures/build_fixtures.py
 
 The tests do not depend on your real `~/.codex/sessions` folder.
 
-## 1.2.0 Compatibility
+## 1.3.0 Compatibility
 
-Version 1.2.0 adds `recover diagnose` and `recover bundle` without adding
-runtime dependencies or changing existing CLI syntax. Local health JSON keeps
-canonical diagnostics and gains additive integrity metrics; remote health accepts
-prior metric-only report schemas and supplies the new counters when both hosts
-are updated.
+Version 1.3.0 keeps protocol-compatibility with existing scripts while adding
+state-first local and remote health results. protocol 1 accepts older remote
+reports that omit state fields and also accepts new reports with validated additive
+fields. Existing runtime dependencies and CLI compatibility are unchanged.
 
 Local health JSON uses canonical diagnostics rather than raw event snippets from
 session records.

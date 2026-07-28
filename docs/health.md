@@ -17,9 +17,25 @@ used as a fallback.
 | Status | Meaning | What to do |
 | --- | --- | --- |
 | `OK` | No major risk signals were found. | Keep working. |
-| `WARN` | One risk area needs attention. | Continue, but prepare a handoff if the task will keep growing. |
-| `DANGER` | Strong risk signals were found. | Make a handoff and start a fresh thread. |
+| `WARN` | One risk area needs attention. | Finish the current turn; then continue with increased scrutiny or a deliberate handoff. |
+| `DANGER` | Strong risk signals were found. | Handoff before continuing. |
 | `RETIRED` | The session was already handed off and is no longer active. | Use the replacement thread or the handoff file. |
+
+Task state and continuation risk are separate. Health separates task lifecycle
+state from continuation risk. A thread can be in an
+active turn and still be safe to finish; handoff guidance is based on whether
+continuation risk is low, rising, or high.
+
+| Task State | Continuation Risk | Handoff Lineage | Action |
+| --- | --- | --- | --- |
+| `active` | `ok` | Any | Finish the current turn, then continue. |
+| `active` | `watch` | Any | Finish the current turn and prepare a deliberate handoff. |
+| `active` | `danger` | Any | Handoff before continuing. |
+| Any | Any | `source-retired` | Use the replacement thread or handoff summary. |
+
+For historical compacted visual references, the report emits notice-level output by
+themselves so they can be reviewed without being treated as unsafe continuity
+signals.
 
 The health check is read-only. It does not edit, delete, trim, or repair any
 Codex thread.
@@ -34,6 +50,12 @@ Compact dashboard:
 codex-thread-tools health --mode compact
 ```
 
+Standard table output:
+
+```bash
+codex-thread-tools health --mode standard
+```
+
 Full diagnostic output:
 
 ```bash
@@ -42,6 +64,15 @@ codex-thread-tools health --mode verbose --size-format both
 
 `--size-format` accepts `bytes`, `human`, or `both`.
 
+For a single session, standard output shows measured file size and its warning
+threshold, response items and their warning threshold, installed compaction
+checkpoints, and visual references. Request-only compaction records do not count
+as installed checkpoint pressure.
+
+Remote verbose reports show the remote measurements and remote-computed scale
+state, but omit local threshold labels because the remote host can use different
+environment defaults.
+
 For machine-readable output:
 
 ```bash
@@ -49,7 +80,8 @@ codex-thread-tools health --json
 ```
 
 JSON output ignores pretty display options and is the stable scripting
-interface.
+interface. Legacy fields and exit behavior remain unchanged; compatible clients can
+also read new state-first fields such as task lifecycle and continuation risk.
 
 ## Remote Project Health
 
@@ -59,7 +91,7 @@ same package on both machines and verify both versions before running a report:
 ```bash
 npm install -g codex-thread-tools@latest
 codex-thread-tools --version
-ssh node1.example.com codex-thread-tools --version
+ssh user@example-host codex-thread-tools --version
 ```
 
 The command first looks for the remote package in non-interactive SSH. If it is
@@ -72,27 +104,29 @@ token.
 Run an all-project report on the SSH host:
 
 ```bash
-codex-thread-tools health remote --host node1.example.com
+codex-thread-tools health remote --host user@example-host
 ```
 
 Select one project by its exact recorded path:
 
 ```bash
-codex-thread-tools health remote --host node1.example.com \
-  --project /home/you/project
+codex-thread-tools health remote --host user@example-host \
+  --project /srv/project
 ```
 
 Use verbose output with human-readable sizes:
 
 ```bash
-codex-thread-tools health remote --host node1.example.com \
+codex-thread-tools health remote --host user@example-host \
   --mode verbose --size-format human
 ```
+
+Older remote hosts continue to return legacy health output for now; upgrade codex-thread-tools to version 1.3.0 or newer to receive the state-first fields.
 
 Use JSON for scripts or other tooling:
 
 ```bash
-codex-thread-tools health remote --host node1.example.com --json
+codex-thread-tools health remote --host user@example-host --json
 ```
 
 Analysis occurs remotely against the SSH host's session root. Before
@@ -113,6 +147,8 @@ the same `codex-thread-tools` version on both machines before retrying.
 This command is read-only and limited to remote project health. Remote token,
 archive, recovery, visual, and handoff operations are excluded.
 
+Legacy status labels and legacy exit codes are unchanged.
+
 ### Remote Exit Codes
 
 These are post-parse health-result codes. Invalid command syntax is handled by
@@ -131,11 +167,11 @@ report.
 - **Host unreachable or timed out:** Confirm the host name, network route, and
   SSH service. The command uses a ten-second connection timeout by default;
   use `--connect-timeout` to adjust it.
-- **Public-key rejected:** Test `ssh node1.example.com` directly and fix the
+- **Public-key rejected:** Test `ssh user@example-host` directly and fix the
   key, agent, host alias, or server account in your normal OpenSSH setup.
 - **Package not found:** The tool checks both non-interactive SSH and the
   account's login shell. Confirm the package is installed for that account with
-  `ssh node1.example.com "bash -lc 'command -v codex-thread-tools && codex-thread-tools --version'"`.
+  `ssh user@example-host "bash -lc 'command -v codex-thread-tools && codex-thread-tools --version'"`.
 - **Incompatible or protocol-missing versions:** Install the same version on
   both machines. A differing major version fails with exit code `1`. A minor or
   patch difference is normally a warning, but a remote version without the

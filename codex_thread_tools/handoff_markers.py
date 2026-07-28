@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from codex_thread_tools.sessionlib import iter_jsonl, now_iso, record_text
+from codex_thread_tools.thread_health import action_for_state
 
 
 MARKER_TYPE = "handoff_completed"
@@ -264,6 +265,37 @@ def replacement_prompt_markers(session_paths: list[Path]) -> list[dict[str, Any]
     return markers
 
 
+def handoff_lineage_for_result(
+    result: dict[str, Any],
+    retired: dict[str, Any] | None,
+    completed_replaces: list[str],
+    prompt_replaces: list[str],
+) -> dict[str, Any]:
+    if retired:
+        return {
+            "status": "source-retired",
+            "source_session_ids": [retired["source_session_id"]],
+            "total_handoffs": result["handoff_summary"]["total_handoffs"],
+        }
+    if completed_replaces:
+        return {
+            "status": "replacement-active",
+            "source_session_ids": sorted(set(completed_replaces)),
+            "total_handoffs": result["handoff_summary"]["total_handoffs"],
+        }
+    if prompt_replaces:
+        return {
+            "status": "incomplete",
+            "source_session_ids": sorted(set(prompt_replaces)),
+            "total_handoffs": result["handoff_summary"]["total_handoffs"],
+        }
+    return {
+        "status": "not-recorded",
+        "source_session_ids": [],
+        "total_handoffs": result["handoff_summary"]["total_handoffs"],
+    }
+
+
 def marker_aware_active_sessions_by_project(
     session_root: Path,
     markers: list[dict[str, Any]],
@@ -304,25 +336,26 @@ def annotate_result_with_handoff_context(
     replacement_markers: list[dict[str, Any]],
 ) -> dict[str, Any]:
     retired = retired_marker_for_result(result, markers)
-    replaces = [
+    prompt_replaces = [
         marker["source_session_id"]
         for marker in replacement_markers
         if marker.get("replacement_session_file") == result["file"]
     ]
-    result_path = path_key(result["file"])
-    result_id = result.get("session_id", "")
-    replaces.extend(
+    completed_replaces = [
         marker["source_session_id"]
         for marker in markers
-        if marker.get("replacement_session_id") == result_id
+        if marker.get("replacement_session_id") == result["session_id"]
         or (
             marker.get("replacement_session_file")
-            and path_key(marker["replacement_session_file"]) == result_path
+            and path_key(marker["replacement_session_file"]) == path_key(result["file"])
         )
-    )
+    ]
+    completed_replaces = [value for value in completed_replaces if value]
+    prompt_replaces = [value for value in prompt_replaces if value]
+    replaces = sorted(set(completed_replaces + prompt_replaces))
     result["handoff_summary"] = handoff_summary_for_project(result["project"], markers)
     result["retired_by_handoff"] = retired
-    result["replaces_session_ids"] = sorted(set(replaces))
+    result["replaces_session_ids"] = replaces
     result["session_role"] = "retired" if retired else "active"
     if retired:
         result["underlying_status"] = result["status"]
@@ -338,6 +371,17 @@ def annotate_result_with_handoff_context(
             "visual_archive": "not-needed",
             "reasons": ["session was retired by completed handoff"],
         }
+    result["handoff_lineage"] = handoff_lineage_for_result(
+        result,
+        retired,
+        completed_replaces,
+        prompt_replaces,
+    )
+    result["action"] = action_for_state(
+        result["task_state"],
+        result["continuation_risk"],
+        result["handoff_lineage"],
+    )
     return result
 
 

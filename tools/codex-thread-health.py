@@ -91,6 +91,213 @@ def handoff_label(value: str) -> str:
     return labels.get(value, status_label(value))
 
 
+REMOTE_STATE_UNAVAILABLE = "Unavailable from this remote host"
+REMOTE_STATE_UPDATE_MESSAGE = (
+    "Update the remote codex-thread-tools installation for state-first details."
+)
+
+
+def task_state_line(item: dict[str, Any]) -> str:
+    details = item.get("task_state")
+    if not isinstance(details, dict):
+        return f"Task: {REMOTE_STATE_UNAVAILABLE}"
+    status = details.get("status", "unknown")
+    reason = details.get("reason", "")
+    label = status_label(str(status)).title()
+    if reason:
+        return f"Task: {label} - {reason}"
+    return f"Task: {label}"
+
+
+def continuation_line(item: dict[str, Any]) -> str:
+    details = item.get("continuation_risk")
+    if not isinstance(details, dict):
+        return f"Continuation: {REMOTE_STATE_UNAVAILABLE}"
+    return f"Continuation: {status_label(details.get('status', 'ok'))}"
+
+
+def lineage_line(item: dict[str, Any]) -> str:
+    details = item.get("handoff_lineage")
+    if not isinstance(details, dict):
+        return f"Handoff: {REMOTE_STATE_UNAVAILABLE}"
+    status = str(details.get("status", "not-recorded"))
+    labels = {
+        "not-recorded": "Not recorded",
+        "replacement-active": "Replacement active",
+        "incomplete": "Incomplete replacement",
+        "source-retired": "Source retired",
+    }
+    return f"Handoff: {labels.get(status, status_label(status).title())}"
+
+
+def action_sentence(status: str) -> str:
+    return {
+        "continue": "Continue in the current thread.",
+        "finish-current-turn": "Finish the current turn, then continue.",
+        "prepare-handoff": (
+            "Finish the current turn and prepare a deliberate handoff."
+        ),
+        "handoff-now": (
+            "Create a handoff and start a fresh Codex thread before continuing."
+        ),
+        "use-replacement": "Use the active replacement thread or the handoff file.",
+    }[status]
+
+
+def action_line(item: dict[str, Any]) -> str:
+    details = item.get("action")
+    if not isinstance(details, dict):
+        return f"Action: {REMOTE_STATE_UNAVAILABLE}"
+    return f"Action: {action_sentence(str(details.get('status', 'continue')))}"
+
+
+def scale_lines(
+    item: dict[str, Any],
+    size_format: str,
+    thresholds: HealthThresholds | None = None,
+) -> list[str]:
+    details = item.get("scale")
+    if not isinstance(details, dict):
+        return ["Scale", f"  {REMOTE_STATE_UNAVAILABLE}"]
+    metrics = item.get("metrics")
+    if not isinstance(metrics, dict):
+        return ["Scale", f"  {REMOTE_STATE_UNAVAILABLE}"]
+    installed_compactions = metrics.get("installed_compaction_checkpoints")
+    compaction_value = format_count(
+        installed_compactions
+        if isinstance(installed_compactions, int)
+        and not isinstance(installed_compactions, bool)
+        else None
+    )
+    compaction_line = f"  Compactions: {compaction_value}"
+    if thresholds is not None and compaction_value != "not recorded":
+        compaction_line += (
+            f" of {format_count(thresholds.max_healthy_compactions)} healthy maximum"
+        )
+    size_line = f"  Size: {format_bytes(metrics['bytes'], size_format)}"
+    items_line = f"  Items: {format_count(metrics['response_items'])}"
+    if thresholds is not None:
+        size_line += (
+            f" of {format_bytes(thresholds.warn_bytes, size_format)} warning threshold"
+        )
+        items_line += (
+            f" of {format_count(thresholds.warn_items)} warning threshold"
+        )
+    return [
+        "Scale",
+        f"  Status: {status_label(str(details.get('status', 'ok')))}",
+        size_line,
+        items_line,
+        compaction_line,
+        f"  Visuals: {format_count(metrics['visual_artifacts'])}",
+    ]
+
+
+def notice_lines(item: dict[str, Any]) -> list[str]:
+    notices = item.get("notices")
+    if notices is None:
+        return ["Notices", f"  {REMOTE_STATE_UNAVAILABLE}"]
+    if not notices:
+        return ["Notices", "  none"]
+    return ["Notices", *[f"  - {note}" for note in notices]]
+
+
+def project_action_label(item: dict[str, Any]) -> str:
+    if "action" not in item:
+        return REMOTE_STATE_UNAVAILABLE
+    action = item.get("action")
+    if not isinstance(action, dict):
+        return REMOTE_STATE_UNAVAILABLE
+    status = str(action.get("status", "continue"))
+    return {
+        "continue": "Continue",
+        "finish-current-turn": "Finish turn",
+        "prepare-handoff": "Prepare handoff",
+        "handoff-now": "Handoff now",
+        "use-replacement": "Use replacement",
+    }.get(status, status_label(status).title())
+
+
+def project_task_line(item: dict[str, Any]) -> str:
+    details = item.get("task_state")
+    if not isinstance(details, dict):
+        return REMOTE_STATE_UNAVAILABLE
+    status = details.get("status", "unknown")
+    reason = details.get("reason")
+    if reason:
+        return f"{status_label(str(status)).title()} - {reason}"
+    return status_label(str(status)).title()
+
+
+def project_scale_label(item: dict[str, Any]) -> str:
+    scale = item.get("scale")
+    if not isinstance(scale, dict):
+        return REMOTE_STATE_UNAVAILABLE
+    return status_label(str(scale.get("status", "ok")))
+
+
+def continuation_label(item: dict[str, Any]) -> str:
+    details = item.get("continuation_risk")
+    if not isinstance(details, dict):
+        return REMOTE_STATE_UNAVAILABLE
+    return status_label(str(details.get("status", "ok")))
+
+
+def project_lineage_label(item: dict[str, Any]) -> str:
+    details = item.get("handoff_lineage")
+    if not isinstance(details, dict):
+        return REMOTE_STATE_UNAVAILABLE
+    status = str(details.get("status", "not-recorded"))
+    labels = {
+        "not-recorded": "Not recorded",
+        "replacement-active": "Replacement active",
+        "incomplete": "Incomplete replacement",
+        "source-retired": "Source retired",
+    }
+    return labels.get(status, status_label(status))
+
+
+def is_missing_protocol_state_axes(item: dict[str, Any]) -> bool:
+    return (
+        not isinstance(item.get("task_state"), dict)
+        and not isinstance(item.get("continuation_risk"), dict)
+        and not isinstance(item.get("scale"), dict)
+        and not isinstance(item.get("notices"), list)
+        and not isinstance(item.get("handoff_lineage"), dict)
+        and not isinstance(item.get("action"), dict)
+    )
+
+
+def is_remote_protocol_no_state_axes(result: dict[str, Any]) -> bool:
+    if result.get("source") != "remote":
+        return False
+    projects = result.get("projects")
+    if not isinstance(projects, list):
+        return False
+    return bool(projects) and all(
+        is_missing_protocol_state_axes(item) for item in projects
+    )
+
+
+def remote_state_axes_are_missing(result: dict[str, Any]) -> bool:
+    if result.get("source") != "remote":
+        return False
+    projects = result.get("projects")
+    if not isinstance(projects, list) or not projects:
+        return False
+    return any(is_missing_protocol_state_axes(item) for item in projects)
+
+
+def should_render_action_summary(item: dict[str, Any]) -> bool:
+    continuation = item.get("continuation_risk", {}).get("status")
+    if continuation in {"watch", "danger"}:
+        return True
+    lineage = item.get("handoff_lineage", {}).get("status")
+    if lineage in {"incomplete", "source-retired"}:
+        return True
+    return False
+
+
 def domain_lines(risk_domains: dict[str, dict[str, Any]], indent: str = "") -> list[str]:
     lines = [f"{indent}Domain risks:"]
     for name in ("load", "visuals", "compaction", "limits", "continuity"):
@@ -115,51 +322,90 @@ def maybe_pretty(
     fmt: str,
     mode: str = "standard",
     size_format: str = "bytes",
+    thresholds: HealthThresholds | None = None,
 ) -> str:
     if fmt == "json":
         return json.dumps(result, indent=2)
     if result.get("report_type") == "token_usage":
         return tokens_pretty(result, mode=mode, size_format=size_format)
     if "projects" in result:
-        return projects_pretty(result, mode=mode, size_format=size_format)
-    return check_pretty(result, mode=mode, size_format=size_format)
+        return projects_pretty(
+            result,
+            mode=mode,
+            size_format=size_format,
+            thresholds=thresholds,
+        )
+    return check_pretty(
+        result,
+        mode=mode,
+        size_format=size_format,
+        thresholds=thresholds,
+    )
 
 
-def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
+def projects_pretty(
+    result: dict[str, Any],
+    mode: str,
+    size_format: str,
+    thresholds: HealthThresholds | None = None,
+) -> str:
     summary = result["summary"]
-    status = summary_status(summary)
     lines = ["Codex Thread Health"]
     if result.get("source") == "remote":
         lines.extend(["Source: REMOTE", f"Host: {result['host']}"])
     lines.extend(
         [
             f"Session folder: {result['session_root']}",
-            (
-                f"Overall: {status_label(status)} "
-                f"({summary['ok']} ok, {summary['warn']} warn, "
-                f"{summary['danger']} danger, {summary.get('retired', 0)} retired)"
-            ),
             f"Projects: {format_count(summary['projects'])}",
-            f"Next step: {next_step(status)}",
         ]
     )
+    remote_protocol_without_state_axes = is_remote_protocol_no_state_axes(result)
+    remote_state_axes_missing = remote_state_axes_are_missing(result)
+
     if mode == "verbose":
         if result["projects"]:
             lines.extend(["", "Attention Required"])
             for item in result["projects"]:
-                lines.extend(project_detail_lines(item, size_format=size_format))
+                lines.extend(
+                    project_detail_lines(
+                        item,
+                        size_format=size_format,
+                        thresholds=thresholds,
+                    )
+                )
                 lines.append("")
         return "\n".join(lines).rstrip()
 
+    if remote_protocol_without_state_axes:
+        lines.extend(
+            [
+                "",
+                "Current State",
+                task_state_line(result["projects"][0]),
+                continuation_line(result["projects"][0]),
+                lineage_line(result["projects"][0]),
+                action_line(result["projects"][0]),
+                REMOTE_STATE_UPDATE_MESSAGE,
+            ]
+        )
+
     lines.extend(["", "Project Summary"])
-    lines.extend(render_project_table(result["projects"], size_format))
+    lines.extend(
+        render_project_table(
+            result["projects"],
+            size_format,
+        )
+    )
     if mode == "compact":
+        if remote_state_axes_missing and not remote_protocol_without_state_axes:
+            lines.append(REMOTE_STATE_UPDATE_MESSAGE)
         return "\n".join(lines)
 
+    if remote_state_axes_missing and not remote_protocol_without_state_axes:
+        lines.append(REMOTE_STATE_UPDATE_MESSAGE)
+
     detail_items = [
-        item
-        for item in result["projects"]
-        if item["status"] != "ok" or has_handoff_metadata(item)
+        item for item in result["projects"] if should_render_action_summary(item)
     ]
     if detail_items:
         lines.extend(["", "Action Summary"])
@@ -167,51 +413,55 @@ def projects_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
     return "\n".join(lines).rstrip()
 
 
-def check_pretty(result: dict[str, Any], mode: str, size_format: str) -> str:
+def check_pretty(
+    result: dict[str, Any],
+    mode: str,
+    size_format: str,
+    thresholds: HealthThresholds | None = None,
+) -> str:
     if mode == "verbose":
-        return check_verbose(result, size_format=size_format)
+        return check_verbose(
+            result,
+            size_format=size_format,
+            thresholds=thresholds,
+        )
 
     lines = [
         "Codex Thread Health",
-        f"Overall: {status_label(result['status'])}",
-        f"Next step: {next_step(result['status'])}",
+        "Current State",
+        task_state_line(result),
+        continuation_line(result),
+        lineage_line(result),
+        action_line(result),
+        "",
     ]
-    if mode != "compact" and result["status"] != "retired":
-        lines.extend(["", "Domain Risks"])
-        lines.extend(render_domain_table(result.get("risk_domains", {})))
-    key_facts = [
-        f"Recommendation: {result['recommendation']}",
-        f"Continuation health: {status_label(result.get('continuation_status', result['status']))}",
-        (
-            "Handoff readiness: "
-            f"{handoff_label(result.get('handoff_readiness', {}).get('status', ''))}"
-        ),
-        handoff_summary_line(result),
-        replacement_line(result),
-        retired_line(result),
-        underlying_health_line(result),
-        f"Project: {result['project']}",
-        f"File: {result['file']}",
-        f"Size: {size_summary(result['metrics'], size_format)}",
-    ]
-    lines.extend(
-        [
-            "",
-            "Key Facts",
-            *[line for line in key_facts if line],
-        ]
-    )
+    lines.extend(scale_lines(result, size_format, thresholds))
+    lines.extend(notice_lines(result))
     if mode != "compact":
-        lines.extend(["", *format_reasons(result["reasons"], indent="")])
+        continuation = result.get("continuation_risk")
+        if isinstance(continuation, dict):
+            reasons = continuation.get("reasons")
+            if isinstance(reasons, list) and reasons:
+                lines.extend(format_reasons(reasons, indent=""))
     return "\n".join(lines)
 
 
-def check_verbose(result: dict[str, Any], size_format: str) -> str:
+def check_verbose(
+    result: dict[str, Any],
+    size_format: str,
+    thresholds: HealthThresholds | None = None,
+) -> str:
     lines = [
         "Codex Thread Health",
         f"Overall: {status_label(result['status'])}",
         f"Recommendation: {result['recommendation']}",
         f"Next step: {next_step(result['status'])}",
+        task_state_line(result),
+        continuation_line(result),
+        lineage_line(result),
+        action_line(result),
+        *scale_lines(result, size_format, thresholds),
+        *notice_lines(result),
         f"Continuation health: {status_label(result.get('continuation_status', result['status']))}",
         (
             "Handoff readiness: "
@@ -231,38 +481,50 @@ def check_verbose(result: dict[str, Any], size_format: str) -> str:
     return "\n".join(line for line in lines if line)
 
 
-def render_project_table(projects: list[dict[str, Any]], size_format: str) -> list[str]:
+def render_project_table(
+    projects: list[dict[str, Any]],
+    size_format: str,
+) -> list[str]:
     rows = []
     for item in projects:
         rows.append(
             [
-                status_label(item["status"]),
                 format_project(item["project"], 24),
-                format_bytes(item["metrics"]["bytes"], size_format),
-                format_count(item["metrics"]["response_items"]),
-                format_count(item["metrics"]["compacted_records"]),
-                format_count(item["metrics"]["visual_artifacts"]),
-                handoff_label(item.get("handoff_readiness", {}).get("status", "")),
+                project_task_line(item),
+                continuation_label(item),
+                project_lineage_label(item),
+                project_action_label(item),
+                project_scale_label(item),
             ]
         )
     return render_table(
         (
-            "Status",
             "Project",
-            "Size",
-            "Items",
-            "Compactions",
-            "Visuals",
-            "Handoff",
+            "Task",
+            "Continue",
+            "Lineage",
+            "Action",
+            "Scale",
         ),
         rows,
     )
 
 
-def project_detail_lines(item: dict[str, Any], *, size_format: str) -> list[str]:
+def project_detail_lines(
+    item: dict[str, Any],
+    *,
+    size_format: str,
+    thresholds: HealthThresholds | None = None,
+) -> list[str]:
     lines = [
         f"{status_label(item['status'])}: {item['project']}",
+        f"  Overall: {status_label(item['status'])}",
         f"  Recommendation: {item['recommendation']}",
+        f"  Next step: {next_step(item['status'])}",
+        f"  {task_state_line(item)}",
+        f"  {continuation_line(item)}",
+        f"  {lineage_line(item)}",
+        f"  {action_line(item)}",
         f"  Continuation health: {status_label(item.get('continuation_status', item['status']))}",
         (
             "  Handoff readiness: "
@@ -280,9 +542,18 @@ def project_detail_lines(item: dict[str, Any], *, size_format: str) -> list[str]
         lines.append(f"  Replacement for: {', '.join(item['replaces_session_ids'])}")
     if item.get("retired_by_handoff"):
         lines.append("  Session role: Retired by handoff")
+    lineage = item.get("handoff_lineage")
+    if isinstance(lineage, dict) and lineage.get("source_session_ids"):
+        lines.append(
+            "  Lineage sources: "
+            + ", ".join(str(value) for value in lineage["source_session_ids"])
+        )
     if item.get("underlying_status"):
         lines.append(f"  Underlying health: {status_label(item['underlying_status'])}")
     lines.append(f"  Size: {size_summary(item['metrics'], size_format)}")
+    lines.append(turn_events_line(item["metrics"], indent="  "))
+    lines.extend(scale_lines(item, size_format, thresholds)[1:])
+    lines.extend(notice_lines(item)[1:])
     if item["status"] != "retired":
         lines.extend(domain_lines(item.get("risk_domains", {}), indent="  "))
     lines.extend(format_reasons(item["reasons"]))
@@ -295,11 +566,12 @@ def render_action_summary(projects: list[dict[str, Any]]) -> list[str]:
     for item in projects:
         if lines:
             lines.append("")
-        lines.append(f"{status_label(item['status'])}: {format_project(item['project'], 56)}")
-        lines.append(f"  Action: {action_for_item(item)}")
-        lines.append("  Why:")
-        for reason in action_reasons(item):
-            lines.extend(wrap_bullet(reason, width=100, initial_indent="    - ", subsequent_indent="      "))
+        lines.append(f"{project_action_label(item)}: {format_project(item['project'], 56)}")
+        reasons = action_reasons(item)
+        for reason in reasons:
+            lines.extend(wrap_bullet(reason, width=100, initial_indent="  - ", subsequent_indent="    "))
+        if not reasons:
+            lines.append("  - none")
     return lines
 
 
@@ -327,8 +599,18 @@ def action_reasons(item: dict[str, Any]) -> list[str]:
         pieces.append("Retired by handoff")
     if item.get("underlying_status"):
         pieces.append(f"Underlying health: {status_label(item['underlying_status'])}")
-    pieces.extend(item.get("reasons") or [])
-    return pieces or ["none"]
+    lineage = item.get("handoff_lineage")
+    if isinstance(lineage, dict) and lineage.get("source_session_ids"):
+        pieces.append(
+            "Lineage sources: "
+            + ", ".join(str(value) for value in lineage["source_session_ids"])
+        )
+    continuation = item.get("continuation_risk")
+    if isinstance(continuation, dict):
+        reasons = continuation.get("reasons")
+        if isinstance(reasons, list):
+            pieces.extend(reasons)
+    return pieces
 
 
 def wrap_bullet(
@@ -381,6 +663,26 @@ def size_summary(metrics: dict[str, Any], size_format: str) -> str:
         f"{format_count(metrics['response_items'])} response items, "
         f"{format_count(metrics['compacted_records'])} compacted checkpoints, "
         f"{format_count(metrics['visual_artifacts'])} visual refs"
+    )
+
+
+def turn_events_line(metrics: dict[str, Any], *, indent: str = "") -> str:
+    fields = (
+        "turn_started_events",
+        "turn_complete_events",
+        "turn_aborted_events",
+        "error_events",
+        "turn_terminal_events",
+        "incomplete_turn_events",
+    )
+    if not all(isinstance(metrics.get(field), int) for field in fields):
+        return f"{indent}Turn events: not recorded"
+    return (
+        f"{indent}Turn events: {metrics['turn_started_events']} started, "
+        f"{metrics['turn_complete_events']} completed, "
+        f"{metrics['turn_aborted_events']} aborted, {metrics['error_events']} errors, "
+        f"{metrics['turn_terminal_events']} terminal, "
+        f"{metrics['incomplete_turn_events']} incomplete"
     )
 
 
@@ -515,11 +817,20 @@ def check_command(args: argparse.Namespace) -> int:
     ensure_file(source)
 
     progress(args, f"Analyzing session: {source} ({format_bytes(source.stat().st_size, args.size_format)})")
-    result = analyze_session_file(source, apply_threshold_overrides(args))
+    thresholds = apply_threshold_overrides(args)
+    result = analyze_session_file(source, thresholds)
     markers = handoff_markers_for_args(args)
     replacements = replacement_prompt_markers([source])
     annotate_result_with_handoff_context(result, markers, replacements)
-    print(maybe_pretty(result, args.format, args.mode, args.size_format))
+    print(
+        maybe_pretty(
+            result,
+            args.format,
+            args.mode,
+            args.size_format,
+            thresholds,
+        )
+    )
     return exit_code_for_status(result["status"])
 
 
@@ -549,7 +860,15 @@ def projects_command(args: argparse.Namespace) -> int:
     if args.remote_safe_json:
         print(json.dumps(build_remote_safe_report(result), indent=2))
     else:
-        print(maybe_pretty(result, args.format, args.mode, args.size_format))
+        print(
+            maybe_pretty(
+                result,
+                args.format,
+                args.mode,
+                args.size_format,
+                thresholds,
+            )
+        )
     if summary["danger"]:
         return 3
     if summary["warn"]:
@@ -607,7 +926,14 @@ def remote_command(args: argparse.Namespace) -> int:
     result = add_remote_metadata(selected, args.host)
     if version_warning:
         print(f"Warning: {version_warning}", file=sys.stderr)
-    print(maybe_pretty(result, args.format, args.mode, args.size_format))
+    print(
+        maybe_pretty(
+            result,
+            args.format,
+            args.mode,
+            args.size_format,
+        )
+    )
     summary = result["summary"]
     if summary["danger"]:
         return 3

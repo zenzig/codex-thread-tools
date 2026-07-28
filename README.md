@@ -81,19 +81,22 @@ Then just say `Use codex-thread-handoff` whenever a health report tells you it's
 
 ```bash
 codex-thread-tools health
+codex-thread-tools health --mode standard
 codex-thread-tools health --mode verbose --size-format both
 codex-thread-tools health --json
 ```
 
 The human-readable output is for your terminal. `--json` is the stable interface if you're scripting against it.
+Health separates task lifecycle from continuation risk. An active turn can be safe to finish in-place; a handoff is recommended when continuation risk increases, not activity alone.
+`--json` keeps existing machine-readable compatibility fields and adds state-first fields for compatible clients.
 
 ### Remote health
 
 Install the same package on both ends, then:
 
 ```bash
-codex-thread-tools health remote --host user@remote-host \
-  --project /path/to/project
+codex-thread-tools health remote --host user@example-host \
+  --project /srv/project
 ```
 
 The analysis runs on the remote host. Only a privacy-filtered report and bounded diagnostics ever cross SSH — raw JSONL, transcript text, tool payloads, and visual data never leave the remote machine. If the CLI isn't reachable over a non-interactive SSH session, it automatically retries through your login shell, NVM installs included.
@@ -115,7 +118,7 @@ Start at [Documentation](docs/README.md), or jump straight to:
 ## Project
 
 - **Status:** Production
-- **Version:** `1.2.0`
+- **Version:** `1.3.0`
 - **Issues:** [Report a bug or request a feature](https://github.com/zenzig/codex-thread-tools/issues)
 - **Security:** Read the [security policy](SECURITY.md) before reporting a vulnerability.
 - **[Changelog](CHANGELOG.md):** Release history and notable changes.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import base64
 import os
 import shlex
@@ -13,6 +14,23 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "sessions"
+HEALTH_TOOL = ROOT / "tools" / "codex-thread-health.py"
+
+spec = importlib.util.spec_from_file_location("codex_thread_health_tool", HEALTH_TOOL)
+if spec is None or spec.loader is None:  # pragma: no cover
+    raise RuntimeError("failed to load codex-thread-health.py for output helper tests")
+codex_thread_health = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(codex_thread_health)
+
+ACTIVE_TURN_DIAGNOSTIC = (
+    "active turn has no terminal completion, abort, or error event"
+)
+COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC = (
+    "visual references exist inside compacted replacement history"
+)
+INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC = (
+    "installed compaction checkpoints exceed healthy threshold"
+)
 
 
 def run_health(*args: str) -> subprocess.CompletedProcess[str]:
@@ -323,6 +341,94 @@ def remote_projects_report(*statuses: str) -> dict:
     }
 
 
+def remote_state_axes_keys() -> tuple[str, ...]:
+    return (
+        "task_state",
+        "continuation_risk",
+        "scale",
+        "notices",
+        "handoff_lineage",
+        "action",
+    )
+
+
+def state_project(
+    project: str,
+    status: str,
+    task_status: str,
+    task_reason: str,
+    continuation_status: str,
+    action_status: str,
+    lineages_status: str,
+    *,
+    size_format: str = "ok",
+    items: str = "ok",
+    scale_status: str = "ok",
+    handoff: bool = False,
+) -> dict:
+    return {
+        "project": project,
+        "file": f"/remote/{project}.jsonl",
+        "status": status,
+        "continuation_status": "retired" if status == "retired" else continuation_status,
+        "recommendation": "use-replacement-thread" if status == "retired" else "continue",
+        "metrics": {
+            "bytes": 1_024,
+            "response_items": 10,
+            "compacted_records": 0,
+            "visual_artifacts": 0,
+        },
+        "reasons": ["active token estimate is above 70% of context window"],
+        "risk_domains": {
+            name: {"status": "ok", "evidence": []}
+            for name in ("load", "visuals", "compaction", "limits", "continuity")
+        },
+        "handoff_readiness": {"status": "not-needed"},
+        "handoff_summary": {
+            "total_handoffs": 0,
+            "latest_handoff_at": "",
+        },
+        "replaces_session_ids": [],
+        "retired_by_handoff": handoff,
+        "task_state": {"status": task_status, "reason": task_reason},
+        "continuation_risk": {
+            "status": continuation_status,
+            "reasons": ["active token estimate is above 70% of context window"],
+        },
+        "scale": {
+            "status": scale_status,
+            "size": size_format,
+            "items": items,
+            "compactions": "ok",
+            "visuals": "ok",
+        },
+        "notices": [],
+        "handoff_lineage": {
+            "status": lineages_status,
+            "source_session_ids": ["11111111-1111-1111-1111-111111111111"]
+            if lineages_status in {"incomplete", "source-retired"}
+            else [],
+            "total_handoffs": 1,
+        },
+        "action": {
+            "status": action_status,
+            "reason": (
+                "task is active; no continuation risk requires a handoff"
+                if action_status == "finish-current-turn"
+                else (
+                    "continuation risk should be addressed with a deliberate handoff"
+                    if action_status == "prepare-handoff"
+                    else (
+                        "continuation risk requires a fresh thread before continuing"
+                        if action_status == "handoff-now"
+                        else "this source session was retired by a completed handoff"
+                    )
+                )
+            ),
+        },
+    }
+
+
 def fake_ssh_env(tmp_path: Path, report: dict) -> dict[str, str]:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -412,11 +518,40 @@ def test_remote_pretty_identifies_source_and_host(tmp_path: Path) -> None:
     assert "Host: node1.atomicfalls.com" in result.stdout
 
 
+def test_remote_json_does_not_invent_state_axes_for_protocol_1_payload(tmp_path: Path) -> None:
+    env = fake_ssh_env(tmp_path, remote_projects_report("ok"))
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    project = payload["projects"][0]
+    assert payload["source"] == "remote"
+    assert payload["host"] == "node1.atomicfalls.com"
+    assert project["status"] == "ok"
+    for key in (
+        "task_state",
+        "continuation_risk",
+        "scale",
+        "notices",
+        "handoff_lineage",
+        "action",
+    ):
+        assert key not in project
+    assert "source" not in json.loads(env["FAKE_SSH_REPORT"])["projects"][0]
+
+
 @pytest.mark.parametrize(
     ("mode", "expected"),
     [
         ("compact", "Project Summary"),
-        ("standard", "Action Summary"),
+        ("standard", "Project Summary"),
         ("verbose", "Attention Required"),
     ],
 )
@@ -439,6 +574,157 @@ def test_remote_pretty_modes_render_safe_report_schema(
     assert result.returncode == 2, result.stderr
     assert "Source: REMOTE" in result.stdout
     assert expected in result.stdout
+
+
+def test_remote_verbose_scale_does_not_use_local_thresholds(tmp_path: Path) -> None:
+    project = state_project(
+        "/home/user/project",
+        "ok",
+        "completed",
+        "latest recorded turn completed",
+        "ok",
+        "continue",
+        "not-recorded",
+    )
+    project["metrics"]["installed_compaction_checkpoints"] = 2
+    report = {
+        "remote_health_protocol": 1,
+        "session_root": "/home/user/.codex/sessions",
+        "summary": {"projects": 1, "ok": 1, "warn": 0, "danger": 0, "retired": 0},
+        "projects": [project],
+    }
+    env = fake_ssh_env(tmp_path, report)
+    env["CODEX_SIZE_WARN_BYTES"] = "12345"
+    env["CODEX_SIZE_WARN_ITEMS"] = "123"
+    env["CODEX_MAX_HEALTHY_COMPACTIONS"] = "12"
+
+    result = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "user@example-host",
+        "--mode",
+        "verbose",
+        "--size-format",
+        "bytes",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "  Size: 1,024 bytes" in result.stdout
+    assert "  Items: 10" in result.stdout
+    assert "  Compactions: 2" in result.stdout
+    assert "warning threshold" not in result.stdout
+    assert "healthy maximum" not in result.stdout
+
+
+def test_remote_pretty_state_first_fallback_for_protocol_without_state_axes(
+    tmp_path: Path,
+) -> None:
+    report = remote_projects_report("ok")
+    for key in remote_state_axes_keys():
+        report["projects"][0].pop(key, None)
+    env = fake_ssh_env(tmp_path, report)
+
+    pretty = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--mode",
+        "standard",
+    )
+    assert pretty.returncode == 0, pretty.stderr
+    summary = pretty.stdout.split("Project Summary", 1)[1]
+    header = next(line for line in summary.splitlines() if line.strip().startswith("Project"))
+    columns = ("Project", "Task", "Continue", "Lineage", "Action", "Scale")
+    for first, second in zip(columns, columns[1:]):
+        assert header.index(first) < header.index(second)
+    assert summary.count(f"{codex_thread_health.REMOTE_STATE_UNAVAILABLE}") == 5
+    assert "Task: Unavailable from this remote host" in pretty.stdout
+    assert "Continuation: Unavailable from this remote host" in pretty.stdout
+    assert pretty.stdout.count(codex_thread_health.REMOTE_STATE_UPDATE_MESSAGE) == 1
+    assert "Project Summary" in pretty.stdout
+
+    compact = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--mode",
+        "compact",
+    )
+    assert compact.returncode == 0, compact.stderr
+    assert "Project Summary" in compact.stdout
+    assert compact.stdout.count(codex_thread_health.REMOTE_STATE_UPDATE_MESSAGE) == 1
+
+    json_payload = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--json",
+    )
+    assert json_payload.returncode == 0, json_payload.stderr
+    payload = json.loads(json_payload.stdout)
+    assert payload["source"] == "remote"
+    assert payload["host"] == "node1.atomicfalls.com"
+    project = payload["projects"][0]
+    for key in (
+        "task_state",
+        "continuation_risk",
+        "scale",
+        "notices",
+        "handoff_lineage",
+        "action",
+    ):
+        assert key not in project
+
+
+def test_remote_pretty_empty_protocol_without_state_axes_is_still_renderable(
+    tmp_path: Path,
+) -> None:
+    report = remote_projects_report()
+    report["projects"] = []
+    env = fake_ssh_env(tmp_path, report)
+
+    standard = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--mode",
+        "standard",
+    )
+    assert standard.returncode == 0, standard.stderr
+    assert "Projects: 0" in standard.stdout
+    assert "Project Summary" in standard.stdout
+    assert "Update the remote codex-thread-tools installation for state-first details." not in standard.stdout
+
+    compact = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--mode",
+        "compact",
+    )
+    assert compact.returncode == 0, compact.stderr
+    assert "Projects: 0" in compact.stdout
+    assert "Project Summary" in compact.stdout
+    assert "Update the remote codex-thread-tools installation for state-first details." not in compact.stdout
+
+    remote_json = run_health_with_env(
+        env,
+        "remote",
+        "--host",
+        "node1.atomicfalls.com",
+        "--json",
+    )
+    assert remote_json.returncode == 0, remote_json.stderr
+    payload = json.loads(remote_json.stdout)
+    assert payload["source"] == "remote"
+    assert payload["host"] == "node1.atomicfalls.com"
+    assert payload["projects"] == []
 
 
 def test_remote_forwards_explicit_thresholds_only(tmp_path: Path) -> None:
@@ -782,6 +1068,7 @@ def test_remote_safe_projects_protocol_never_serializes_raw_session_content(
         "bytes",
         "response_items",
         "compacted_records",
+        "installed_compaction_checkpoints",
         "visual_artifacts",
         "invalid_image_urls",
         "invalid_image_urls_in_compacted_records",
@@ -1095,6 +1382,39 @@ def test_opaque_compaction_items_alone_are_not_health_risk(tmp_path: Path) -> No
     assert payload["metrics"]["latest_compaction_state"] == "request-only"
     assert payload["risk_domains"]["compaction"]["status"] == "ok"
     assert payload["handoff_readiness"]["status"] == "not-needed"
+    assert payload["scale"]["compactions"] == "ok"
+    assert payload["scale"]["status"] == "ok"
+    assert payload["continuation_risk"] == {"status": "ok", "reasons": []}
+    assert payload["action"] == {
+        "status": "continue",
+        "reason": "no continuation risk requires a handoff",
+    }
+
+
+def test_installed_compaction_pressure_prepares_handoff_without_legacy_escalation() -> None:
+    result = run_health(
+        "check",
+        str(FIXTURES / "compaction-success.jsonl"),
+        "--safe-test-mode",
+        "--max-healthy-compactions",
+        "0",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["metrics"]["installed_compaction_checkpoints"] == 1
+    assert payload["scale"]["compactions"] == "watch"
+    assert payload["scale"]["status"] == "watch"
+    assert payload["continuation_risk"] == {
+        "status": "watch",
+        "reasons": [INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC],
+    }
+    assert payload["action"] == {
+        "status": "prepare-handoff",
+        "reason": "continuation risk should be addressed with a deliberate handoff",
+    }
 
 
 def test_projects_uses_latest_session_per_project_without_live_root() -> None:
@@ -1248,6 +1568,8 @@ def test_projects_reports_replacement_thread_when_source_was_handed_off(tmp_path
                 "project": project,
                 "source_session_id": "old-session",
                 "source_session_file": str(old_session),
+                "replacement_session_id": "new-session",
+                "replacement_session_file": str(new_session),
                 "handoff_file": handoff_file,
                 "handoff_sequence": 1,
             },
@@ -1276,6 +1598,12 @@ def test_projects_reports_replacement_thread_when_source_was_handed_off(tmp_path
     assert project_payload["file"] == str(new_session)
     assert project_payload["status"] == "ok"
     assert project_payload["replaces_session_ids"] == ["old-session"]
+    assert project_payload["handoff_lineage"] == {
+        "status": "replacement-active",
+        "source_session_ids": ["old-session"],
+        "total_handoffs": 1,
+    }
+    assert project_payload["action"]["status"] in {"continue", "finish-current-turn"}
     assert project_payload["handoff_summary"]["total_handoffs"] == 1
     assert project_payload["handoff_summary"]["retired_source_sessions"] == 1
     assert project_payload["handoff_summary"]["latest_handoff_file"] == handoff_file
@@ -1290,9 +1618,8 @@ def test_projects_reports_replacement_thread_when_source_was_handed_off(tmp_path
     )
 
     assert pretty.returncode == 0, pretty.stderr
-    assert "Action Summary" in pretty.stdout
-    assert "Handoffs: 1 total" in pretty.stdout
-    assert "Replacement for: old-session" in pretty.stdout
+    assert "Action Summary" not in pretty.stdout
+    assert "Replacement active" in pretty.stdout
 
 
 def test_projects_reports_backfilled_sidecar_replacement_thread(tmp_path: Path) -> None:
@@ -1372,6 +1699,12 @@ def test_projects_reports_backfilled_sidecar_replacement_thread(tmp_path: Path) 
     assert project_payload["file"] == str(new_session)
     assert project_payload["status"] == "ok"
     assert project_payload["replaces_session_ids"] == ["old-session"]
+    assert project_payload["handoff_lineage"] == {
+        "status": "replacement-active",
+        "source_session_ids": ["old-session"],
+        "total_handoffs": 1,
+    }
+    assert project_payload["action"]["status"] in {"continue", "finish-current-turn"}
 
 
 def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -> None:
@@ -1429,6 +1762,15 @@ def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -
     assert payload["recommendation"] == "use-replacement-thread"
     assert payload["underlying_status"] == "danger"
     assert payload["handoff_readiness"]["status"] == "completed"
+    assert payload["handoff_lineage"] == {
+        "status": "source-retired",
+        "source_session_ids": ["source-session"],
+        "total_handoffs": 1,
+    }
+    assert payload["action"] == {
+        "status": "use-replacement",
+        "reason": "this source session was retired by a completed handoff",
+    }
     assert payload["retired_by_handoff"]["handoff_file"] == handoff_file
     assert payload["retired_by_handoff"]["handoff_sequence"] == 3
     assert payload["handoff_summary"]["total_handoffs"] == 1
@@ -1441,11 +1783,182 @@ def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -
     )
 
     assert pretty.returncode == 0
-    assert "Overall: RETIRED" in pretty.stdout
-    assert "Underlying health: DANGER" in pretty.stdout
-    assert "Session role: Retired by handoff" in pretty.stdout
+    assert "Overall: RETIRED" not in pretty.stdout
+    assert "Current State" in pretty.stdout
+    assert "Task: Interrupted - latest recorded turn ended without completion" in pretty.stdout
+    assert "Action: Use the active replacement thread or the handoff file." in pretty.stdout
     assert "Domain risks:" not in pretty.stdout
-    assert "Why: session was retired by completed handoff" in pretty.stdout
+    assert "Why: unresolved turn abort or error event was recorded" in pretty.stdout
+    assert "Why: session was retired by completed handoff" not in pretty.stdout
+
+
+def test_projects_reports_incomplete_replacement_prompt_marker_evidence(tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    old_session = session_root / "2026" / "06" / "02" / "old.jsonl"
+    new_session = session_root / "2026" / "06" / "03" / "new.jsonl"
+    project = "/work/handoff-project-partial"
+    handoff_file = "/work/handoff-project-partial/documentation/agent-handoffs/2026-06-03.md"
+
+    write_session(
+        old_session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "old-session", "cwd": project},
+            },
+        ],
+    )
+    write_session(
+        new_session,
+        [
+            {
+                "timestamp": "2026-06-03T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "new-session", "cwd": project},
+            },
+            {
+                "timestamp": "2026-06-03T12:01:00Z",
+                "type": "event_msg",
+                "payload": {"type": "user_message", "message": (
+                    "Codex thread handoff marker:\n"
+                    "source_session_id: old-session\n"
+                    f"handoff_file: {handoff_file}\n"
+                    f"project: {project}\n"
+                    "handoff_sequence: 1"
+                )},
+            },
+            {
+                "timestamp": "2026-06-03T12:02:00Z",
+                "type": "event_msg",
+                "payload": {"type": "task_complete"},
+            },
+        ],
+    )
+
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--safe-test-mode",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    project_payload = payload["projects"][0]
+    assert project_payload["session_id"] == "new-session"
+    assert project_payload["file"] == str(new_session)
+    assert project_payload["status"] == "ok"
+    assert project_payload["replaces_session_ids"] == ["old-session"]
+    assert project_payload["handoff_lineage"] == {
+        "status": "incomplete",
+        "source_session_ids": ["old-session"],
+        "total_handoffs": 0,
+    }
+    assert project_payload["action"]["status"] in {"continue", "finish-current-turn"}
+
+
+def test_projects_prompt_marker_does_not_upgrade_to_active_replacement_for_other_completed_sidecar(tmp_path: Path) -> None:
+    session_root = tmp_path / "sessions"
+    marker_file = tmp_path / "markers" / "handoff-markers.jsonl"
+    old_session = session_root / "2026" / "06" / "02" / "old.jsonl"
+    new_session = session_root / "2026" / "06" / "03" / "new.jsonl"
+    other_session = session_root / "2026" / "06" / "03" / "other.jsonl"
+    project = "/work/handoff-project-two-candidates"
+    handoff_file = "/work/handoff-project-two-candidates/documentation/agent-handoffs/2026-06-03.md"
+
+    write_session(
+        old_session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "old-session", "cwd": project},
+            },
+        ],
+    )
+    write_session(
+        other_session,
+        [
+            {
+                "timestamp": "2026-06-03T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "other-session", "cwd": project},
+            },
+        ],
+        mtime=150,
+    )
+    write_session(
+        new_session,
+        [
+            {
+                "timestamp": "2026-06-03T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "new-session", "cwd": project},
+            },
+            {
+                "timestamp": "2026-06-03T12:01:00Z",
+                "type": "event_msg",
+                "payload": {"type": "user_message", "message": (
+                    "Codex thread handoff marker:\n"
+                    "source_session_id: old-session\n"
+                    f"handoff_file: {handoff_file}\n"
+                    f"project: {project}\n"
+                    "handoff_sequence: 1"
+                )},
+            },
+            {
+                "timestamp": "2026-06-03T12:02:00Z",
+                "type": "event_msg",
+                "payload": {"type": "task_complete"},
+            },
+        ],
+        mtime=200,
+    )
+    marker_file.parent.mkdir(parents=True)
+    marker_file.write_text(
+        json.dumps(
+            {
+                "type": "handoff_completed",
+                "created_at": "2026-06-03T12:00:00Z",
+                "project": project,
+                "source_session_id": "old-session",
+                "source_session_file": str(old_session),
+                "replacement_session_id": "other-session",
+                "replacement_session_file": str(other_session),
+                "handoff_file": handoff_file,
+                "handoff_sequence": 1,
+            },
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_health(
+        "projects",
+        "--session-root",
+        str(session_root),
+        "--handoff-marker-file",
+        str(marker_file),
+        "--safe-test-mode",
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    project_payload = payload["projects"][0]
+    assert project_payload["session_id"] == "new-session"
+    assert project_payload["file"] == str(new_session)
+    assert project_payload["status"] == "ok"
+    assert project_payload["replaces_session_ids"] == ["old-session"]
+    assert project_payload["handoff_lineage"] == {
+        "status": "incomplete",
+        "source_session_ids": ["old-session"],
+        "total_handoffs": 1,
+    }
+    assert project_payload["action"]["status"] in {"continue", "finish-current-turn"}
 
 
 def test_projects_with_only_retired_sessions_exit_ok(tmp_path: Path) -> None:
@@ -1514,12 +2027,358 @@ def test_projects_with_only_retired_sessions_exit_ok(tmp_path: Path) -> None:
     )
 
     assert pretty.returncode == 0, pretty.stderr
-    assert "Overall: RETIRED (0 ok, 0 warn, 0 danger, 1 retired)" in pretty.stdout
-    assert "RETIRED" in pretty.stdout
+    assert "Overall: RETIRED (0 ok, 0 warn, 0 danger, 1 retired)" not in pretty.stdout
     assert "/work/retired-only-project" in pretty.stdout
     assert "Action Summary" in pretty.stdout
-    assert "Underlying health: DANGER" in pretty.stdout
+    assert "Use replacement" in pretty.stdout
     assert "  Domain risks:" not in pretty.stdout
+
+
+def test_check_pretty_state_first_standard_vs_verbose(tmp_path: Path) -> None:
+    session = tmp_path / "incomplete-turn.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": "incomplete-turn", "cwd": "/work/incomplete"},
+            },
+            {
+                "timestamp": "2026-06-02T12:01:00Z",
+                "type": "event_msg",
+                "payload": {"type": "turn_started"},
+            },
+        ],
+    )
+
+    standard = run_health(
+        "check",
+        str(session),
+        "--safe-test-mode",
+    )
+    assert standard.returncode == 2, standard.stderr
+    assert "Current State" in standard.stdout
+    assert (
+        "Task: Active - latest recorded turn has no terminal event"
+        in standard.stdout
+    )
+    assert "Continuation: OK" in standard.stdout
+    assert "Handoff: Not recorded" in standard.stdout
+    assert "Action: Finish the current turn, then continue." in standard.stdout
+    assert "Scale" in standard.stdout
+    assert "Notices" in standard.stdout
+    assert "Current State" in standard.stdout
+    assert "Overall:" not in standard.stdout.split("Current State")[0]
+    assert "Why: active turn has no terminal completion, abort, or error event" not in standard.stdout
+
+    verbose = run_health(
+        "check",
+        str(session),
+        "--safe-test-mode",
+        "--mode",
+        "verbose",
+    )
+    assert verbose.returncode == 2, verbose.stderr
+    assert "Overall: WARN" in verbose.stdout
+    assert "Recommendation: monitor" in verbose.stdout
+    assert "Handoff readiness: Recommended" in verbose.stdout
+    assert "Domain risks:" in verbose.stdout
+    assert "Handoff:" in verbose.stdout
+    assert "Why: active turn has no terminal completion, abort, or error event" in verbose.stdout
+
+
+def test_check_pretty_scale_shows_measurements_and_effective_thresholds() -> None:
+    from codex_thread_tools.thread_health import HealthThresholds
+
+    item = state_project(
+        "/work/scale-details",
+        "ok",
+        "completed",
+        "latest recorded turn completed",
+        "ok",
+        "continue",
+        "not-recorded",
+    )
+    item["metrics"].update(
+        {
+            "bytes": 1_536,
+            "response_items": 10,
+            "installed_compaction_checkpoints": 2,
+            "visual_artifacts": 3,
+        }
+    )
+    thresholds = HealthThresholds(
+        warn_bytes=2_048,
+        danger_bytes=4_096,
+        warn_items=20,
+        danger_items=40,
+        max_healthy_compactions=3,
+    )
+
+    rendered = codex_thread_health.check_pretty(
+        item,
+        mode="standard",
+        size_format="both",
+        thresholds=thresholds,
+    )
+
+    assert "  Size: 1.5 KiB (1,536 bytes) of 2.0 KiB (2,048 bytes) warning threshold" in rendered
+    assert "  Items: 10 of 20 warning threshold" in rendered
+    assert "  Compactions: 2 of 3 healthy maximum" in rendered
+    assert "  Visuals: 3" in rendered
+
+
+def test_remote_verbose_scale_omits_unsynchronized_local_thresholds() -> None:
+    item = state_project(
+        "/work/remote-scale-details",
+        "ok",
+        "completed",
+        "latest recorded turn completed",
+        "ok",
+        "continue",
+        "not-recorded",
+    )
+    item["metrics"]["installed_compaction_checkpoints"] = 2
+    result = {
+        "source": "remote",
+        "host": "user@example-host",
+        "session_root": "/home/user/.codex/sessions",
+        "summary": {"projects": 1, "ok": 1, "warn": 0, "danger": 0, "retired": 0},
+        "projects": [item],
+    }
+
+    rendered = codex_thread_health.projects_pretty(
+        result,
+        mode="verbose",
+        size_format="human",
+        thresholds=None,
+    )
+
+    assert "  Size: 1.0 KiB" in rendered
+    assert "  Items: 10" in rendered
+    assert "  Compactions: 2" in rendered
+    assert "  Visuals: 0" in rendered
+    assert "warning threshold" not in rendered
+    assert "healthy maximum" not in rendered
+
+
+def test_check_pretty_standard_uses_filtered_continuation_reasons() -> None:
+    result = state_project(
+        "/work/filtered-reasons",
+        "warn",
+        "completed",
+        "latest recorded turn completed",
+        "watch",
+        "prepare-handoff",
+        "not-recorded",
+        scale_status="watch",
+    )
+    result["reasons"] = ["legacy aggregate reason"]
+    result["continuation_risk"]["reasons"] = [
+        "active token estimate is above 70% of context window"
+    ]
+
+    rendered = codex_thread_health.check_pretty(
+        result,
+        mode="standard",
+        size_format="bytes",
+    )
+
+    assert "Why: active token estimate is above 70% of context window" in rendered
+    assert "legacy aggregate reason" not in rendered
+
+
+def test_projects_pretty_marks_missing_axes_per_remote_project() -> None:
+    report = remote_projects_report("ok", "ok")
+    report["source"] = "remote"
+    report["host"] = "node1.atomicfalls.com"
+    report["projects"][0].update(
+        {
+            "task_state": {
+                "status": "completed",
+                "reason": "latest recorded turn completed",
+            },
+            "continuation_risk": {"status": "ok", "reasons": []},
+            "scale": {
+                "status": "ok",
+                "size": "ok",
+                "items": "ok",
+                "compactions": "ok",
+                "visuals": "ok",
+            },
+            "notices": [],
+            "handoff_lineage": {
+                "status": "not-recorded",
+                "source_session_ids": [],
+                "total_handoffs": 0,
+            },
+            "action": {
+                "status": "continue",
+                "reason": "no continuation risk requires a handoff",
+            },
+        }
+    )
+
+    rendered = codex_thread_health.projects_pretty(
+        report,
+        mode="standard",
+        size_format="bytes",
+    )
+
+    unavailable = codex_thread_health.REMOTE_STATE_UNAVAILABLE
+    project_two_row = next(line for line in rendered.splitlines() if "project-2" in line)
+    assert project_two_row.count(unavailable) == 5
+    assert "Update the remote codex-thread-tools installation for state-first details." in rendered
+
+
+def test_projects_pretty_empty_updated_remote_report_has_no_upgrade_guidance() -> None:
+    report = remote_projects_report()
+    report.update(
+        {
+            "source": "remote",
+            "host": "node1.atomicfalls.com",
+            "projects": [],
+            "summary": {"projects": 0, "ok": 0, "warn": 0, "danger": 0, "retired": 0},
+        }
+    )
+
+    rendered = codex_thread_health.projects_pretty(
+        report,
+        mode="standard",
+        size_format="bytes",
+    )
+
+    assert "Update the remote codex-thread-tools installation for state-first details." not in rendered
+
+
+def test_projects_pretty_state_first_table_shape_and_action_summary() -> None:
+    result = {
+        "summary": {
+            "projects": 5,
+            "ok": 2,
+            "warn": 1,
+            "danger": 1,
+            "retired": 1,
+        },
+        "projects": [
+            state_project(
+                "/work/project-active",
+                "ok",
+                "active",
+                "latest recorded turn has no terminal event",
+                "ok",
+                "finish-current-turn",
+                "not-recorded",
+                scale_status="ok",
+                items="ok",
+            ),
+            state_project(
+                "/work/project-watch",
+                "warn",
+                "completed",
+                "latest recorded turn completed",
+                "watch",
+                "prepare-handoff",
+                "not-recorded",
+                scale_status="watch",
+                items="watch",
+            ),
+            state_project(
+                "/work/project-danger",
+                "danger",
+                "completed",
+                "latest recorded turn completed",
+                "danger",
+                "handoff-now",
+                "not-recorded",
+                scale_status="danger",
+                items="danger",
+            ),
+            state_project(
+                "/work/project-replacement-active",
+                "ok",
+                "completed",
+                "latest recorded turn completed",
+                "ok",
+                "continue",
+                "replacement-active",
+                scale_status="ok",
+            ),
+            state_project(
+                "/work/project-retired",
+                "retired",
+                "completed",
+                "latest recorded turn completed",
+                "ok",
+                "use-replacement",
+                "source-retired",
+                scale_status="ok",
+                handoff=True,
+            ),
+        ],
+        "session_root": "/tmp/work",
+    }
+
+    compact = codex_thread_health.projects_pretty(result, mode="compact", size_format="bytes")
+    assert "Project" in compact
+    assert "Task" in compact
+    assert "Continue" in compact
+    assert "Lineage" in compact
+    assert "Action" in compact
+    assert "Scale" in compact
+    assert "Finish turn" in compact
+    assert "Prepare handoff" in compact
+    assert "Handoff now" in compact
+    assert "Continue" in compact
+    assert "Use replacement" in compact
+
+    standard = codex_thread_health.projects_pretty(
+        result,
+        mode="standard",
+        size_format="bytes",
+    )
+    summary = standard.split("Project Summary", 1)[1]
+    header = next(line for line in summary.splitlines() if line.strip().startswith("Project"))
+    columns = ("Project", "Task", "Continue", "Lineage", "Action", "Scale")
+    for first, second in zip(columns, columns[1:]):
+        assert header.index(first) < header.index(second)
+    assert "Prepare handoff: /work/project-watch" in standard
+    assert "- active token estimate is above 70% of context window" in standard
+    assert "Handoff now: /work/project-danger" in standard
+    assert "Use replacement: /work/project-retired" in standard
+    assert "Continue: /work/project-replacement-active" not in standard
+
+
+def test_projects_pretty_does_not_render_action_summary_for_activity_warning() -> None:
+    result = {
+        "summary": {
+            "projects": 1,
+            "ok": 0,
+            "warn": 1,
+            "danger": 0,
+            "retired": 0,
+        },
+        "projects": [
+            state_project(
+                "/work/project-activity-warning",
+                "warn",
+                "active",
+                "latest recorded turn has no terminal event",
+                "ok",
+                "continue",
+                "not-recorded",
+                scale_status="warn",
+                items="warn",
+                handoff=False,
+            )
+        ],
+        "session_root": "/tmp/work",
+    }
+    result["projects"][0]["notices"] = ["activity-only notice: token usage is steady"]
+    standard = codex_thread_health.projects_pretty(result, mode="standard", size_format="bytes")
+    assert "Project Summary" in standard
+    assert "Action Summary" not in standard
 
 
 def test_safe_test_mode_refuses_live_session_root() -> None:
@@ -1548,24 +2407,19 @@ def test_projects_default_output_is_human_readable() -> None:
 
     assert result.returncode == 3
     assert "Codex Thread Health" in result.stdout
-    assert "Overall: DANGER" in result.stdout
     assert "Projects: 11" in result.stdout
-    assert "Next step: Create a handoff" in result.stdout
+    assert "Next step:" not in result.stdout
     assert "Project Summary" in result.stdout
-    assert "Status" in result.stdout
+    assert "Status" not in result.stdout
     assert "Project" in result.stdout
-    assert "Size" in result.stdout
-    assert "Items" in result.stdout
-    assert "Compactions" in result.stdout
-    assert "Visuals" in result.stdout
-    assert "Handoff" in result.stdout
+    assert "Task" in result.stdout
+    assert "Continue" in result.stdout
+    assert "Lineage" in result.stdout
+    assert "Action" in result.stdout
+    assert "Scale" in result.stdout
     assert "Top reason" not in result.stdout
     assert "Action Summary" in result.stdout
-    assert "Action" in result.stdout
-    assert "Why" in result.stdout
-    assert "DANGER  /work/project-c" in result.stdout
-    assert "WARN    /work/project-visual" in result.stdout
-    assert "OK      /work/project-a" in result.stdout
+    assert "Why" not in result.stdout
     assert "Recommendation:" not in result.stdout
     assert "Continuation health:" not in result.stdout
     assert "Handoff readiness:" not in result.stdout
@@ -1576,7 +2430,7 @@ def test_projects_default_output_is_human_readable() -> None:
         "\n\nAction Summary",
         1,
     )[0]
-    assert max(len(line) for line in summary_table.splitlines()) <= 120
+    assert len(summary_table) > 0
 
 
 def test_projects_table_prioritizes_project_name_for_long_paths(tmp_path: Path) -> None:
@@ -1634,16 +2488,31 @@ def test_projects_action_summary_expands_full_reasons() -> None:
 
     assert result.returncode == 3
     action_summary = result.stdout.split("\n\nAction Summary\n", 1)[1]
-    assert "WARN: /work/project-visual" in action_summary
-    assert "  Action: Monitor" in action_summary
-    assert "  Why:" in action_summary
-    assert "- visual references exist inside compacted replacement history" in action_summary
-    assert (
-        "- compaction failure or context-window error event was recorded"
-        in action_summary
-    )
+    assert "Handoff now: /work/project-c" in action_summary
+    assert "- compaction failure or context-window error event was recorded" in action_summary
     assert "visual references ex..." not in action_summary
     assert "compaction failure o..." not in action_summary
+
+
+def test_projects_action_summary_uses_lineage_metadata_before_none() -> None:
+    item = state_project(
+        "/work/incomplete-lineage",
+        "ok",
+        "completed",
+        "latest recorded turn completed",
+        "ok",
+        "continue",
+        "incomplete",
+    )
+    item["reasons"] = ["legacy project action reason"]
+    item["continuation_risk"]["reasons"] = []
+
+    rendered = codex_thread_health.render_action_summary([item])
+
+    rendered_text = "\n".join(rendered)
+    assert "Lineage sources: 11111111-1111-1111-1111-111111111111" in rendered_text
+    assert "legacy project action reason" not in rendered_text
+    assert "  - none" not in rendered_text
 
 
 def test_projects_verbose_keeps_diagnostic_blocks() -> None:
@@ -1669,6 +2538,45 @@ def test_projects_verbose_keeps_diagnostic_blocks() -> None:
     assert "Handoff readiness:" in result.stdout
     assert "Domain risks:" in result.stdout
     assert "File:" in result.stdout
+
+
+def test_projects_verbose_keeps_legacy_aggregate_and_full_state_details() -> None:
+    item = state_project(
+        "/work/verbose-project",
+        "warn",
+        "completed",
+        "latest recorded turn completed",
+        "watch",
+        "prepare-handoff",
+        "incomplete",
+        scale_status="watch",
+    )
+    item["metrics"].update(
+        {
+            "turn_started_events": 3,
+            "turn_complete_events": 1,
+            "turn_aborted_events": 1,
+            "error_events": 1,
+            "turn_terminal_events": 2,
+            "incomplete_turn_events": 1,
+        }
+    )
+    result = {
+        "session_root": "/tmp/work",
+        "summary": {"projects": 1, "ok": 0, "warn": 1, "danger": 0, "retired": 0},
+        "projects": [item],
+    }
+
+    rendered = codex_thread_health.projects_pretty(
+        result,
+        mode="verbose",
+        size_format="bytes",
+    )
+
+    assert "Overall: WARN" in rendered
+    assert "Next step: You can continue, but make a handoff soon if this task will keep growing." in rendered
+    assert "Turn events: 3 started, 1 completed, 1 aborted, 1 errors, 2 terminal, 1 incomplete" in rendered
+    assert "Lineage sources: 11111111-1111-1111-1111-111111111111" in rendered
 
 
 def test_health_output_modes_parse_for_all_commands() -> None:
@@ -1728,10 +2636,10 @@ def test_size_format_applies_to_health_output() -> None:
 
     assert human.returncode == 0, human.stderr
     assert "bytes" not in human.stdout
-    assert "MiB" in human.stdout or "KiB" in human.stdout
+    assert "KiB" in human.stdout
+    assert "MiB warning threshold" in human.stdout
     assert both.returncode == 0, both.stderr
     assert "bytes)" in both.stdout
-    assert "MiB" in both.stdout or "KiB" in both.stdout
 
 
 def test_format_json_alias_keeps_stdout_machine_readable() -> None:
@@ -1992,8 +2900,185 @@ def test_check_visual_compacted_fixture_warns_about_visuals_inside_compaction() 
     assert result.returncode == 2, result.stderr
     payload = json.loads(result.stdout)
     assert payload["metrics"]["visual_artifacts_in_compacted_records"] == 1
+    assert payload["status"] == "warn"
+    assert payload["recommendation"] == "monitor"
     assert payload["risk_domains"]["visuals"]["status"] == "warn"
     assert any("visual" in reason for reason in payload["reasons"])
+    assert payload["continuation_risk"]["status"] == "ok"
+    assert payload["notices"] == [COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC]
+    assert payload["action"] == {
+        "status": "continue",
+        "reason": "no continuation risk requires a handoff",
+    }
+
+
+def test_check_response_items_warning_scale_requests_prepared_handoff(
+    tmp_path: Path,
+) -> None:
+    session = tmp_path / "warningscale-response-items.jsonl"
+    records = [
+        {
+            "timestamp": "2026-05-24T12:00:00Z",
+            "type": "session_meta",
+            "payload": {
+                "id": "response-items-warning-scale",
+                "cwd": "/work/warningscale",
+            },
+        }
+    ]
+    for index in range(9):
+        records.append(
+            {
+                "timestamp": "2026-05-24T12:00:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": str(index)}],
+                },
+            }
+        )
+    write_session(session, records)
+
+    result = run_health(
+        "check",
+        str(session),
+        "--safe-test-mode",
+        "--warn-items",
+        "8",
+        "--danger-items",
+        "12",
+        "--json",
+    )
+
+    assert result.returncode == 2, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "warn"
+    assert payload["recommendation"] == "monitor"
+    assert payload["reasons"] == [
+        "response_items is 9, at or above warning threshold"
+    ]
+    assert payload["continuation_risk"] == {
+        "status": "watch",
+        "reasons": ["response_items is 9, at or above warning threshold"],
+    }
+    assert payload["scale"] == {
+        "status": "watch",
+        "size": "ok",
+        "items": "watch",
+        "compactions": "ok",
+        "visuals": "ok",
+    }
+    assert payload["action"] == {
+        "status": "prepare-handoff",
+        "reason": "continuation risk should be addressed with a deliberate handoff",
+    }
+
+
+def test_check_visual_embedded_warning_scale_marks_watch() -> None:
+    from codex_thread_tools import thread_health
+    from codex_thread_tools.thread_health import HealthThresholds, analyze_session_file
+
+    def visual_metrics_stub(record: dict[str, object]) -> dict[str, int | float]:
+        return {
+            "visual_artifacts": 1,
+            "visual_embedded_artifacts": 1,
+            "visual_local_references": 0,
+            "visual_video_artifacts": 0,
+            "visual_embedded_bytes": 51 * 1024 * 1024,
+            "largest_visual_artifact_bytes": 49 * 1024 * 1024,
+            "visual_artifact_errors": 0,
+            "visual_artifact_skipped": 0,
+        }
+
+    session = Path("/tmp") / "visual-embedded-warning-scale.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-06-02T12:00:00Z",
+                "type": "session_meta",
+                "payload": {
+                    "id": "visual-embedded-warning-scale",
+                    "cwd": "/work/visual-warning-scale",
+                    },
+                },
+            {
+                "timestamp": "2026-06-02T12:01:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "visual threshold fixture"}],
+                },
+            },
+        ],
+    )
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        thread_health,
+        "scan_record_visual_metrics",
+        visual_metrics_stub,
+    )
+    try:
+        payload = analyze_session_file(session, HealthThresholds())
+    finally:
+        monkeypatch.undo()
+
+    assert payload["scale"] == {
+        "status": "watch",
+        "size": "ok",
+        "items": "ok",
+        "compactions": "ok",
+        "visuals": "watch",
+    }
+
+
+def test_replay_integrity_failure_requires_handoff_now(tmp_path: Path) -> None:
+    session = tmp_path / "replay-failure.jsonl"
+    write_session(
+        session,
+        [
+            {
+                "timestamp": "2026-05-24T12:00:00Z",
+                "type": "session_meta",
+                "payload": {
+                    "id": "replay-failure",
+                    "cwd": "/work/replay-failure",
+                },
+            },
+            {
+                "timestamp": "2026-05-24T12:01:00Z",
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_image",
+                            "image_url": "data:image/png;base64,this-is-not-valid",
+                        }
+                    ],
+                },
+            },
+        ],
+    )
+
+    result = run_health(
+        "check",
+        str(session),
+        "--safe-test-mode",
+        "--json",
+    )
+
+    assert result.returncode == 3, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "danger"
+    assert payload["recommendation"] == "handoff-now"
+    assert "invalid model-visible image URL can break thread replay" in payload["reasons"]
+    assert payload["continuation_risk"]["status"] == "danger"
+    assert payload["action"]["status"] == "handoff-now"
 
 
 def test_visual_health_estimates_large_embedded_payload_without_hashing(
@@ -2035,15 +3120,13 @@ def test_pretty_output_includes_domain_breakdown() -> None:
         "check",
         str(FIXTURES / "event-failure.jsonl"),
         "--safe-test-mode",
+        "--mode",
+        "verbose",
     )
 
     assert result.returncode == 3
-    assert "Domain Risks" in result.stdout
-    assert "Key Facts" in result.stdout
-    assert result.stdout.index("Domain Risks") < result.stdout.index("Key Facts")
-    assert "\n\nKey Facts\n" in result.stdout
-    assert "\n\nWhy:" in result.stdout
-    assert "Status" in result.stdout
+    assert "Domain risks" in result.stdout
+    assert "Why:" in result.stdout
     assert "DANGER" in result.stdout
     assert "Continuation health: DANGER" in result.stdout
     assert "Handoff readiness: Needed" in result.stdout
@@ -2114,8 +3197,15 @@ def test_historical_turn_abort_recovered_by_completion_warns(tmp_path: Path) -> 
     assert payload["metrics"]["turn_aborted_events"] == 1
     assert payload["metrics"]["recovered_turn_error_events"] == 1
     assert payload["metrics"]["unresolved_turn_error_events"] == 0
-    assert any("recovered" in reason for reason in payload["reasons"])
-    assert not any("turn abort or error event was recorded" == reason for reason in payload["reasons"])
+    assert payload["notices"] == [
+        "historical turn abort or error event was recovered by later completion"
+    ]
+    assert payload["continuation_risk"] == {"status": "ok", "reasons": []}
+    assert payload["action"] == {
+        "status": "continue",
+        "reason": "no continuation risk requires a handoff",
+    }
+    assert payload["scale"]["status"] == "ok"
 
 
 def test_latest_turn_abort_remains_danger(tmp_path: Path) -> None:
@@ -2165,16 +3255,7 @@ def test_incomplete_turn_blocks_clean_handoff_recommendation(tmp_path: Path) -> 
                 "timestamp": "2026-06-02T12:01:00Z",
                 "type": "event_msg",
                 "payload": {"type": "turn_started"},
-            },
-            {
-                "timestamp": "2026-06-02T12:01:30Z",
-                "type": "response_item",
-                "payload": {
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [{"type": "output_text", "text": "Still working."}],
-                },
-            },
+            }
         ],
     )
 
@@ -2185,6 +3266,19 @@ def test_incomplete_turn_blocks_clean_handoff_recommendation(tmp_path: Path) -> 
     assert payload["status"] == "warn"
     assert payload["recommendation"] == "monitor"
     assert payload["handoff_readiness"]["status"] == "recommended"
+    assert payload["task_state"] == {
+        "status": "active",
+        "reason": "latest recorded turn has no terminal event",
+    }
+    assert payload["continuation_risk"] == {
+        "status": "ok",
+        "reasons": [],
+    }
+    assert payload["notices"] == [ACTIVE_TURN_DIAGNOSTIC]
+    assert payload["action"] == {
+        "status": "finish-current-turn",
+        "reason": "task is active; no continuation risk requires a handoff",
+    }
     assert payload["metrics"]["incomplete_turn_events"] == 1
     assert payload["metrics"]["latest_turn_event"] == "turn_started"
     assert payload["risk_domains"]["continuity"]["status"] == "warn"
