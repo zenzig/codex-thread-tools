@@ -28,9 +28,6 @@ ACTIVE_TURN_DIAGNOSTIC = (
 COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC = (
     "visual references exist inside compacted replacement history"
 )
-INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC = (
-    "installed compaction checkpoints exceed healthy threshold"
-)
 
 
 def run_health(*args: str) -> subprocess.CompletedProcess[str]:
@@ -416,8 +413,8 @@ def state_project(
                 "task is active; no continuation risk requires a handoff"
                 if action_status == "finish-current-turn"
                 else (
-                    "continuation risk should be addressed with a deliberate handoff"
-                    if action_status == "prepare-handoff"
+                    "warning signals should be monitored before deciding on a handoff"
+                    if action_status == "monitor"
                     else (
                         "continuation risk requires a fresh thread before continuing"
                         if action_status == "handoff-now"
@@ -635,12 +632,12 @@ def test_remote_pretty_state_first_fallback_for_protocol_without_state_axes(
     )
     assert pretty.returncode == 0, pretty.stderr
     summary = pretty.stdout.split("Project Summary", 1)[1]
-    header = next(line for line in summary.splitlines() if line.strip().startswith("Project"))
-    columns = ("Project", "Task", "Continue", "Lineage", "Action", "Scale")
+    header = next(line for line in summary.splitlines() if line.strip().startswith("Status"))
+    columns = ("Status", "Project", "Turn", "Risk", "Lineage", "Action", "Scale")
     for first, second in zip(columns, columns[1:]):
         assert header.index(first) < header.index(second)
     assert summary.count(f"{codex_thread_health.REMOTE_STATE_UNAVAILABLE}") == 5
-    assert "Task: Unavailable from this remote host" in pretty.stdout
+    assert "Turn: Unavailable from this remote host" in pretty.stdout
     assert "Continuation: Unavailable from this remote host" in pretty.stdout
     assert pretty.stdout.count(codex_thread_health.REMOTE_STATE_UPDATE_MESSAGE) == 1
     assert "Project Summary" in pretty.stdout
@@ -1391,7 +1388,7 @@ def test_opaque_compaction_items_alone_are_not_health_risk(tmp_path: Path) -> No
     }
 
 
-def test_installed_compaction_pressure_prepares_handoff_without_legacy_escalation() -> None:
+def test_installed_compaction_count_is_scale_notice_not_continuation_risk() -> None:
     result = run_health(
         "check",
         str(FIXTURES / "compaction-success.jsonl"),
@@ -1405,15 +1402,12 @@ def test_installed_compaction_pressure_prepares_handoff_without_legacy_escalatio
     payload = json.loads(result.stdout)
     assert payload["status"] == "ok"
     assert payload["metrics"]["installed_compaction_checkpoints"] == 1
-    assert payload["scale"]["compactions"] == "watch"
-    assert payload["scale"]["status"] == "watch"
-    assert payload["continuation_risk"] == {
-        "status": "watch",
-        "reasons": [INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC],
-    }
+    assert payload["scale"]["compactions"] == "notice"
+    assert payload["scale"]["status"] == "notice"
+    assert payload["continuation_risk"] == {"status": "ok", "reasons": []}
     assert payload["action"] == {
-        "status": "prepare-handoff",
-        "reason": "continuation risk should be addressed with a deliberate handoff",
+        "status": "continue",
+        "reason": "no continuation risk requires a handoff",
     }
 
 
@@ -1785,7 +1779,7 @@ def test_check_retired_source_session_reports_handoff_metadata(tmp_path: Path) -
     assert pretty.returncode == 0
     assert "Overall: RETIRED" not in pretty.stdout
     assert "Current State" in pretty.stdout
-    assert "Task: Interrupted - latest recorded turn ended without completion" in pretty.stdout
+    assert "Turn: Interrupted - latest recorded turn ended without completion" in pretty.stdout
     assert "Action: Use the active replacement thread or the handoff file." in pretty.stdout
     assert "Domain risks:" not in pretty.stdout
     assert "Why: unresolved turn abort or error event was recorded" in pretty.stdout
@@ -1819,14 +1813,23 @@ def test_projects_reports_incomplete_replacement_prompt_marker_evidence(tmp_path
             },
             {
                 "timestamp": "2026-06-03T12:01:00Z",
-                "type": "event_msg",
-                "payload": {"type": "user_message", "message": (
-                    "Codex thread handoff marker:\n"
-                    "source_session_id: old-session\n"
-                    f"handoff_file: {handoff_file}\n"
-                    f"project: {project}\n"
-                    "handoff_sequence: 1"
-                )},
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Codex thread handoff marker:\n"
+                                "source_session_id: old-session\n"
+                                f"handoff_file: {handoff_file}\n"
+                                f"project: {project}\n"
+                                "handoff_sequence: 1"
+                            ),
+                        }
+                    ],
+                },
             },
             {
                 "timestamp": "2026-06-03T12:02:00Z",
@@ -1899,14 +1902,23 @@ def test_projects_prompt_marker_does_not_upgrade_to_active_replacement_for_other
             },
             {
                 "timestamp": "2026-06-03T12:01:00Z",
-                "type": "event_msg",
-                "payload": {"type": "user_message", "message": (
-                    "Codex thread handoff marker:\n"
-                    "source_session_id: old-session\n"
-                    f"handoff_file: {handoff_file}\n"
-                    f"project: {project}\n"
-                    "handoff_sequence: 1"
-                )},
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Codex thread handoff marker:\n"
+                                "source_session_id: old-session\n"
+                                f"handoff_file: {handoff_file}\n"
+                                f"project: {project}\n"
+                                "handoff_sequence: 1"
+                            ),
+                        }
+                    ],
+                },
             },
             {
                 "timestamp": "2026-06-03T12:02:00Z",
@@ -2027,7 +2039,7 @@ def test_projects_with_only_retired_sessions_exit_ok(tmp_path: Path) -> None:
     )
 
     assert pretty.returncode == 0, pretty.stderr
-    assert "Overall: RETIRED (0 ok, 0 warn, 0 danger, 1 retired)" not in pretty.stdout
+    assert "Overall: RETIRED (0 ok, 0 warn, 0 danger, 1 retired)" in pretty.stdout
     assert "/work/retired-only-project" in pretty.stdout
     assert "Action Summary" in pretty.stdout
     assert "Use replacement" in pretty.stdout
@@ -2060,7 +2072,7 @@ def test_check_pretty_state_first_standard_vs_verbose(tmp_path: Path) -> None:
     assert standard.returncode == 2, standard.stderr
     assert "Current State" in standard.stdout
     assert (
-        "Task: Active - latest recorded turn has no terminal event"
+        "Turn: In progress - latest recorded turn has no terminal event"
         in standard.stdout
     )
     assert "Continuation: OK" in standard.stdout
@@ -2082,7 +2094,8 @@ def test_check_pretty_state_first_standard_vs_verbose(tmp_path: Path) -> None:
     assert verbose.returncode == 2, verbose.stderr
     assert "Overall: WARN" in verbose.stdout
     assert "Recommendation: monitor" in verbose.stdout
-    assert "Handoff readiness: Recommended" in verbose.stdout
+    assert "Next step: Monitor this session and reassess if its risk increases." in verbose.stdout
+    assert "Legacy handoff readiness: Recommended" in verbose.stdout
     assert "Domain risks:" in verbose.stdout
     assert "Handoff:" in verbose.stdout
     assert "Why: active turn has no terminal completion, abort, or error event" in verbose.stdout
@@ -2125,7 +2138,7 @@ def test_check_pretty_scale_shows_measurements_and_effective_thresholds() -> Non
 
     assert "  Size: 1.5 KiB (1,536 bytes) of 2.0 KiB (2,048 bytes) warning threshold" in rendered
     assert "  Items: 10 of 20 warning threshold" in rendered
-    assert "  Compactions: 2 of 3 healthy maximum" in rendered
+    assert "  Compactions: 2 of 3 review threshold" in rendered
     assert "  Visuals: 3" in rendered
 
 
@@ -2170,7 +2183,7 @@ def test_check_pretty_standard_uses_filtered_continuation_reasons() -> None:
         "completed",
         "latest recorded turn completed",
         "watch",
-        "prepare-handoff",
+        "monitor",
         "not-recorded",
         scale_status="watch",
     )
@@ -2185,6 +2198,7 @@ def test_check_pretty_standard_uses_filtered_continuation_reasons() -> None:
         size_format="bytes",
     )
 
+    assert "Action: Monitor this thread; a handoff is not currently required." in rendered
     assert "Why: active token estimate is above 70% of context window" in rendered
     assert "legacy aggregate reason" not in rendered
 
@@ -2279,7 +2293,7 @@ def test_projects_pretty_state_first_table_shape_and_action_summary() -> None:
                 "completed",
                 "latest recorded turn completed",
                 "watch",
-                "prepare-handoff",
+                "monitor",
                 "not-recorded",
                 scale_status="watch",
                 items="watch",
@@ -2321,14 +2335,16 @@ def test_projects_pretty_state_first_table_shape_and_action_summary() -> None:
     }
 
     compact = codex_thread_health.projects_pretty(result, mode="compact", size_format="bytes")
+    assert "Overall: DANGER (2 ok, 1 warn, 1 danger, 1 retired)" in compact
+    assert "Status" in compact
     assert "Project" in compact
-    assert "Task" in compact
-    assert "Continue" in compact
+    assert "Turn" in compact
+    assert "Risk" in compact
     assert "Lineage" in compact
     assert "Action" in compact
     assert "Scale" in compact
     assert "Finish turn" in compact
-    assert "Prepare handoff" in compact
+    assert "Monitor" in compact
     assert "Handoff now" in compact
     assert "Continue" in compact
     assert "Use replacement" in compact
@@ -2339,11 +2355,11 @@ def test_projects_pretty_state_first_table_shape_and_action_summary() -> None:
         size_format="bytes",
     )
     summary = standard.split("Project Summary", 1)[1]
-    header = next(line for line in summary.splitlines() if line.strip().startswith("Project"))
-    columns = ("Project", "Task", "Continue", "Lineage", "Action", "Scale")
+    header = next(line for line in summary.splitlines() if line.strip().startswith("Status"))
+    columns = ("Status", "Project", "Turn", "Risk", "Lineage", "Action", "Scale")
     for first, second in zip(columns, columns[1:]):
         assert header.index(first) < header.index(second)
-    assert "Prepare handoff: /work/project-watch" in standard
+    assert "Monitor: /work/project-watch" in standard
     assert "- active token estimate is above 70% of context window" in standard
     assert "Handoff now: /work/project-danger" in standard
     assert "Use replacement: /work/project-retired" in standard
@@ -2407,13 +2423,14 @@ def test_projects_default_output_is_human_readable() -> None:
 
     assert result.returncode == 3
     assert "Codex Thread Health" in result.stdout
+    assert "Overall: DANGER (6 ok, 1 warn, 4 danger, 0 retired)" in result.stdout
     assert "Projects: 11" in result.stdout
     assert "Next step:" not in result.stdout
     assert "Project Summary" in result.stdout
-    assert "Status" not in result.stdout
+    assert "Status" in result.stdout
     assert "Project" in result.stdout
-    assert "Task" in result.stdout
-    assert "Continue" in result.stdout
+    assert "Turn" in result.stdout
+    assert "Risk" in result.stdout
     assert "Lineage" in result.stdout
     assert "Action" in result.stdout
     assert "Scale" in result.stdout
@@ -2534,8 +2551,8 @@ def test_projects_verbose_keeps_diagnostic_blocks() -> None:
     assert "Project Summary" not in result.stdout
     assert "Action Summary" not in result.stdout
     assert "Recommendation:" in result.stdout
-    assert "Continuation health:" in result.stdout
-    assert "Handoff readiness:" in result.stdout
+    assert "Legacy continuation health:" in result.stdout
+    assert "Legacy handoff readiness:" in result.stdout
     assert "Domain risks:" in result.stdout
     assert "File:" in result.stdout
 
@@ -2547,7 +2564,7 @@ def test_projects_verbose_keeps_legacy_aggregate_and_full_state_details() -> Non
         "completed",
         "latest recorded turn completed",
         "watch",
-        "prepare-handoff",
+        "monitor",
         "incomplete",
         scale_status="watch",
     )
@@ -2574,7 +2591,9 @@ def test_projects_verbose_keeps_legacy_aggregate_and_full_state_details() -> Non
     )
 
     assert "Overall: WARN" in rendered
-    assert "Next step: You can continue, but make a handoff soon if this task will keep growing." in rendered
+    assert "Next step: Monitor this session and reassess if its risk increases." in rendered
+    assert "Legacy continuation health:" in rendered
+    assert "Legacy handoff readiness: Not needed" in rendered
     assert "Turn events: 3 started, 1 completed, 1 aborted, 1 errors, 2 terminal, 1 incomplete" in rendered
     assert "Lineage sources: 11111111-1111-1111-1111-111111111111" in rendered
 
@@ -2912,7 +2931,7 @@ def test_check_visual_compacted_fixture_warns_about_visuals_inside_compaction() 
     }
 
 
-def test_check_response_items_warning_scale_requests_prepared_handoff(
+def test_check_response_items_warning_scale_is_monitored_without_handoff(
     tmp_path: Path,
 ) -> None:
     session = tmp_path / "warningscale-response-items.jsonl"
@@ -2970,8 +2989,8 @@ def test_check_response_items_warning_scale_requests_prepared_handoff(
         "visuals": "ok",
     }
     assert payload["action"] == {
-        "status": "prepare-handoff",
-        "reason": "continuation risk should be addressed with a deliberate handoff",
+        "status": "monitor",
+        "reason": "warning signals should be monitored before deciding on a handoff",
     }
 
 
@@ -3128,8 +3147,8 @@ def test_pretty_output_includes_domain_breakdown() -> None:
     assert "Domain risks" in result.stdout
     assert "Why:" in result.stdout
     assert "DANGER" in result.stdout
-    assert "Continuation health: DANGER" in result.stdout
-    assert "Handoff readiness: Needed" in result.stdout
+    assert "Legacy continuation health: DANGER" in result.stdout
+    assert "Legacy handoff readiness: Needed" in result.stdout
     assert "Visuals" in result.stdout
     assert "Compaction" in result.stdout
     assert "Continuity" in result.stdout

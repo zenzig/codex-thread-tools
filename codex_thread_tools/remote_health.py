@@ -39,6 +39,12 @@ UTC_TIMESTAMP_PATTERN = re.compile(
     r"(?:\.[0-9]{1,6})?Z$"
 )
 REMOTE_HEALTH_PROTOCOL = 1
+MONITOR_ACTION_REASON = (
+    "warning signals should be monitored before deciding on a handoff"
+)
+LEGACY_PREPARE_ACTION_REASON = (
+    "continuation risk should be addressed with a deliberate handoff"
+)
 SUMMARY_KEYS = ("projects", "ok", "warn", "danger", "retired")
 REMOTE_REQUIRED_METRIC_KEYS = (
     "bytes",
@@ -88,7 +94,8 @@ CANONICAL_TASK_STATE_REASONS = {
 CANONICAL_ACTION_REASONS = {
     "no continuation risk requires a handoff",
     "task is active; no continuation risk requires a handoff",
-    "continuation risk should be addressed with a deliberate handoff",
+    MONITOR_ACTION_REASON,
+    LEGACY_PREPARE_ACTION_REASON,
     "continuation risk requires a fresh thread before continuing",
     "this source session was retired by a completed handoff",
 }
@@ -466,15 +473,20 @@ def build_remote_safe_report(report: dict[str, Any]) -> dict[str, Any]:
                 raise RemoteHealthError(
                     "cannot build remote-safe health report: invalid action"
                 )
+            action_status = _enum(
+                action.get("status"),
+                set(VALID_ACTION_STATES),
+                "action.status",
+            )
+            action_reason = _state_detail(
+                action.get("reason"), CANONICAL_ACTION_REASONS
+            )
+            if action_status == "monitor":
+                action_status = "prepare-handoff"
+                action_reason = LEGACY_PREPARE_ACTION_REASON
             safe_item["action"] = {
-                "status": _enum(
-                    action.get("status"),
-                    set(VALID_ACTION_STATES),
-                    "action.status",
-                ),
-                "reason": _state_detail(
-                    action.get("reason"), CANONICAL_ACTION_REASONS
-                ),
+                "status": action_status,
+                "reason": action_reason,
             }
         safe_projects.append(safe_item)
 
@@ -687,6 +699,19 @@ def select_remote_project(
 
 def add_remote_metadata(report: dict[str, Any], host: str) -> dict[str, Any]:
     result = deepcopy(report)
+    for project in result.get("projects", []):
+        continuation = project.get("continuation_risk")
+        action = project.get("action")
+        if (
+            isinstance(continuation, dict)
+            and continuation.get("status") == "watch"
+            and isinstance(action, dict)
+            and action.get("status") in {"monitor", "prepare-handoff"}
+        ):
+            project["action"] = {
+                "status": "monitor",
+                "reason": MONITOR_ACTION_REASON,
+            }
     result["source"] = "remote"
     result["host"] = host
     return result

@@ -55,6 +55,7 @@ HANDOFF_LINEAGE_STATES = (
 ACTION_STATES = (
     "continue",
     "finish-current-turn",
+    "monitor",
     "prepare-handoff",
     "handoff-now",
     "use-replacement",
@@ -323,7 +324,7 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
     task_state = task_state_for_metrics(metrics)
     notices = notices_for_domains(risk_domains)
     scale = scale_for_metrics(metrics, thresholds)
-    continuation_risk = continuation_risk_for_domains(risk_domains, scale)
+    continuation_risk = continuation_risk_for_domains(risk_domains)
     handoff_lineage = base_handoff_lineage()
     action = action_for_state(task_state, continuation_risk, handoff_lineage)
     return {
@@ -587,7 +588,6 @@ def notices_for_domains(
 
 def continuation_risk_for_domains(
     risk_domains: dict[str, dict[str, Any]],
-    scale: dict[str, str],
 ) -> dict[str, Any]:
     status = "ok"
     reasons: list[str] = []
@@ -603,11 +603,6 @@ def continuation_risk_for_domains(
         reasons.extend(relevant)
         if relevant and STATUS_RANK[details["status"]] > STATUS_RANK[status]:
             status = details["status"]
-
-    if scale["compactions"] == "watch":
-        reasons.append(INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC)
-        if STATUS_RANK["warn"] > STATUS_RANK[status]:
-            status = "warn"
 
     return {
         "status": "watch" if status == "warn" else status,
@@ -637,7 +632,7 @@ def scale_for_metrics(
         metrics["installed_compaction_checkpoints"]
         > thresholds.max_healthy_compactions
     ):
-        compactions = "watch"
+        compactions = "notice"
 
     visuals = "ok"
     if metrics["invalid_image_urls_in_compacted_records"] > 0:
@@ -691,6 +686,9 @@ def action_for_state(
         "finish-current-turn": (
             "task is active; no continuation risk requires a handoff"
         ),
+        "monitor": (
+            "warning signals should be monitored before deciding on a handoff"
+        ),
         "prepare-handoff": (
             "continuation risk should be addressed with a deliberate handoff"
         ),
@@ -707,7 +705,7 @@ def action_for_state(
     elif continuation_risk["status"] == "danger":
         status = "handoff-now"
     elif continuation_risk["status"] == "watch":
-        status = "prepare-handoff"
+        status = "monitor"
     elif task_state["status"] == "active":
         status = "finish-current-turn"
     else:

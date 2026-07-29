@@ -58,8 +58,7 @@ Allowed values are:
 - `unknown`: event data cannot establish a current turn state.
 
 `active` is a lifecycle state. It must not, by itself, make continuation risk
-`watch`, recommend a handoff, or change action from `continue` to
-`prepare-handoff`.
+`watch`, recommend a handoff, or select a handoff action.
 
 ### Continuation Risk
 
@@ -77,8 +76,8 @@ Allowed values are `ok`, `watch`, and `danger`.
 - `danger`: replay-integrity failures, unrecovered turn failures, dangerous
   size or token pressure, compaction failure, or another existing danger-level
   continuity, load, visual, compaction, or limits condition.
-- `watch`: warning-level scale, token, compaction, integrity, or unrecovered
-  continuity conditions that make a deliberate future handoff prudent.
+- `watch`: warning-level scale, token, integrity, or unrecovered continuity
+  conditions that should be monitored but do not currently require a handoff.
 - `ok`: no condition requiring a near-term handoff.
 
 An unmatched active turn is represented only in `task_state`. Historical visual
@@ -125,7 +124,9 @@ uses `incomplete` only when actual partial marker evidence exists.
 
 `scale` reports current threshold position, not a growth rate. The tool does
 not persist historical snapshots in this release, so it must not imply a trend
-or estimate time to a threshold.
+or estimate time to a threshold. A successful installed compaction count above
+the review threshold is `notice`; it does not independently increase
+continuation risk.
 
 ### Action
 
@@ -138,14 +139,15 @@ or estimate time to a threshold.
 }
 ```
 
-Allowed values are `continue`, `finish-current-turn`, `prepare-handoff`,
-`handoff-now`, and `use-replacement`.
+Allowed values are `continue`, `finish-current-turn`, `monitor`,
+`prepare-handoff`, `handoff-now`, and `use-replacement`. `prepare-handoff`
+remains accepted for compatibility with older state-first reports.
 
 Action precedence is:
 
 1. A retired source uses `use-replacement`.
 2. Danger continuation risk uses `handoff-now`.
-3. Watch continuation risk uses `prepare-handoff`.
+3. Watch continuation risk uses `monitor`.
 4. Active task state with `ok` continuation risk uses `finish-current-turn`.
 5. Otherwise use `continue`.
 
@@ -155,7 +157,7 @@ Action precedence is:
 
 ```text
 Current State
-Task: Active - latest turn has no terminal event
+Turn: In progress - latest turn has no terminal event
 Continuation: OK
 Handoff: Replacement active
 Action: Finish the current turn, then continue.
@@ -170,13 +172,14 @@ Notices
 - Visual references exist inside compacted replacement history.
 ```
 
-`projects` uses columns for task state, continuation risk, handoff lineage,
-action, and compact scale. `compact` remains one screen. `verbose` adds the
-full domain table, terminal-event counts, lineage identifiers, paths, reasons,
-and legacy aggregate status.
+`projects` shows the aggregate status plus columns for turn state,
+continuation risk, handoff lineage, action, and compact scale. `compact`
+remains one screen. `verbose` adds the full domain table, terminal-event
+counts, lineage identifiers, paths, reasons, and legacy aggregate status.
 
-Legacy `status` remains visible in verbose diagnostics and JSON but does not
-lead the standard human report.
+Legacy `status` remains visible in project reports, verbose diagnostics, and
+JSON. The separate risk and action fields prevent that aggregate value from
+being mistaken for automatic handoff guidance.
 
 ## Remote Health And Privacy
 
@@ -187,6 +190,8 @@ project/file identity, or marker-file contents.
 
 Older remote hosts remain supported. The local client treats absent additive
 fields as unknown/unavailable for display instead of failing report validation.
+Protocol 1 transports `monitor` using its legacy watch-action value; updated
+clients normalize that value back to `monitor` after validating the report.
 
 ## Verification
 
@@ -197,8 +202,10 @@ Add focused coverage for:
   recommendation;
 - historical compacted visual references only: a notice, not continuation
   risk;
-- scale, token, or compaction pressure: `continuation_risk=watch` and
-  `action=prepare-handoff`;
+- warning-level scale, token, or integrity pressure:
+  `continuation_risk=watch` and `action=monitor`;
+- successful installed compaction count above the review threshold:
+  `scale.compactions=notice` without increasing continuation risk;
 - replay-integrity or unrecovered failure: `continuation_risk=danger` and
   `action=handoff-now`;
 - marker-backed replacement and retired source lineage;

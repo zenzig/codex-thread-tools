@@ -75,7 +75,7 @@ def next_step(status: str) -> str:
     if status == "danger":
         return "Create a handoff and start a fresh Codex thread before continuing."
     if status == "warn":
-        return "You can continue, but make a handoff soon if this task will keep growing."
+        return "Monitor this session and reassess if its risk increases."
     if status == "retired":
         return "Use the active replacement thread or the handoff file."
     return "Continue in the current thread."
@@ -100,13 +100,18 @@ REMOTE_STATE_UPDATE_MESSAGE = (
 def task_state_line(item: dict[str, Any]) -> str:
     details = item.get("task_state")
     if not isinstance(details, dict):
-        return f"Task: {REMOTE_STATE_UNAVAILABLE}"
-    status = details.get("status", "unknown")
+        return f"Turn: {REMOTE_STATE_UNAVAILABLE}"
+    status = str(details.get("status", "unknown"))
     reason = details.get("reason", "")
-    label = status_label(str(status)).title()
+    label = {
+        "active": "In progress",
+        "completed": "Complete",
+        "interrupted": "Interrupted",
+        "unknown": "Unknown",
+    }.get(status, status_label(status).title())
     if reason:
-        return f"Task: {label} - {reason}"
-    return f"Task: {label}"
+        return f"Turn: {label} - {reason}"
+    return f"Turn: {label}"
 
 
 def continuation_line(item: dict[str, Any]) -> str:
@@ -134,6 +139,7 @@ def action_sentence(status: str) -> str:
     return {
         "continue": "Continue in the current thread.",
         "finish-current-turn": "Finish the current turn, then continue.",
+        "monitor": "Monitor this thread; a handoff is not currently required.",
         "prepare-handoff": (
             "Finish the current turn and prepare a deliberate handoff."
         ),
@@ -172,7 +178,7 @@ def scale_lines(
     compaction_line = f"  Compactions: {compaction_value}"
     if thresholds is not None and compaction_value != "not recorded":
         compaction_line += (
-            f" of {format_count(thresholds.max_healthy_compactions)} healthy maximum"
+            f" of {format_count(thresholds.max_healthy_compactions)} review threshold"
         )
     size_line = f"  Size: {format_bytes(metrics['bytes'], size_format)}"
     items_line = f"  Items: {format_count(metrics['response_items'])}"
@@ -212,6 +218,7 @@ def project_action_label(item: dict[str, Any]) -> str:
     return {
         "continue": "Continue",
         "finish-current-turn": "Finish turn",
+        "monitor": "Monitor",
         "prepare-handoff": "Prepare handoff",
         "handoff-now": "Handoff now",
         "use-replacement": "Use replacement",
@@ -222,11 +229,13 @@ def project_task_line(item: dict[str, Any]) -> str:
     details = item.get("task_state")
     if not isinstance(details, dict):
         return REMOTE_STATE_UNAVAILABLE
-    status = details.get("status", "unknown")
-    reason = details.get("reason")
-    if reason:
-        return f"{status_label(str(status)).title()} - {reason}"
-    return status_label(str(status)).title()
+    status = str(details.get("status", "unknown"))
+    return {
+        "active": "In progress",
+        "completed": "Complete",
+        "interrupted": "Interrupted",
+        "unknown": "Unknown",
+    }.get(status, status_label(status).title())
 
 
 def project_scale_label(item: dict[str, Any]) -> str:
@@ -356,6 +365,13 @@ def projects_pretty(
     lines.extend(
         [
             f"Session folder: {result['session_root']}",
+            (
+                f"Overall: {status_label(summary_status(summary))} "
+                f"({format_count(summary['ok'])} ok, "
+                f"{format_count(summary['warn'])} warn, "
+                f"{format_count(summary['danger'])} danger, "
+                f"{format_count(summary['retired'])} retired)"
+            ),
             f"Projects: {format_count(summary['projects'])}",
         ]
     )
@@ -462,9 +478,9 @@ def check_verbose(
         action_line(result),
         *scale_lines(result, size_format, thresholds),
         *notice_lines(result),
-        f"Continuation health: {status_label(result.get('continuation_status', result['status']))}",
+        f"Legacy continuation health: {status_label(result.get('continuation_status', result['status']))}",
         (
-            "Handoff readiness: "
+            "Legacy handoff readiness: "
             f"{handoff_label(result.get('handoff_readiness', {}).get('status', ''))}"
         ),
         handoff_summary_line(result),
@@ -489,6 +505,7 @@ def render_project_table(
     for item in projects:
         rows.append(
             [
+                status_label(item["status"]),
                 format_project(item["project"], 24),
                 project_task_line(item),
                 continuation_label(item),
@@ -499,9 +516,10 @@ def render_project_table(
         )
     return render_table(
         (
+            "Status",
             "Project",
-            "Task",
-            "Continue",
+            "Turn",
+            "Risk",
             "Lineage",
             "Action",
             "Scale",
@@ -525,9 +543,9 @@ def project_detail_lines(
         f"  {continuation_line(item)}",
         f"  {lineage_line(item)}",
         f"  {action_line(item)}",
-        f"  Continuation health: {status_label(item.get('continuation_status', item['status']))}",
+        f"  Legacy continuation health: {status_label(item.get('continuation_status', item['status']))}",
         (
-            "  Handoff readiness: "
+            "  Legacy handoff readiness: "
             f"{handoff_label(item.get('handoff_readiness', {}).get('status', ''))}"
         ),
     ]
