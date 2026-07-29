@@ -38,6 +38,7 @@ build/
 # investigation output from this machine.
 .codex/
 docs/superpowers/
+docs/designs/
 docs/codex-thread-recovery-starter.md
 documentation/
 notes/
