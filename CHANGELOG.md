@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.3.1 - 2026-07-29
+
+- Restore explicit health severity in project reports and use monitor guidance
+  for warning-level continuation risk.
+- Treat successful compaction counts as scale information and restrict prompt
+  handoff markers to user-authored messages.
+
 ## 1.3.0 - 2026-07-27
 
 - Add state-first health reporting with explicit task lifecycle state and continuation

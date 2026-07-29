@@ -9,6 +9,7 @@ from pathlib import Path
 from codex_thread_tools.handoff_markers import (
     handoff_lineage_for_result,
     marker_aware_active_sessions_by_project,
+    prompt_markers_for_session,
     retired_marker_for_result,
 )
 
@@ -179,6 +180,91 @@ def test_path_matched_retirement_uses_marker_source_session_id() -> None:
         "source_session_ids": [marker_source_id],
         "total_handoffs": 1,
     }
+
+
+def test_prompt_marker_uses_only_user_authored_message(tmp_path: Path) -> None:
+    session = tmp_path / "replacement.jsonl"
+    marker = (
+        "Codex thread handoff marker:\n"
+        "source_session_id: source-session\n"
+        "handoff_file: /work/project/handoff.md\n"
+        "project: /work/project\n"
+        "handoff_sequence: 1"
+    )
+    records = [
+        {
+            "type": "session_meta",
+            "payload": {"id": "replacement-session", "cwd": "/work/project"},
+        },
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": marker}],
+            },
+        },
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": marker}],
+            },
+        },
+        {
+            "type": "event_msg",
+            "payload": {"type": "user_message", "message": marker},
+        },
+    ]
+    session.write_text(
+        "\n".join(json.dumps(record) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+    assert prompt_markers_for_session(session) == [
+        {
+            "source_session_id": "source-session",
+            "handoff_file": "/work/project/handoff.md",
+            "project": "/work/project",
+            "handoff_sequence": 1,
+            "replacement_session_file": str(session),
+            "replacement_session_id": "replacement-session",
+        }
+    ]
+
+
+def test_assistant_marker_example_does_not_create_handoff_lineage(
+    tmp_path: Path,
+) -> None:
+    session = tmp_path / "assistant-example.jsonl"
+    marker = (
+        "Codex thread handoff marker:\n"
+        "source_session_id: unrelated-session\n"
+        "handoff_file: /work/project/handoff.md\n"
+        "project: /work/project\n"
+        "handoff_sequence: 1"
+    )
+    records = [
+        {
+            "type": "session_meta",
+            "payload": {"id": "current-session", "cwd": "/work/project"},
+        },
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": marker}],
+            },
+        },
+    ]
+    session.write_text(
+        "\n".join(json.dumps(record) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+    assert prompt_markers_for_session(session) == []
 
 
 def run_marker(*args: str) -> subprocess.CompletedProcess[str]:

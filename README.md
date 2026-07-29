@@ -72,7 +72,7 @@ Then just say `Use codex-thread-handoff` whenever a health report tells you it's
 
 ## How it works
 
-1. **Inspect** — a health report finds your active project session and scores independent risk domains, not just raw file size.
+1. **Inspect** — a health report selects one project session and scores independent risk domains, not just raw file size.
 2. **Decide** — it tells you plainly: continue, monitor, or hand off, and shows the signals behind that call.
 3. **Preserve** — handoff and archive tools keep the durable facts and visual evidence, and leave the bulky or sensitive payloads behind.
 4. **Continue** — start clean with tight project context, while the old session stays around for recovery or verified archiving.
@@ -87,7 +87,7 @@ codex-thread-tools health --json
 ```
 
 The human-readable output is for your terminal. `--json` is the stable interface if you're scripting against it.
-Health separates task lifecycle from continuation risk. An active turn can be safe to finish in-place; a handoff is recommended when continuation risk increases, not activity alone.
+Health separates the latest turn from continuation risk. `WARN` means monitor the selected session; `DANGER` is what triggers handoff-now guidance. Successful compaction counts remain visible as scale information without requiring a handoff by themselves.
 `--json` keeps existing machine-readable compatibility fields and adds state-first fields for compatible clients.
 
 ### Remote health
@@ -118,7 +118,7 @@ Start at [Documentation](docs/README.md), or jump straight to:
 ## Project
 
 - **Status:** Production
-- **Version:** `1.3.0`
+- **Version:** `1.3.1`
 - **Issues:** [Report a bug or request a feature](https://github.com/zenzig/codex-thread-tools/issues)
 - **Security:** Read the [security policy](SECURITY.md) before reporting a vulnerability.
 - **[Changelog](CHANGELOG.md):** Release history and notable changes.

@@ -7,7 +7,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from codex_thread_tools.sessionlib import iter_jsonl, now_iso, record_text
+from codex_thread_tools.sessionlib import (
+    iter_jsonl,
+    now_iso,
+    payload_role,
+    payload_type,
+    record_text,
+)
 from codex_thread_tools.thread_health import action_for_state
 
 
@@ -176,6 +182,12 @@ def prompt_markers_for_session(path: Path) -> list[dict[str, Any]]:
     identity = session_identity(path)
     markers: list[dict[str, Any]] = []
     for _line_no, _raw, record in iter_jsonl(path):
+        if (
+            record.get("type") != "response_item"
+            or payload_type(record) != "message"
+            or payload_role(record) != "user"
+        ):
+            continue
         text = record_text(record)
         if PROMPT_HEADER not in text:
             continue

@@ -177,6 +177,30 @@ def test_remote_safe_report_preserves_state_axes() -> None:
     assert safe_project["action"]["status"] == "finish-current-turn"
 
 
+def test_remote_safe_report_preserves_protocol_1_action_compatibility() -> None:
+    payload = fixture_projects_report()
+    project = payload["projects"][0]
+    project["continuation_risk"] = {
+        "status": "watch",
+        "reasons": ["active token estimate is above 70% of context window"],
+    }
+    project["action"] = {
+        "status": "monitor",
+        "reason": "warning signals should be monitored before deciding on a handoff",
+    }
+
+    safe = build_remote_safe_report(payload)
+
+    assert safe["projects"][0]["action"] == {
+        "status": "prepare-handoff",
+        "reason": "continuation risk should be addressed with a deliberate handoff",
+    }
+    assert validate_projects_report(safe) == safe
+
+    local = add_remote_metadata(safe, "user@example-host")
+    assert local["projects"][0]["action"] == project["action"]
+
+
 def test_remote_safe_report_filters_noncanonical_state_details() -> None:
     payload = fixture_projects_report()
     payload["projects"][0]["task_state"] = {

@@ -1,8 +1,12 @@
 # Handoff Workflow
 
+Monitor `WARN` threads and reassess them as work continues. Prepare a handoff
+for `DANGER` threads once any active turn is complete.
+
 Use `codex-thread-handoff` when:
 
-- the health check says `WARN` or `DANGER`
+- the health check says `DANGER`
+- a monitored `WARN` has persisted or worsened and you decide to rotate the thread
 - a major implementation slice is complete
 - Codex reports a context-window or compaction error
 - the model starts losing track of earlier decisions
@@ -26,10 +30,12 @@ resume the project.
 ## Quick Flow
 
 1. Run `codex-thread-tools health`.
-2. If health is `WARN` or `DANGER`, ask Codex to use `codex-thread-handoff`.
-3. Review the generated handoff file in your project repository.
-4. Start a fresh Codex thread with the prompt from that handoff.
-5. Continue from durable repository notes, not from the old oversized session.
+2. If health is `WARN`, monitor the thread and reassess it as work continues.
+3. If health is `DANGER`, finish the active turn and ask Codex to use
+   `codex-thread-handoff`.
+4. Review the generated handoff file in your project repository.
+5. Start a fresh Codex thread with the prompt from that handoff.
+6. Continue from durable repository notes, not from the old oversized session.
 
 ## Handoff Summary Draft
 

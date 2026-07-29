@@ -6,36 +6,41 @@ The main command is:
 codex-thread-tools health
 ```
 
-It scans your Codex session folder, finds the active user-owned root session
-for each project, and reports whether each thread looks safe to continue. A
-newer subagent or automation session does not replace that root in the project
-report. If a project has no root session, the newest available child session is
-used as a fallback.
+It scans your Codex session folder, selects the newest non-retired
+user-owned root session for each project, and reports whether it looks safe to
+continue. A newer subagent or automation session does not replace that root in
+the project report. If a project has no root session, the newest available
+child session is used as a fallback. A selected session can be old; guidance
+applies if you intend to resume that exact thread.
 
 ## Statuses
 
 | Status | Meaning | What to do |
 | --- | --- | --- |
 | `OK` | No major risk signals were found. | Keep working. |
-| `WARN` | One risk area needs attention. | Finish the current turn; then continue with increased scrutiny or a deliberate handoff. |
+| `WARN` | One risk area needs attention. | Monitor the selected session; a handoff is not currently required. |
 | `DANGER` | Strong risk signals were found. | Handoff before continuing. |
 | `RETIRED` | The session was already handed off and is no longer active. | Use the replacement thread or the handoff file. |
 
-Task state and continuation risk are separate. Health separates task lifecycle
-state from continuation risk. A thread can be in an
-active turn and still be safe to finish; handoff guidance is based on whether
-continuation risk is low, rising, or high.
+Turn state and continuation risk are separate. The `Overall` line and `Status`
+column retain the aggregate domain severity used by JSON and exit codes. The
+separate `Turn`, `Risk`, and `Action` columns
+explain what that severity means operationally. A thread can have an active turn
+or a historical warning and still be safe to continue.
 
-| Task State | Continuation Risk | Handoff Lineage | Action |
+| Turn State | Continuation Risk | Handoff Lineage | Action |
 | --- | --- | --- | --- |
 | `active` | `ok` | Any | Finish the current turn, then continue. |
-| `active` | `watch` | Any | Finish the current turn and prepare a deliberate handoff. |
-| `active` | `danger` | Any | Handoff before continuing. |
+| Any | `watch` | Any | Monitor the thread; a handoff is not currently required. |
+| Any | `danger` | Any | Handoff before continuing. |
 | Any | Any | `source-retired` | Use the replacement thread or handoff summary. |
 
 For historical compacted visual references, the report emits notice-level output by
 themselves so they can be reviewed without being treated as unsafe continuity
-signals.
+signals. Successful installed compaction counts are also scale information:
+crossing the configured compaction review threshold produces `NOTICE`, not
+continuation risk. Failed or malformed compaction state can still produce
+`WARN` or `DANGER`.
 
 The health check is read-only. It does not edit, delete, trim, or repair any
 Codex thread.
@@ -63,11 +68,14 @@ codex-thread-tools health --mode verbose --size-format both
 ```
 
 `--size-format` accepts `bytes`, `human`, or `both`.
+Verbose output labels compatibility-only continuation and handoff-readiness
+fields as `Legacy`; use the state-first `Risk` and `Action` values for the
+current guidance.
 
 For a single session, standard output shows measured file size and its warning
 threshold, response items and their warning threshold, installed compaction
 checkpoints, and visual references. Request-only compaction records do not count
-as installed checkpoint pressure.
+as installed checkpoints.
 
 Remote verbose reports show the remote measurements and remote-computed scale
 state, but omit local threshold labels because the remote host can use different

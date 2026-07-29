@@ -60,12 +60,14 @@ python3 tests/fixtures/build_fixtures.py
 
 The tests do not depend on your real `~/.codex/sessions` folder.
 
-## 1.3.0 Compatibility
+## 1.3.x Compatibility
 
-Version 1.3.0 keeps protocol-compatibility with existing scripts while adding
-state-first local and remote health results. protocol 1 accepts older remote
-reports that omit state fields and also accepts new reports with validated additive
-fields. Existing runtime dependencies and CLI compatibility are unchanged.
+Version 1.3.x keeps protocol compatibility with existing scripts while adding
+state-first local and remote health results. The privacy-safe protocol 1 accepts
+older remote reports that omit state fields and also accepts new reports with
+validated additive fields. Version 1.3.1 normalizes warning-level remote
+actions client-side so 1.3.0 remote reports remain compatible. Existing
+runtime dependencies and CLI compatibility are unchanged.
 
 Local health JSON uses canonical diagnostics rather than raw event snippets from
 session records.
