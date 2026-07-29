@@ -149,6 +149,15 @@ def test_handoff_redaction_documentation_is_explicit() -> None:
     assert "review before sharing" in text
 
 
+def test_handoff_documentation_distinguishes_monitor_from_handoff_now() -> None:
+    text = (DOCS / "handoff.md").read_text(encoding="utf-8")
+    normalized_text = " ".join(text.split())
+
+    assert "Monitor `WARN`" in normalized_text
+    assert "handoff for `DANGER`" in normalized_text
+    assert "If health is `WARN` or `DANGER`" not in normalized_text
+
+
 def test_recovery_documentation_leads_with_safe_diagnosis_and_bundle() -> None:
     text = (DOCS / "recovery.md").read_text(encoding="utf-8")
 
