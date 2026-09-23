@@ -9,6 +9,7 @@ from codex_thread_tools.display import format_count
 from codex_thread_tools.redaction import redact_sensitive_text
 from codex_thread_tools.sessionlib import (
     iter_jsonl,
+    iter_session_records,
     payload_role,
     payload_type,
     record_text,
@@ -93,7 +94,7 @@ def durable_context_items(
     redactions: dict[str, int],
 ) -> list[dict[str, str]]:
     items: list[dict[str, str]] = []
-    for _line_no, _raw, record in iter_jsonl(session_file):
+    for _line_no, _raw, record in iter_session_records(session_file):
         rtype = record.get("type")
         ptype = payload_type(record)
         if rtype == "response_item" and is_tool_payload_type(ptype):

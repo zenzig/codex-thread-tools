@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 - Unreleased
+
+- Add Claude Code support: health, handoff summaries, handoff markers, and visual
+  archives read `~/.claude/projects` sessions; `--agent claude` selects the root.
+- Add the `thread-handoff` Claude Code skill (`install-skill --agent claude`), which
+  wires the latest handoff into `CLAUDE.local.md` for the next session.
+
 ## 1.3.2 - 2026-08-04
 
 - Distinguish the repository-backed handoff skill from Codex native Handoff and improve skill installation guidance.

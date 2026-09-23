@@ -76,6 +76,21 @@ handoff for a new task. Do not use Codex's native Handoff or `handoff_thread`.
 If the skill is unavailable, stop and report that it must be installed.
 ```
 
+## Claude Code
+
+The same health checks, handoff summaries, and visual archives work on Claude Code
+sessions (`~/.claude/projects/<project>/<session>.jsonl`). The format is detected per
+file; subagent transcripts are skipped when scanning.
+
+```bash
+codex-thread-tools health --agent claude          # every Claude Code project
+codex-thread-tools install-skill --agent claude   # adds /thread-handoff
+```
+
+In Claude Code, run `/thread-handoff` when health says to, then `/clear`. The handoff
+is wired into `CLAUDE.local.md`, so the fresh session starts with it loaded. See
+[Claude Code](docs/claude-code.md).
+
 ## How it works
 
 1. **Inspect** — a health report selects one project session and scores independent risk domains, not just raw file size.
@@ -124,7 +139,7 @@ Start at [Documentation](docs/README.md), or jump straight to:
 ## Project
 
 - **Status:** Production
-- **Version:** `1.3.2`
+- **Version:** `1.4.0`
 - **Issues:** [Report a bug or request a feature](https://github.com/zenzig/codex-thread-tools/issues)
 - **Security:** Read the [security policy](SECURITY.md) before reporting a vulnerability.
 - **[Changelog](CHANGELOG.md):** Release history and notable changes.

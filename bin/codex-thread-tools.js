@@ -27,11 +27,12 @@ Usage:
   codex-thread-tools session-archive [args...]
   codex-thread-tools visual-archive [args...]
   codex-thread-tools recover [args...]
-  codex-thread-tools install-skill
+  codex-thread-tools install-skill [--agent codex|claude]
   codex-thread-tools --version
 
 Examples:
   codex-thread-tools health
+  codex-thread-tools health --agent claude
   codex-thread-tools health check ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
   codex-thread-tools handoff-summary ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
   codex-thread-tools session-archive plan --older-than 30d --min-size 100MiB
@@ -55,7 +56,7 @@ function main(argv) {
     return 0;
   }
   if (command === "install-skill") {
-    return installSkill();
+    return skillAgent(args) === "claude" ? installClaudeSkill() : installSkill();
   }
   if (PYTHON_TOOLS.has(command)) {
     return runPythonTool(PYTHON_TOOLS.get(command), args);
@@ -101,6 +102,40 @@ function pythonCommands() {
     { command: "python3", args: [] },
     { command: "python", args: [] },
   ];
+}
+
+function skillAgent(args) {
+  const index = args.indexOf("--agent");
+  if (index !== -1 && args[index + 1]) {
+    return args[index + 1];
+  }
+  const hasCodex = fs.existsSync(path.join(os.homedir(), ".codex"));
+  const hasClaude = fs.existsSync(path.join(os.homedir(), ".claude"));
+  return !hasCodex && hasClaude ? "claude" : "codex";
+}
+
+function installClaudeSkill() {
+  const claudeHome = path.join(os.homedir(), ".claude");
+  if (!fs.existsSync(claudeHome)) {
+    process.stderr.write("Open Claude Code once so ~/.claude exists, then retry.\n");
+    return 1;
+  }
+  try {
+    const source = path.join(ROOT, "skills", "thread-handoff");
+    const target = path.join(claudeHome, "skills", "thread-handoff");
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.rmSync(target, { recursive: true, force: true });
+    fs.cpSync(source, target, { recursive: true });
+    process.stdout.write(
+      `Installed thread-handoff to ${target}\n\n` +
+        "Invoke it in Claude Code with: /thread-handoff\n" +
+        "Check session health with: codex-thread-tools health --agent claude\n"
+    );
+    return 0;
+  } catch (error) {
+    process.stderr.write(`Failed to install thread-handoff: ${error.message}\n`);
+    return 1;
+  }
 }
 
 function installSkill() {
