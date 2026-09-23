@@ -31,11 +31,19 @@ resume the project.
 
 1. Run `codex-thread-tools health`.
 2. If health is `WARN`, monitor the thread and reassess it as work continues.
-3. If health is `DANGER`, finish the active turn and ask Codex to use
-   `codex-thread-handoff`.
+3. If health is `DANGER`, finish the active turn and paste the exact repository-backed
+   request shown below into your next task handoff.
 4. Review the generated handoff file in your project repository.
 5. Start a fresh Codex thread with the prompt from that handoff.
 6. Continue from durable repository notes, not from the old oversized session.
+
+When you are ready to hand off, use:
+
+```text
+Use the installed `codex-thread-handoff` skill to create a repository-backed
+handoff for a new task. Do not use Codex's native Handoff or `handoff_thread`.
+If the skill is unavailable, stop and report that it must be installed.
+```
 
 ## Handoff Summary Draft
 
@@ -98,9 +106,10 @@ it somewhere else.
 
 `codex-thread-handoff` is for a different problem: retiring or rotating a large,
 risky, or completed project thread while preserving durable project context in
-your repository. It writes a handoff file, records health findings, captures
-visual archive decisions, and gives you the prompt and markers needed to start a
-fresh thread with the right project context.
+your repository. It never calls `handoff_thread`, and it does not transfer the
+active task. It writes a handoff file, records health findings, captures visual
+archive decisions, and gives you the prompt and markers needed to start a fresh
+thread with the right project context.
 
 You can use both together. Use Codex remote handoff for host placement. Use
 `codex-thread-tools` for thread health, repo-backed continuity, and safer thread

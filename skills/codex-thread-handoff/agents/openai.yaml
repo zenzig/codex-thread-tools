@@ -1,3 +1,6 @@
 interface:
   display_name: "Codex Thread Handoff"
-  default_prompt: "Use codex-thread-handoff."
+  default_prompt: >-
+    Use the installed `codex-thread-handoff` skill to create a repository-backed
+    handoff for a new task. Do not use Codex's native Handoff or `handoff_thread`.
+    If the skill is unavailable, stop and report that it must be installed.

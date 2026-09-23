@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.2 - 2026-08-04
+
+- Distinguish the repository-backed handoff skill from Codex native Handoff and improve skill installation guidance.
+
 ## Unreleased
 
 ## 1.3.1 - 2026-07-29

@@ -38,6 +38,12 @@ Examples:
   codex-thread-tools visual-archive scan ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 `;
 
+const SAFE_SKILL_INVOCATION = [
+  "Use the installed `codex-thread-handoff` skill to create a repository-backed",
+  "handoff for a new task. Do not use Codex's native Handoff or `handoff_thread`.",
+  "If the skill is unavailable, stop and report that it must be installed.",
+].join("\n");
+
 function main(argv) {
   const [command, ...args] = argv;
   if (!command || command === "help" || command === "--help" || command === "-h") {
@@ -104,15 +110,40 @@ function installSkill() {
     return 1;
   }
   const skillsDir = path.join(codexHome, "skills");
-  if (!fs.existsSync(skillsDir)) {
-    fs.mkdirSync(skillsDir);
+
+  try {
+    fs.mkdirSync(skillsDir, { recursive: true });
+    const source = path.join(ROOT, "skills", "codex-thread-handoff");
+    const sourceSkill = path.join(source, "SKILL.md");
+    const target = path.join(skillsDir, "codex-thread-handoff");
+    const targetSkill = path.join(target, "SKILL.md");
+
+    fs.rmSync(target, { recursive: true, force: true });
+    fs.cpSync(source, target, { recursive: true });
+
+    const sourceSkillContents = fs.readFileSync(sourceSkill);
+    const targetSkillContents = fs.readFileSync(targetSkill);
+    if (!sourceSkillContents.equals(targetSkillContents)) {
+      process.stderr.write(
+        "Failed to install codex-thread-handoff: SKILL.md verification failed\n"
+      );
+      return 1;
+    }
+
+    process.stdout.write(
+      `Installed codex-thread-handoff to ${target}\n\n` +
+        "Invoke it with:\n" +
+        `${SAFE_SKILL_INVOCATION}\n\n` +
+        "After upgrading codex-thread-tools, rerun `codex-thread-tools install-skill` to refresh the copied skill.\n" +
+        "If the updated skill is not visible, reload Codex or start a new task.\n"
+    );
+    return 0;
+  } catch (error) {
+    process.stderr.write(
+      `Failed to install codex-thread-handoff: ${error.message}\n`
+    );
+    return 1;
   }
-  const source = path.join(ROOT, "skills", "codex-thread-handoff");
-  const target = path.join(skillsDir, "codex-thread-handoff");
-  fs.rmSync(target, { recursive: true, force: true });
-  fs.cpSync(source, target, { recursive: true });
-  process.stdout.write(`Installed codex-thread-handoff to ${target}\n`);
-  return 0;
 }
 
 process.exitCode = main(process.argv.slice(2));
