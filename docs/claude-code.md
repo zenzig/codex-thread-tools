@@ -48,10 +48,16 @@ session:
 3. writes a dated handoff and puts stable facts into `CLAUDE.md`;
 4. points `CLAUDE.local.md` at the latest handoff, so the next session loads it.
 
-When the project has a `.reference/` directory, handoffs, screenshots, and
-reference docs go there. Making `.reference/` its own local git repository
-(ignored by the project repository) keeps that material versioned on the machine
-without pushing it anywhere.
+Handoffs, screenshots, and reference docs go in the project's `.reference/`
+folder. The skill sets it up automatically: it is its own local git repository,
+listed in the project's `.git/info/exclude` so the project repository ignores it
+without any tracked file changing, and each handoff is committed there. Nothing in
+it is pushed. You can run the same steps yourself:
+
+```bash
+codex-thread-tools reference init                    # create .reference/ and hide it
+codex-thread-tools reference commit -m "Add spec"    # commit everything in it
+```
 
 Then run `/clear` or start a new session: it starts from `CLAUDE.md`, the handoff,
 and auto memory instead of the old transcript.

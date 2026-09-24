@@ -158,3 +158,33 @@ def test_install_skill_for_claude_code(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     installed = tmp_path / ".claude" / "skills" / "thread-handoff" / "SKILL.md"
     assert installed.read_text().startswith("---\nname: thread-handoff\n")
+
+
+def test_reference_init_and_commit_stay_local(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
+    }
+    cli = ["node", str(ROOT / "bin" / "codex-thread-tools.js"), "reference"]
+
+    init = subprocess.run([*cli, "init"], cwd=project, env=env, text=True, capture_output=True)
+    (project / ".reference" / "docs" / "spec.md").write_text("# Spec\n")
+    commit = subprocess.run(
+        [*cli, "commit", "-m", "Add spec"], cwd=project, env=env, text=True, capture_output=True
+    )
+
+    assert init.returncode == 0, init.stderr
+    assert commit.returncode == 0, commit.stderr
+    assert "/.reference/" in (project / ".git" / "info" / "exclude").read_text()
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=project, text=True, capture_output=True
+    )
+    assert status.stdout == ""
+    log = subprocess.run(
+        ["git", "log", "--format=%s"], cwd=project / ".reference", text=True, capture_output=True
+    )
+    assert log.stdout.strip() == "Add spec"

@@ -16,6 +16,7 @@ const PYTHON_TOOLS = new Map([
   ["session-archive", "codex-session-archive.py"],
   ["visual-archive", "codex-visual-archive.py"],
   ["recover", "recover-codex-thread-starter.py"],
+  ["reference", "thread-reference.py"],
 ]);
 
 const HELP = `codex-thread-tools ${VERSION}
@@ -27,6 +28,7 @@ Usage:
   codex-thread-tools session-archive [args...]
   codex-thread-tools visual-archive [args...]
   codex-thread-tools recover [args...]
+  codex-thread-tools reference init|commit [--project DIR] [-m MESSAGE]
   codex-thread-tools install-skill [--agent codex|claude]
   codex-thread-tools --version
 
@@ -73,7 +75,7 @@ function runPythonTool(toolName, args) {
     const result = spawnSync(command, pythonArgs, {
       cwd: ROOT,
       stdio: "inherit",
-      env: process.env,
+      env: { ...process.env, CODEX_THREAD_TOOLS_CWD: process.cwd() },
     });
     if (result.error && result.error.code === "ENOENT") {
       continue;

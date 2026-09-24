@@ -6,6 +6,8 @@
   archives read `~/.claude/projects` sessions; `--agent claude` selects the root.
 - Add the `thread-handoff` Claude Code skill (`install-skill --agent claude`), which
   wires the latest handoff into `CLAUDE.local.md` for the next session.
+- Add `reference init|commit`, which keeps handoffs, screenshots, and reference docs
+  in a local-only `.reference/` git repository hidden from the project repository.
 
 ## 1.3.2 - 2026-08-04
 
