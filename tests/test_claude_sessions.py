@@ -180,6 +180,7 @@ def test_reference_init_and_commit_stay_local(tmp_path: Path) -> None:
     assert init.returncode == 0, init.stderr
     assert commit.returncode == 0, commit.stderr
     assert "/.reference/" in (project / ".git" / "info" / "exclude").read_text()
+    (project / "CLAUDE.local.md").write_text("Latest handoff: @.reference/handoffs/x.md\n")
     status = subprocess.run(
         ["git", "status", "--porcelain"], cwd=project, text=True, capture_output=True
     )

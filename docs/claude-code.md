@@ -50,8 +50,8 @@ session:
 
 Handoffs, screenshots, and reference docs go in the project's `.reference/`
 folder. The skill sets it up automatically: it is its own local git repository,
-listed in the project's `.git/info/exclude` so the project repository ignores it
-without any tracked file changing, and each handoff is committed there. Nothing in
+listed (with `CLAUDE.local.md`) in the project's `.git/info/exclude` so the project
+repository ignores both without any tracked file changing, and each handoff is committed there. Nothing in
 it is pushed. You can run the same steps yourself:
 
 ```bash

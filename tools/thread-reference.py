@@ -11,6 +11,7 @@ from pathlib import Path
 
 
 REFERENCE_DIR = ".reference"
+LOCAL_ONLY_ENTRIES = (f"/{REFERENCE_DIR}/", "/CLAUDE.local.md")
 INDEX_TEMPLATE = "# Reference Index\n\nOne line per saved document or screenshot set.\n"
 
 
@@ -26,18 +27,19 @@ def project_root(start: Path) -> Path:
 
 
 def exclude_from_project(root: Path) -> str:
-    """Hide .reference/ from the project repository without editing tracked files."""
+    """Hide local-only files from the project repository without editing tracked files."""
     result = git(root, "rev-parse", "--git-path", "info/exclude")
     if result.returncode != 0:
         return "project is not a git repository"
     exclude = (root / result.stdout.strip()).resolve()
     lines = exclude.read_text().splitlines() if exclude.exists() else []
-    if f"/{REFERENCE_DIR}/" in lines:
+    missing = [entry for entry in LOCAL_ONLY_ENTRIES if entry not in lines]
+    if not missing:
         return f"already excluded in {exclude}"
     exclude.parent.mkdir(parents=True, exist_ok=True)
     with exclude.open("a") as handle:
-        handle.write(f"/{REFERENCE_DIR}/\n")
-    return f"excluded in {exclude}"
+        handle.writelines(f"{entry}\n" for entry in missing)
+    return f"excluded {', '.join(missing)} in {exclude}"
 
 
 def init(root: Path) -> Path:
