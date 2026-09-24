@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -78,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         command = sub.add_parser(name)
         command.add_argument(
             "--project",
-            default=os.environ.get("CODEX_THREAD_TOOLS_CWD", "."),
+            default=".",
             help="project directory (default: current)",
         )
         if name == "commit":

@@ -73,9 +73,9 @@ function runPythonTool(toolName, args) {
     const command = python.command;
     const pythonArgs = [...python.args, script, ...args];
     const result = spawnSync(command, pythonArgs, {
-      cwd: ROOT,
+      cwd: process.cwd(),
       stdio: "inherit",
-      env: { ...process.env, CODEX_THREAD_TOOLS_CWD: process.cwd() },
+      env: process.env,
     });
     if (result.error && result.error.code === "ENOENT") {
       continue;
