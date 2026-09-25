@@ -1,37 +1,50 @@
 # Installation
 
-`agent-thread-tools` is for local OpenAI Codex session files under
-`~/.codex/sessions/` and Claude Code session files under `~/.claude/projects/`.
+`agent-thread-tools` reads local session files from two coding agents:
+
+| Agent | Session files |
+| --- | --- |
+| Claude Code | `~/.claude/projects/<project>/<session-id>.jsonl` |
+| Codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` |
 
 It was published as `codex-thread-tools` before 2.0.0. To switch, run
 `npm uninstall -g codex-thread-tools && npm install -g agent-thread-tools`; the
 `codex-thread-tools` command keeps working as an alias.
 
-The npm package is a command wrapper around bundled Python tools. `npx` and
-`npm install -g` make the commands easier to run, but Python 3 must still be
-available on your `PATH`.
+The npm package is a command wrapper around bundled Python tools. You need
+Node.js 18 or newer and Python 3 on your `PATH`.
 
 ## Choose An Install Path
 
 | Path | Best for | Command |
 | --- | --- | --- |
-| `npx` | Trying the tools once without cloning the repo. | `npx agent-thread-tools health` |
-| Global npm install | Regular use from any terminal. | `npm install -g agent-thread-tools` |
+| `npx` | Trying the tools once without installing them. | `npx agent-thread-tools health --agent claude` |
+| Global npm install | Regular use, and the handoff skills. | `npm install -g agent-thread-tools` |
 | Source checkout | Development, tests, fixtures, and local edits. | `git clone https://github.com/zenzig/agent-thread-tools.git` |
 
+Install on the machine where your agent runs. For the Claude Code desktop app, or
+the mobile app through Remote Control, that is the machine the session runs on;
+you can ask Claude to run the install commands there for you (see
+[Install The Handoff Skill](#install-the-handoff-skill)).
+
 ## Run A Health Check
+
+Pass `--agent claude` or `--agent codex` to choose which sessions to read.
+Without `--agent`, the tools read Codex sessions when `~/.codex/sessions` exists
+and Claude Code sessions otherwise.
 
 Without installing:
 
 ```bash
-npx agent-thread-tools health
+npx agent-thread-tools health --agent claude
 ```
 
 After a global install:
 
 ```bash
 npm install -g agent-thread-tools
-agent-thread-tools health
+agent-thread-tools health --agent claude
+agent-thread-tools health --agent codex
 ```
 
 From a source checkout:
@@ -39,7 +52,7 @@ From a source checkout:
 ```bash
 git clone https://github.com/zenzig/agent-thread-tools.git
 cd agent-thread-tools
-python3 tools/agent-thread-health.py
+python3 tools/agent-thread-health.py --agent claude
 ```
 
 ## Install The Handoff Skill

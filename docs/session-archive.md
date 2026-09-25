@@ -1,34 +1,45 @@
 # Session Archive
 
-Old threads can be useful as audit history, but Codex does not need old project
-threads in `~/.codex/sessions/` to continue work in your current thread. If you
-want cold storage without filling your local drive, use the session archive
-tool.
+Old sessions can be useful as audit history, but neither Claude Code nor Codex
+needs them to continue work in a new session. Their files keep growing on disk. If
+you want cold storage without filling your local drive, use the session archive
+tool. It works with Claude Code sessions in `~/.claude/projects/` and Codex
+sessions in `~/.codex/sessions/`.
 
 The session archive workflow has four phases:
 
-1. `plan` previews matching session files.
+1. `plan` previews matching sessions.
 2. `archive` copies those files to external storage and writes a manifest.
 3. `verify` checks archived file size and SHA-256 hashes against the manifest.
-4. `prune-local` optionally deletes verified local JSONL files.
+4. `prune-local` optionally deletes the verified local copies.
 
-## Claude Code
+## Choose The Agent
 
-Pass `--agent claude` to archive Claude Code sessions from `~/.claude/projects/`:
+Pass `--agent claude` or `--agent codex` to `plan` and `archive`. Without it, the
+tool reads Codex sessions when `~/.codex/sessions` exists and Claude Code sessions
+otherwise. `--session-root` points it at another folder; without `--agent`, the
+tool then tells the two layouts apart by their folders.
 
-```bash
-agent-thread-tools session-archive plan --agent claude --older-than 30d
-```
+| | Claude Code | Codex |
+| --- | --- | --- |
+| Sessions read | `~/.claude/projects/<project>/<session-id>.jsonl`, plus the session's folder | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` |
+| Archive folder | `claude-session-archives/` | `codex-session-archives/` |
+| Open sessions | Skipped by `plan` and `archive`; `prune-local` refuses them | `prune-local` refuses while Codex appears to be open |
+
+## Claude Code Sessions
 
 Claude Code keeps each session as `<session-id>.jsonl` plus a folder of the same
 name that holds subagent transcripts, tool results, and workflow files. The archive
 treats them as one session: every file is copied, hashed in the manifest, verified,
-and pruned together, and `prune-local` removes the emptied folder. The project's
+and pruned together, and `prune-local` removes the emptied folder. In the manifest,
+each folder file is its own entry with `companion_of` naming its session file.
+`--min-size` counts the session file and its folder together. The project's
 `memory/` folder is never touched.
 
-Sessions that are open in Claude Code are skipped by `plan` and `archive`, and
-`prune-local` refuses them. Claude Code archives go in `claude-session-archives/`
-under the archive root; Codex archives go in `codex-session-archives/`.
+The tool reads which sessions are open from `~/.claude/sessions/`, where Claude
+Code records each running session. `plan` reports how many sessions it skipped
+because they are open (`skipped_open` lists them in `--json` output). To include
+one, exit that session (or run `/clear` in it) and rerun.
 
 ## Plan
 
@@ -36,32 +47,38 @@ Start with a read-only plan:
 
 ```bash
 agent-thread-tools session-archive plan \
+  --agent claude \
   --project "/Users/you/project" \
   --older-than 30d \
   --min-size 100MiB
 ```
 
+`--project` matches the project path recorded in the session. Use `--agent codex`
+for Codex sessions.
+
 ## Archive
 
-Archive matching sessions to a folder outside `~/.codex/sessions/`, such as an
+Archive matching sessions to a folder outside the session root, such as an
 external drive:
 
 ```bash
 agent-thread-tools session-archive archive \
+  --agent claude \
   --project "/Users/you/project" \
   --older-than 30d \
   --min-size 100MiB \
-  --archive-root "/Volumes/CodexArchive" \
-  --archive-name "project-old-threads"
+  --archive-root "/Volumes/Archive" \
+  --archive-name "project-old-sessions"
 ```
 
-The archive command writes:
+This writes to `/Volumes/Archive/claude-session-archives/project-old-sessions/`
+(`codex-session-archives/` for Codex). The archive command writes:
 
-- `manifest.json`: machine-readable inventory with source paths, archive paths,
-  byte counts, timestamps, session IDs, and SHA-256 hashes
+- `manifest.json`: machine-readable inventory with the agent, source paths,
+  archive paths, byte counts, timestamps, session IDs, and SHA-256 hashes
 - `manifest.md`: human-readable archive summary
-- `sessions/`: copied session JSONL files, preserving their relative session
-  folder paths
+- `sessions/`: copied session files, preserving their relative paths under the
+  session root
 
 Verification resolves archived session paths from the manifest directory. It
 rejects paths outside that directory, including traversal and symlink escapes.
@@ -87,7 +104,7 @@ Verify the archive before deleting anything local:
 
 ```bash
 agent-thread-tools session-archive verify \
-  --manifest "/Volumes/CodexArchive/codex-session-archives/project-old-threads/manifest.json"
+  --manifest "/Volumes/Archive/claude-session-archives/project-old-sessions/manifest.json"
 ```
 
 ## Prune Local Copies
@@ -96,13 +113,17 @@ Only after verification passes, prune local copies:
 
 ```bash
 agent-thread-tools session-archive prune-local \
-  --manifest "/Volumes/CodexArchive/codex-session-archives/project-old-threads/manifest.json" \
+  --manifest "/Volumes/Archive/claude-session-archives/project-old-sessions/manifest.json" \
   --confirm-prune-local
 ```
 
-`prune-local` refuses to run while Codex appears to be open unless you pass
-`--allow-codex-running`. Closing Codex first is safer because the app may be
-reading or writing session files.
+`prune-local` reads the agent from the manifest:
+
+- Claude Code: it refuses sessions that are open in Claude Code. If any session in
+  the manifest is open, nothing is deleted.
+- Codex: it refuses to run while Codex appears to be open unless you pass
+  `--allow-codex-running`. Closing Codex first is safer because the app may be
+  reading or writing session files.
 
 Use `--json` on any phase when you want machine-readable output.
 
@@ -124,6 +145,6 @@ removal.
 
 ## Session Archive vs Visual Archive
 
-Session archive keeps raw thread JSONL in cold storage. Visual archive extracts
-screenshots and videos into handoff-ready manifests that a future fresh thread
+Session archive keeps raw session files in cold storage. Visual archive extracts
+screenshots and videos into handoff-ready manifests that a future fresh session
 can understand without loading the old conversation.

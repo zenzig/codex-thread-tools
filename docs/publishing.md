@@ -13,7 +13,7 @@ Configure the `agent-thread-tools` package on npm with this trusted publisher:
 | Workflow filename | `publish-npm.yml` |
 
 Then publish a GitHub release whose tag matches the package version, for example
-`v1.0.0`. The `Publish npm package` workflow will:
+`v2.0.0`. The `Publish npm package` workflow will:
 
 - verify `VERSION` and `package.json` match
 - verify the GitHub release tag matches the package version
@@ -28,8 +28,8 @@ pushes to `main` do not publish npm.
 
 ## Release Checklist
 
-1. Update `VERSION`, `package.json`, README badge/current version, and
-   `CHANGELOG.md`.
+1. Update `VERSION`, `package.json`, the version in the README's Project table,
+   and `CHANGELOG.md`.
 2. Run `python3 -m pytest`.
 3. Run `npm pack --dry-run --json`.
 4. Commit and push `main`.

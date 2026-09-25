@@ -13,23 +13,42 @@ cd agent-thread-tools
 ```text
 agent-thread-tools/
 ├── .github/workflows/publish-npm.yml
-├── assets/agent-thread-tools-header.png
-├── bin/agent-thread-tools.js
-├── agent_thread_tools/
-│   ├── display.py
+├── assets/                       README images
+├── bin/agent-thread-tools.js     npm command wrapper
+├── agent_thread_tools/           shared Python package
+│   ├── claude_sessions.py        reads Claude Code records in the Codex record shape
+│   ├── claude_recovery.py        Claude Code inspect, checks, and strip-images
 │   ├── handoff_markers.py
 │   ├── handoff_summary.py
+│   ├── remote_health.py
 │   ├── session_archive.py
 │   ├── session_integrity.py
 │   ├── sessionlib.py
 │   ├── sessionpaths.py
 │   ├── thread_health.py
-│   └── visual_artifacts.py
+│   ├── visual_artifacts.py
+│   └── ...
 ├── docs/
-├── skills/codex-thread-handoff/
+├── skills/
+│   ├── thread-handoff/           Claude Code skill (/thread-handoff)
+│   └── codex-thread-handoff/     Codex skill
 ├── tests/
-└── tools/
+└── tools/                        one script per command, agent-thread-*.py
 ```
+
+`bin/agent-thread-tools.js` maps each command to a script in `tools/`: for
+example `agent-thread-tools health` runs `tools/agent-thread-health.py`. The
+scripts share `agent_thread_tools/`.
+
+## How Session Formats Are Read
+
+The tools read Claude Code and Codex sessions with the same analyzers.
+`sessionlib.iter_session_records` checks the format of each file: Codex records
+pass through unchanged, and Claude Code records are translated by
+`claude_sessions.py` into the Codex record shape (`session_meta`,
+`response_item`, `event_msg`, `compacted`). Code that must see a format's own
+records, such as the Claude Code checks in `claude_recovery.py`, reads the raw
+lines instead.
 
 ## Testing
 
@@ -52,13 +71,24 @@ Check the npm package contents without publishing:
 npm pack --dry-run --json
 ```
 
-Rebuild fixture session files:
+Rebuild the Codex fixture session files:
 
 ```bash
 python3 tests/fixtures/build_fixtures.py
 ```
 
-The tests do not depend on your real `~/.codex/sessions` folder.
+Claude Code test sessions are built inside the tests that use them, for example
+`tests/test_claude_sessions.py` and `tests/test_claude_recovery.py`. The tests do
+not depend on your real `~/.codex/sessions` or `~/.claude/projects` folders.
+
+## 2.0.0 Compatibility
+
+Version 2.0.0 renames the package from `codex-thread-tools` to
+`agent-thread-tools` and keeps `codex-thread-tools` as a second command name.
+Remote health still runs `codex-thread-tools` on the remote host, so it reaches
+hosts running either package, and a 2.x client accepts 1.x remote hosts with a
+version warning because the remote protocol is unchanged. `health remote` passes
+`--agent` to the remote host only when you give it.
 
 ## 1.3.x Compatibility
 
@@ -79,15 +109,15 @@ guaranteed to preserve prior external output.
 
 ## Public Repo Hygiene
 
-This repository intentionally does not track local Codex usage artifacts. The
+This repository intentionally does not track local agent usage artifacts. The
 `.gitignore` excludes private handoff files, local planning notes, generated
 visual fixtures, archive output, and common tool caches.
 
-Do not commit real Codex session files, private-project handoffs, screenshots,
-screen recordings, or archive output.
+Do not commit real Claude Code or Codex session files, private-project handoffs,
+`.reference/` folders, screenshots, screen recordings, or archive output.
 
-If you need a fixture, generate a small synthetic one through
-`tests/fixtures/build_fixtures.py`.
+If you need a fixture, generate a small synthetic one: Codex fixtures through
+`tests/fixtures/build_fixtures.py`, Claude Code sessions inside the test.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) and [SECURITY.md](../SECURITY.md)
 before opening issues or pull requests that involve session data.

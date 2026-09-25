@@ -3,15 +3,21 @@
 The main command is:
 
 ```bash
-agent-thread-tools health
+agent-thread-tools health --agent claude    # Claude Code sessions in ~/.claude/projects/
+agent-thread-tools health --agent codex     # Codex sessions in ~/.codex/sessions/
 ```
 
-It scans your Codex session folder, selects the newest non-retired
-user-owned root session for each project, and reports whether it looks safe to
-continue. A newer subagent or automation session does not replace that root in
-the project report. If a project has no root session, the newest available
-child session is used as a fallback. A selected session can be old; guidance
-applies if you intend to resume that exact thread.
+Without `--agent`, health reads Codex sessions when `~/.codex/sessions/` exists
+and Claude Code sessions otherwise. `--session-root` points it at any other
+folder.
+
+Health scans the session folder, selects the newest non-retired user-owned root
+session for each project, and reports whether it looks safe to continue. A newer
+subagent or automation session does not replace that root in the project report.
+Claude Code subagent transcripts, which live in the session's own folder, are
+skipped entirely. If a project has no root session, the newest available child
+session is used as a fallback. A selected session can be old; guidance applies if
+you intend to resume that exact session.
 
 ## Statuses
 
@@ -20,20 +26,20 @@ applies if you intend to resume that exact thread.
 | `OK` | No major risk signals were found. | Keep working. |
 | `WARN` | One risk area needs attention. | Monitor the selected session; a handoff is not currently required. |
 | `DANGER` | Strong risk signals were found. | Handoff before continuing. |
-| `RETIRED` | The session was already handed off and is no longer active. | Use the replacement thread or the handoff file. |
+| `RETIRED` | The session was already handed off and is no longer active. | Use the replacement session or the handoff file. |
 
 Turn state and continuation risk are separate. The `Overall` line and `Status`
 column retain the aggregate domain severity used by JSON and exit codes. The
 separate `Turn`, `Risk`, and `Action` columns
-explain what that severity means operationally. A thread can have an active turn
+explain what that severity means operationally. A session can have an active turn
 or a historical warning and still be safe to continue.
 
 | Turn State | Continuation Risk | Handoff Lineage | Action |
 | --- | --- | --- | --- |
 | `active` | `ok` | Any | Finish the current turn, then continue. |
-| Any | `watch` | Any | Monitor the thread; a handoff is not currently required. |
+| Any | `watch` | Any | Monitor the session; a handoff is not currently required. |
 | Any | `danger` | Any | Handoff before continuing. |
-| Any | Any | `source-retired` | Use the replacement thread or handoff summary. |
+| Any | Any | `source-retired` | Use the replacement session or handoff summary. |
 
 For historical compacted visual references, the report emits notice-level output by
 themselves so they can be reviewed without being treated as unsafe continuity
@@ -43,7 +49,7 @@ continuation risk. Failed or malformed compaction state can still produce
 `WARN` or `DANGER`.
 
 The health check is read-only. It does not edit, delete, trim, or repair any
-Codex thread.
+session file.
 
 ## Display Modes
 
@@ -208,16 +214,31 @@ agent-thread-tools health --progress always
 
 ## What Health Checks Inspect
 
+Health reads both session formats the same way: Claude Code records are
+translated into the Codex record shape before analysis, so every check below
+applies to both agents unless it says otherwise.
+
 - session file size
-- number of response items
-- number of `compacted` checkpoints
-- whether the latest compacted checkpoint has `replacement_history`
-- whether compaction signals are only requests or installed continuation state
+- number of response items (for Claude Code, each message and tool result)
+- installed compactions: a Codex `compacted` checkpoint with
+  `replacement_history`, or a Claude Code compact summary; the Claude Code
+  `compact_boundary` record before each summary counts as a compaction event
+- Codex only: whether the latest compacted checkpoint has `replacement_history`,
+  and whether compaction signals are only requests or installed continuation state
 - compaction warning or error events
 - active, incomplete, aborted, and error turns
-- active token usage, when Codex persisted it
+- active token usage: the latest Codex `token_count` event, when Codex persisted
+  it, or the latest Claude Code reply's input, cache, and output tokens
 - embedded screenshots, videos, and visual references
 - whether compacted records dominate the file size
+
+For Claude Code, a user prompt opens a turn; a `turn_duration` record or an
+`end_turn` reply closes it; an interrupt aborts it; and an API error message
+counts as an error.
+
+Claude Code context use is measured against a 200,000-token window unless a reply
+or compaction in the session exceeds it, in which case 1,000,000 is assumed. Set
+`CLAUDE_CONTEXT_WINDOW` to fix the window size.
 
 ## Risk Domains
 
@@ -230,29 +251,33 @@ agent-thread-tools health --progress always
 | `Continuity` | Missing session metadata, active incomplete turns, unresolved aborted turns, or error events. |
 
 Historical abort or error events are treated differently from unresolved ones.
-If a later `turn_complete` or `task_complete` event is persisted, the health
-check reports the historical abort/error as `WARN` instead of `DANGER`. If the
-latest terminal event is still an abort or error, it remains `DANGER`.
+If a later completed turn is persisted, the health check reports the historical
+abort/error as `WARN` instead of `DANGER`. If the latest terminal event is still
+an abort or error, it remains `DANGER`.
 
-If a `turn_started` event has no later completion, abort, or error event, the
-thread is reported as `WARN`. That usually means Codex was still working or the
-turn did not persist a clean terminal state, so a handoff should not be treated
-as clean yet.
+If the latest turn has no later completion, abort, or error event, the session is
+reported as `WARN`. That usually means the agent was still working or the turn
+did not persist a clean terminal state, so a handoff should not be treated as
+clean yet.
 
 ## One Session
 
 To check one specific session file:
 
 ```bash
+agent-thread-tools health check ~/.claude/projects/<project>/<session>.jsonl
 agent-thread-tools health check ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 ```
 
+The format is detected from the file, so `--agent` is not needed here.
+
 ## Token Usage
 
-To estimate Codex-persisted lifetime token usage by project:
+To estimate lifetime token usage by project:
 
 ```bash
-agent-thread-tools health tokens
+agent-thread-tools health tokens --agent claude
+agent-thread-tools health tokens --agent codex
 ```
 
 You can choose the same display modes for token reports:
@@ -261,10 +286,15 @@ You can choose the same display modes for token reports:
 agent-thread-tools health tokens --mode standard
 ```
 
-The token report scans session JSONL files under `~/.codex/sessions/`, groups
-them by project, and sums the latest cumulative `token_count` total from each
+The token report scans session JSONL files under the selected session folder,
+groups them by project, and sums the latest cumulative token total from each
 token-bearing session. It also shows the latest active token estimate and active
 context percentage for each project.
+
+For Codex, the totals come from persisted `token_count` events. For Claude Code,
+they are summed from each reply's input, cache, and output tokens, counted once
+per message. Cache reads count on every reply, so a Claude Code total measures
+how much context the session processed, not what was billed.
 
 Use JSON when you want the per-session source records behind each project total:
 
@@ -272,6 +302,6 @@ Use JSON when you want the per-session source records behind each project total:
 agent-thread-tools health tokens --json
 ```
 
-Treat this as a Codex session-scale report, not a billing ledger. Older
-sessions may not contain `token_count` events, and missing token data is
-reported as `not recorded` rather than guessed as zero.
+Treat this as a session-scale report, not a billing ledger. Older Codex sessions
+may not contain `token_count` events, and missing token data is reported as
+`not recorded` rather than guessed as zero.

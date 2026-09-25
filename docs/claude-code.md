@@ -8,8 +8,9 @@ Code records are translated into the same shape before analysis.
 
 Claude Code writes one JSONL file per session to
 `~/.claude/projects/<project-dir>/<session-id>.jsonl`, where `<project-dir>` is the
-project path with separators replaced by `-`. Subagent transcripts live under
-`<session-id>/subagents/` and are skipped when a root is scanned.
+project path with separators replaced by `-`. Next to it, a folder named
+`<session-id>/` holds subagent transcripts, tool results, and workflow files. Files
+in that folder are not counted as separate sessions when a root is scanned.
 
 ## Health
 
@@ -40,13 +41,18 @@ exceeds it, in which case 1,000,000 is assumed. Set `CLAUDE_CONTEXT_WINDOW` to f
 agent-thread-tools install-skill --agent claude
 ```
 
-This installs `~/.claude/skills/thread-handoff`. Running `/thread-handoff` in a
-session:
+This installs `~/.claude/skills/thread-handoff`. `/thread-handoff` then appears in
+the slash-command menu of every Claude Code app (terminal, IDE, desktop, and mobile
+through Remote Control) when the session runs on that machine. See
+[Installation](installation.md#claude-code) to install from inside an app.
+
+Running `/thread-handoff` in a session:
 
 1. runs the health check and redacted summary on the current session;
 2. archives screenshots that still matter and saves large reference text;
 3. writes a dated handoff and puts stable facts into `CLAUDE.md`;
-4. points `CLAUDE.local.md` at the latest handoff, so the next session loads it.
+4. points `CLAUDE.local.md` at the latest handoff, so the next session loads it;
+5. commits the handoff in `.reference/` and records a handoff marker.
 
 Handoffs, screenshots, and reference docs go in the project's `.reference/`
 folder. The skill sets it up automatically: it is its own local git repository,
@@ -67,7 +73,7 @@ retired, and a later session that loaded the handoff through `CLAUDE.local.md`
 shows as its replacement ("Replacement active").
 
 Handoff markers are kept in `~/.codex/thread-tools/handoff-markers.jsonl` when
-Codex is installed, so one file covers both agents, and in
+`~/.codex` exists, so one file covers both agents, and in
 `~/.claude/thread-tools/handoff-markers.jsonl` otherwise. Set
 `AGENT_THREAD_HANDOFF_MARKER_FILE` to use another file.
 
@@ -76,11 +82,11 @@ Codex is installed, so one file covers both agents, and in
 Old sessions can move to external storage with `session-archive --agent claude`.
 Each session's folder (subagents, tool results, workflows) travels with it, the
 project's `memory/` folder is never touched, and sessions open in Claude Code are
-skipped. See [Session archive](session-archive.md#claude-code).
+skipped. See [Session archive](session-archive.md#claude-code-sessions).
 
 `recover` reads Claude Code sessions too. `diagnose` also reports tool calls
 without results and API errors about images, and `strip-images` removes images
-that Claude Code cannot process. See [Recovery](recovery.md#claude-code).
+that Claude Code cannot process. See [Recovery](recovery.md).
 
 Commands that write refuse to touch a session that is open in Claude Code. The
 tool reads the open sessions from `~/.claude/sessions/`, where Claude Code

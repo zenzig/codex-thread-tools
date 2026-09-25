@@ -1,13 +1,17 @@
 # Visual Archive
 
-Screenshots and screen recordings can make a Codex thread grow quickly. They
-can also be important context. If a future thread needs to understand what a
-design looked like, do not simply strip that data away and hope the next thread
-remembers it.
+Screenshots and screen recordings make a session grow quickly. They can also be
+important context. If a future session needs to understand what a design looked
+like, do not simply strip that data away and hope the next session remembers it.
 
 Use the visual archive tool to copy visual references to storage you control.
-That storage can be a USB drive, external drive, secondary internal drive, or a
-synced folder.
+It reads Claude Code and Codex sessions; the format is detected from the file.
+The archive location can be a project folder, a USB drive, an external drive, a
+secondary internal drive, or a synced folder.
+
+In Claude Code, `/thread-handoff` does this for you: it scans the session and
+archives the screenshots that still matter into the project's `.reference/`
+folder. See [Claude Code](claude-code.md).
 
 ## Workflow
 
@@ -20,6 +24,7 @@ The visual archive workflow has two phases:
 Start with a read-only scan:
 
 ```bash
+agent-thread-tools visual-archive scan ~/.claude/projects/<project>/<session>.jsonl
 agent-thread-tools visual-archive scan ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 ```
 
@@ -27,14 +32,14 @@ If the scan reports local image paths as skipped, rerun it with the folder that
 contains those files:
 
 ```bash
-agent-thread-tools visual-archive scan ~/.codex/sessions/YYYY/MM/DD/thread.jsonl \
+agent-thread-tools visual-archive scan <session>.jsonl \
   --allow-local-root "/path/to/screenshots"
 ```
 
 If the scan finds visuals you want to keep, use the interactive wizard:
 
 ```bash
-agent-thread-tools visual-archive wizard ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+agent-thread-tools visual-archive wizard <session>.jsonl
 ```
 
 The wizard asks for:
@@ -49,14 +54,16 @@ The wizard asks for:
 For advanced or repeatable use:
 
 ```bash
-agent-thread-tools visual-archive archive ~/.codex/sessions/YYYY/MM/DD/thread.jsonl \
-  --archive-root "/Volumes/CodexArchive" \
+agent-thread-tools visual-archive archive <session>.jsonl \
+  --archive-root "/Volumes/Archive" \
   --project-name "My Project" \
   --artifact-set "navbar-design-screenshots" \
   --visual-context "Screenshots showing navbar color, spacing, and layout decisions."
 ```
 
-The archive command writes:
+The archive root must already exist and must be outside `~/.claude/projects/` and
+`~/.codex/sessions/`. The archive is written to
+`visual-artifacts/<project>/<set>/` under it, and contains:
 
 - `manifest.json`: machine-readable inventory
 - `manifest.md`: human-readable visual context
@@ -78,13 +85,13 @@ of a session file and copying files you did not intend to archive.
 Verify an archive later:
 
 ```bash
-agent-thread-tools visual-archive verify /Volumes/CodexArchive/visual-artifacts/my-project/navbar-design-screenshots/manifest.json
+agent-thread-tools visual-archive verify /Volumes/Archive/visual-artifacts/my-project/navbar-design-screenshots/manifest.json
 ```
 
 Verification checks that archived files still exist and that their byte size and
 SHA-256 hash match the manifest. Malformed manifests, unsupported schemas,
 missing artifact metadata, and paths outside the archive fail closed.
 
-The visual archive tool does not edit, delete, trim, or rewrite Codex session
-files. It only scans a session and copies visual files into the archive location
-you choose.
+The visual archive tool does not edit, delete, trim, or rewrite session files.
+It only scans a session and copies visual files into the archive location you
+choose.

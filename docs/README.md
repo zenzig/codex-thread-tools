@@ -1,6 +1,7 @@
 # agent-thread-tools Documentation
 
-This documentation is the detailed reference for `agent-thread-tools`.
+This documentation is the detailed reference for `agent-thread-tools`, which
+works with Claude Code and Codex sessions.
 
 Start with the root [README](../README.md) if you only need the quick path.
 Use the pages below when you want the exact command flow, safety model, or
@@ -10,14 +11,14 @@ release process.
 
 | Topic | Use this when |
 | --- | --- |
-| [Installation](installation.md) | You want to choose between `npx`, global npm install, or source checkout. |
+| [Installation](installation.md) | You want to install the tools or a handoff skill, from a terminal or from inside a Claude Code app. |
+| [Claude Code](claude-code.md) | You use Claude Code and want the details: where sessions live, what health measures, `/thread-handoff`, and how handoffs link sessions. |
 | [Thread health](health.md) | You want local or SSH-host project reports, report modes, risk domains, and token reports. |
-| [Handoff workflow](handoff.md) | You use Codex and want to preserve durable project context and rotate into a fresh thread. |
-| [Session archive](session-archive.md) | You want staged, verified cold storage and recoverable local pruning for old session JSONL files. |
+| [Handoff workflow](handoff.md) | You want to preserve durable project context and continue in a fresh session. |
+| [Session archive](session-archive.md) | You want staged, verified cold storage and recoverable local pruning for old Claude Code and Codex sessions. |
 | [Visual archive](visual-archive.md) | You want verified copies of screenshots and videos outside an oversized session. |
-| [Recovery](recovery.md) | You need a safe diagnosis and external recovery bundle for a damaged or oversized session. |
-| [Claude Code](claude-code.md) | You use Claude Code and want health reports, `/thread-handoff`, and screenshot archives for its sessions. |
-| [Compaction](compaction.md) | You want to understand how Codex compaction differs from handoffs and archives. |
+| [Recovery](recovery.md) | You need a safe diagnosis, a repair, or an external recovery bundle for a damaged or oversized session. |
+| [Compaction](compaction.md) | You want to understand how compaction differs from handoffs and archives. |
 
 ## Maintainer Guides
 

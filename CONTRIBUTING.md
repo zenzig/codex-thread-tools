@@ -10,7 +10,7 @@ Run tests before opening a pull request:
 python3 -m pytest
 ```
 
-Rebuild generated fixtures when changing fixture builders:
+Rebuild the generated Codex fixtures when changing fixture builders:
 
 ```bash
 python3 tests/fixtures/build_fixtures.py
@@ -18,13 +18,14 @@ python3 tests/fixtures/build_fixtures.py
 
 ## Privacy Rules
 
-Do not commit real Codex session files, handoffs, screenshots, visual archives,
-or machine-local planning notes. The repository intentionally ignores private
+Do not commit real Claude Code or Codex session files, handoffs, screenshots,
+visual archives, or machine-local planning notes. The repository intentionally ignores private
 handoff directories, generated visual fixtures, archive output, and local
 planning notes.
 
-If a contribution needs an example session, add a small synthetic fixture through
-`tests/fixtures/build_fixtures.py`.
+If a contribution needs an example session, add a small synthetic one: Codex
+sessions through `tests/fixtures/build_fixtures.py`, Claude Code sessions inside the
+test, as `tests/test_claude_sessions.py` does.
 
 ## Pull Requests
 
