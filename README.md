@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-project_guides-brightgreen.svg)](docs/README.md)
 
-<img src="assets/agent-thread-tools-header.png" alt="Clockwork robots pull tangled threads from several coding-agent sessions into one braided cord that runs through a gauge, a filing cabinet, a crane, and a bridge onto a spool" width="100%">
+<img src="assets/agent-thread-tools-header.png" alt="Clockwork robots pull tangled threads from several coding-agent sessions into one braided cord that runs through a gauge, a filing cabinet, a bridge, and a crane onto a spool" width="100%">
 
 </div>
 
