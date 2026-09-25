@@ -16,6 +16,7 @@ release process.
 | [Session archive](session-archive.md) | You want staged, verified cold storage and recoverable local pruning for old session JSONL files. |
 | [Visual archive](visual-archive.md) | You want verified copies of screenshots and videos outside an oversized Codex thread. |
 | [Recovery](recovery.md) | You need a safe diagnosis and external recovery bundle for a damaged or oversized session. |
+| [Claude Code](claude-code.md) | You use Claude Code and want health reports, `/thread-handoff`, and screenshot archives for its sessions. |
 | [Compaction](compaction.md) | You want to understand how Codex compaction differs from handoffs and archives. |
 
 ## Maintainer Guides

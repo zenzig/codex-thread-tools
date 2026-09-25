@@ -38,7 +38,7 @@ def test_package_metadata_is_publish_ready() -> None:
     ).strip()
     assert (
         package["description"]
-        == "CLI health checks, handoffs, session archives, visual archives, and recovery tools for OpenAI Codex session threads."
+        == "CLI health checks, handoffs, session archives, visual archives, and recovery tools for OpenAI Codex and Claude Code session threads."
     )
     assert package["author"] == "Rich Olson"
     assert package["bin"]["codex-thread-tools"] == "bin/codex-thread-tools.js"

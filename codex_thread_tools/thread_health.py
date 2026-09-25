@@ -11,12 +11,13 @@ from typing import Any
 
 from codex_thread_tools.sessionlib import (
     iter_jsonl,
+    iter_session_records,
     payload_role,
     payload_type,
     record_text,
     record_timestamp,
 )
-from codex_thread_tools.sessionpaths import default_session_root
+from codex_thread_tools.sessionpaths import default_session_root, iter_session_paths
 from codex_thread_tools.session_integrity import SessionIntegrityAccumulator
 from codex_thread_tools.visual_artifacts import scan_record_visual_metrics
 
@@ -191,7 +192,7 @@ def analyze_session_file(path: Path, thresholds: HealthThresholds) -> dict[str, 
     open_turn_events = 0
     integrity_accumulator = SessionIntegrityAccumulator(max_findings=0)
 
-    for line_no, raw, record in iter_jsonl(path):
+    for line_no, raw, record in iter_session_records(path):
         integrity_accumulator.scan_record(record, line_no=line_no)
         metrics["total_records"] += 1
         metrics["max_line_bytes"] = max(metrics["max_line_bytes"], len(raw))
@@ -865,7 +866,7 @@ def token_usage_fields(usage: dict[str, Any]) -> dict[str, int | None]:
 
 def active_sessions_by_project(session_root: Path) -> list[Path]:
     latest: dict[str, tuple[float, Path]] = {}
-    for path in session_root.rglob("*.jsonl"):
+    for path in iter_session_paths(session_root):
         try:
             stat = path.stat()
             project = project_for_file(path)
@@ -878,11 +879,11 @@ def active_sessions_by_project(session_root: Path) -> list[Path]:
 
 
 def session_files(session_root: Path) -> list[Path]:
-    return sorted(path for path in session_root.rglob("*.jsonl") if path.is_file())
+    return sorted(path for path in iter_session_paths(session_root) if path.is_file())
 
 
 def project_for_file(path: Path) -> str:
-    for _line_no, _raw, record in iter_jsonl(path):
+    for _line_no, _raw, record in iter_session_records(path):
         if record.get("type") in {"session_meta", "turn_context"}:
             project = extract_project(record)
             if project:

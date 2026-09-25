@@ -67,8 +67,12 @@ test -d ~/.codex/skills || mkdir ~/.codex/skills
 cp -R skills/codex-thread-handoff ~/.codex/skills/
 ```
 
-For local development, a symlink is easier because updates in this repo are used
-immediately by Codex:
+A copied installation is a snapshot. If you copy it from this repository, npm
+upgrades to `codex-thread-tools` do not refresh that copy, so run
+`codex-thread-tools install-skill` after each upgrade to refresh the snapshot.
+
+For local development, a symlink is better because updates in this repository are
+used immediately by Codex:
 
 ```bash
 if ! test -d ~/.codex; then
@@ -82,5 +86,12 @@ ln -s "$(pwd)/skills/codex-thread-handoff" ~/.codex/skills/codex-thread-handoff
 Then, from any Codex thread, say:
 
 ```text
-Use codex-thread-handoff.
+Use the installed `codex-thread-handoff` skill to create a repository-backed
+handoff for a new task. Do not use Codex's native Handoff or `handoff_thread`.
+If the skill is unavailable, stop and report that it must be installed.
 ```
+
+If you copied `codex-thread-handoff` rather than using the symlink method, that
+snapshot can lag behind repo changes until you rerun `codex-thread-tools
+install-skill`. If Codex still doesn't show the updated skill, reload Codex or
+start a new task.

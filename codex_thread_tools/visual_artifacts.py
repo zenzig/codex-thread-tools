@@ -15,6 +15,7 @@ from typing import Any
 from codex_thread_tools.atomic_directory import staged_directory
 from codex_thread_tools.sessionlib import (
     iter_jsonl,
+    iter_session_records,
     now_iso,
     record_timestamp,
     sha256_file,
@@ -143,7 +144,7 @@ def iter_visual_occurrences(
 ) -> list[VisualOccurrence]:
     allow_roots = normalize_roots(allow_local_roots)
     artifacts: list[VisualOccurrence] = []
-    for line_no, _raw, record in iter_jsonl(session_file):
+    for line_no, _raw, record in iter_session_records(session_file):
         artifacts.extend(scan_record_visuals(record, line_no, allow_roots))
     for index, artifact in enumerate(artifacts, 1):
         artifact.artifact_id = f"artifact-{index:03d}"

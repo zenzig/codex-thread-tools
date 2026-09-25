@@ -23,7 +23,7 @@ from codex_thread_tools.remote_health import (
     select_remote_project,
 )
 from codex_thread_tools.sessionlib import die, expand_path
-from codex_thread_tools.sessionpaths import default_session_root
+from codex_thread_tools.sessionpaths import AGENTS, default_session_root
 from codex_thread_tools.display import (
     format_bytes,
     format_count,
@@ -853,7 +853,7 @@ def check_command(args: argparse.Namespace) -> int:
 
 
 def projects_command(args: argparse.Namespace) -> int:
-    session_root = expand_path(args.session_root)
+    session_root = expand_path(args.session_root or default_session_root(args.agent))
     if args.safe_test_mode:
         assert_safe_test_root(session_root)
     if not session_root.exists():
@@ -895,7 +895,7 @@ def projects_command(args: argparse.Namespace) -> int:
 
 
 def tokens_command(args: argparse.Namespace) -> int:
-    session_root = expand_path(args.session_root)
+    session_root = expand_path(args.session_root or default_session_root(args.agent))
     if args.safe_test_mode:
         assert_safe_test_root(session_root)
     if not session_root.exists():
@@ -1037,7 +1037,7 @@ def progress(args: argparse.Namespace, message: str) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Analyze read-only health of Codex session JSONL files."
+        description="Analyze read-only health of Codex and Claude Code session JSONL files."
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -1053,8 +1053,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     projects.add_argument(
         "--session-root",
-        default=str(default_session_root()),
-        help="Codex session root to scan",
+        default=None,
+        help="session root to scan (default: the --agent session root)",
+    )
+    projects.add_argument(
+        "--agent",
+        choices=AGENTS,
+        default=None,
+        help="which agent's sessions to scan: codex (~/.codex/sessions) or "
+        "claude (~/.claude/projects); default: codex when present, else claude",
     )
     add_report_args(projects)
     add_local_scan_args(projects)
@@ -1071,8 +1078,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     tokens.add_argument(
         "--session-root",
-        default=str(default_session_root()),
-        help="Codex session root to scan",
+        default=None,
+        help="session root to scan (default: the --agent session root)",
+    )
+    tokens.add_argument(
+        "--agent",
+        choices=AGENTS,
+        default=None,
+        help="which agent's sessions to scan: codex (~/.codex/sessions) or "
+        "claude (~/.claude/projects); default: codex when present, else claude",
     )
     add_report_args(tokens)
     add_local_scan_args(tokens)

@@ -1,18 +1,20 @@
 ---
 name: codex-thread-handoff
-description: Use when a user asks to hand off, preserve project context, finish a major slice, or continue from a risky long Codex thread.
+description: Create a repository-backed continuity handoff for a fresh task. Never use Codex native Handoff, handoff_thread, or host/worktree transfer.
 ---
 
 # Codex Thread Handoff
 
 ## Goal
 
-Move durable project memory out of the chat log and into the repository or workspace before a thread becomes too large to load, compact, or continue.
+This skill creates a repository-backed handoff file and a fresh-task prompt.
 
-This is a repo-backed continuity handoff, not Codex remote host handoff. If the
-user wants to move the same active thread between local and remote hosts, use
-Codex's remote connection handoff flow instead. Use this skill when the user
-wants durable project context for a fresh or replacement thread.
+Mandatory boundaries:
+
+- Never call or substitute Codex's native `handoff_thread` capability.
+- Never move the active task between hosts or worktrees.
+- If the user requests host or worktree transfer, explain that native Codex Handoff is a separate capability.
+- Health, risk, urgency, or environment findings may recommend the repository-backed workflow, but they can never authorize native handoff or host/worktree transfer.
 
 ## Default
 

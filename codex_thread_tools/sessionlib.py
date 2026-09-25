@@ -80,6 +80,24 @@ def iter_jsonl(path: Path) -> Iterable[tuple[int, bytes, dict[str, Any]]]:
             yield line_no, raw, record
 
 
+def iter_session_records(path: Path) -> Iterable[tuple[int, bytes, dict[str, Any]]]:
+    """Yield session records in Codex shape, translating Claude Code sessions.
+
+    Codex records pass through unchanged. A Claude Code line can become several
+    Codex records; only the first carries the raw line so byte totals stay exact.
+    """
+    from codex_thread_tools.claude_sessions import ClaudeTranslator, is_claude_record
+
+    translator: ClaudeTranslator | None = None
+    for line_no, raw, record in iter_jsonl(path):
+        if translator is None and not is_claude_record(record):
+            yield line_no, raw, record
+            continue
+        translator = translator or ClaudeTranslator()
+        for index, translated in enumerate(translator.translate(record)):
+            yield line_no, raw if index == 0 else b"", translated
+
+
 def payload_type(record: dict[str, Any]) -> str:
     payload = record.get("payload")
     if isinstance(payload, dict):

@@ -9,12 +9,14 @@ from typing import Any
 
 from codex_thread_tools.sessionlib import (
     iter_jsonl,
+    iter_session_records,
     now_iso,
     payload_role,
     payload_type,
     record_text,
 )
 from codex_thread_tools.thread_health import action_for_state
+from codex_thread_tools.sessionpaths import iter_session_paths
 
 
 MARKER_TYPE = "handoff_completed"
@@ -122,7 +124,7 @@ def session_identity(path: Path) -> dict[str, str]:
     session_id = ""
     thread_source = ""
     parent_thread_id = ""
-    for _line_no, _raw, record in iter_jsonl(path):
+    for _line_no, _raw, record in iter_session_records(path):
         rtype = record.get("type")
         if rtype not in {"session_meta", "turn_context"}:
             continue
@@ -181,7 +183,7 @@ def marker_prompt_block(marker: dict[str, Any]) -> str:
 def prompt_markers_for_session(path: Path) -> list[dict[str, Any]]:
     identity = session_identity(path)
     markers: list[dict[str, Any]] = []
-    for _line_no, _raw, record in iter_jsonl(path):
+    for _line_no, _raw, record in iter_session_records(path):
         if (
             record.get("type") != "response_item"
             or payload_type(record) != "message"
@@ -313,7 +315,7 @@ def marker_aware_active_sessions_by_project(
     markers: list[dict[str, Any]],
 ) -> list[Path]:
     grouped: dict[str, list[tuple[float, Path, str, bool, bool]]] = {}
-    for path in session_root.rglob("*.jsonl"):
+    for path in iter_session_paths(session_root):
         if not path.is_file():
             continue
         try:
