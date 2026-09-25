@@ -62,6 +62,8 @@ skills/*
 !skills/
 !skills/codex-thread-handoff/
 !skills/codex-thread-handoff/**
+!skills/thread-handoff/
+!skills/thread-handoff/**
 skills/codex-thread-handoff/.DS_Store
 skills/codex-thread-handoff/**/.DS_Store
 
