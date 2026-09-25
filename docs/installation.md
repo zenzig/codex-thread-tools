@@ -44,50 +44,35 @@ python3 tools/codex-thread-health.py
 
 ## Install The Handoff Skill
 
-Codex creates `~/.codex/` when it runs. This repo assumes that directory already
-exists on the machine where you use these tools.
+### Claude Code
 
-Codex skills live in `~/.codex/skills/`. Only the `skills` subfolder may need to
-be created.
+In a terminal on the machine where Claude Code runs:
+
+```bash
+agent-thread-tools install-skill --agent claude
+```
+
+Or set it up from inside any Claude Code app, including the desktop app and the
+mobile app through Remote Control. Send Claude this message; it runs the commands
+on the machine where the session runs:
+
+```text
+Install agent-thread-tools with `npm install -g agent-thread-tools`, then run
+`agent-thread-tools install-skill --agent claude`.
+```
+
+Claude may ask for permission before it runs them. The skill is installed to
+`~/.claude/skills/thread-handoff`. If `/thread-handoff` is not in the slash-command
+menu afterwards, start a new session.
+
+### Codex
 
 ```bash
 agent-thread-tools install-skill
 ```
 
-Or run it once without a global install:
-
-```bash
-npx agent-thread-tools install-skill
-```
-
-From a source checkout, you can copy the skill manually:
-
-```bash
-if ! test -d ~/.codex; then
-  echo "Open Codex once so ~/.codex exists, then retry."
-  exit 1
-fi
-test -d ~/.codex/skills || mkdir ~/.codex/skills
-cp -R skills/codex-thread-handoff ~/.codex/skills/
-```
-
-A copied installation is a snapshot. If you copy it from this repository, npm
-upgrades to `agent-thread-tools` do not refresh that copy, so run
-`agent-thread-tools install-skill` after each upgrade to refresh the snapshot.
-
-For local development, a symlink is better because updates in this repository are
-used immediately by Codex:
-
-```bash
-if ! test -d ~/.codex; then
-  echo "Open Codex once so ~/.codex exists, then retry."
-  exit 1
-fi
-test -d ~/.codex/skills || mkdir ~/.codex/skills
-ln -s "$(pwd)/skills/codex-thread-handoff" ~/.codex/skills/codex-thread-handoff
-```
-
-Then, from any Codex thread, say:
+The skill is installed to `~/.codex/skills/codex-thread-handoff`. Then, from any
+Codex thread, say:
 
 ```text
 Use the installed `codex-thread-handoff` skill to create a repository-backed
@@ -95,7 +80,33 @@ handoff for a new task. Do not use Codex's native Handoff or `handoff_thread`.
 If the skill is unavailable, stop and report that it must be installed.
 ```
 
-If you copied `codex-thread-handoff` rather than using the symlink method, that
-snapshot can lag behind repo changes until you rerun `agent-thread-tools
-install-skill`. If Codex still doesn't show the updated skill, reload Codex or
-start a new task.
+If Codex doesn't show the skill, reload Codex or start a new task.
+
+Both installs need the agent to have run once on that machine, so that
+`~/.claude/` or `~/.codex/` exists; the command says so if it doesn't. Run either
+one without a global install by starting it with `npx`, for example
+`npx agent-thread-tools install-skill --agent claude`.
+
+### Keeping The Skill Current
+
+The installed skill is a copy, so upgrading agent-thread-tools does not change
+it. After each upgrade, run `install-skill` again (with `--agent claude` for
+Claude Code), or ask Claude to run it for you.
+
+### From A Source Checkout
+
+For development, link the skill instead of copying it, so edits in the
+repository take effect right away. In a terminal, from the root of the checkout:
+
+```bash
+# Claude Code
+mkdir -p ~/.claude/skills
+ln -s "$(pwd)/skills/thread-handoff" ~/.claude/skills/thread-handoff
+
+# Codex
+mkdir -p ~/.codex/skills
+ln -s "$(pwd)/skills/codex-thread-handoff" ~/.codex/skills/codex-thread-handoff
+```
+
+Remove an installed copy first (`rm -r ~/.claude/skills/thread-handoff`) if one
+exists, or the link is created inside it.

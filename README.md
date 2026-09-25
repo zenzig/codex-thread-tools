@@ -75,6 +75,11 @@ agent-thread-tools install-skill --agent claude   # adds the /thread-handoff ski
 agent-thread-tools health --agent claude          # checks every Claude Code project
 ```
 
+Setting up from the desktop or mobile app? Ask Claude instead: *"Install
+agent-thread-tools with `npm install -g agent-thread-tools`, then run
+`agent-thread-tools install-skill --agent claude`."* Claude runs those commands on the
+machine where the session runs.
+
 Then, whenever health says `WARN` or `DANGER`, or a piece of work is done:
 
 <table>
