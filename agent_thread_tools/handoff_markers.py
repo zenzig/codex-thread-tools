@@ -1,9 +1,11 @@
-"""Local sidecar markers for completed Codex thread handoffs."""
+"""Local sidecar markers for completed Codex and Claude Code handoffs."""
 
 from __future__ import annotations
 
 import json
 import os
+import re
+from itertools import islice
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +16,7 @@ from agent_thread_tools.sessionlib import (
     payload_role,
     payload_type,
     record_text,
+    session_agent,
 )
 from agent_thread_tools.thread_health import action_for_state
 from agent_thread_tools.sessionpaths import iter_session_paths
@@ -22,13 +25,22 @@ from agent_thread_tools.sessionpaths import iter_session_paths
 MARKER_TYPE = "handoff_completed"
 PROMPT_HEADER = "Codex thread handoff marker:"
 DEFAULT_MARKER_FILE = Path.home() / ".codex" / "thread-tools" / "handoff-markers.jsonl"
+CLAUDE_MARKER_FILE = Path.home() / ".claude" / "thread-tools" / "handoff-markers.jsonl"
+# /thread-handoff points CLAUDE.local.md at the latest handoff with this line.
+CLAUDE_HANDOFF_IMPORT = re.compile(r"Latest handoff:\s*@(\S+)")
+CLAUDE_ATTACHMENT_SCAN_LINES = 200
 
 
 def default_marker_file() -> Path:
-    override = os.environ.get("CODEX_THREAD_HANDOFF_MARKER_FILE")
+    override = os.environ.get("AGENT_THREAD_HANDOFF_MARKER_FILE") or os.environ.get(
+        "CODEX_THREAD_HANDOFF_MARKER_FILE"
+    )
     if override:
         return Path(override).expanduser()
-    return DEFAULT_MARKER_FILE
+    # One marker file serves both agents; it lives with Codex when Codex is installed.
+    if DEFAULT_MARKER_FILE.parent.parent.exists() or not CLAUDE_MARKER_FILE.parent.parent.exists():
+        return DEFAULT_MARKER_FILE
+    return CLAUDE_MARKER_FILE
 
 
 def load_handoff_markers(marker_file: Path | None = None) -> list[dict[str, Any]]:
@@ -183,6 +195,19 @@ def marker_prompt_block(marker: dict[str, Any]) -> str:
 def prompt_markers_for_session(path: Path) -> list[dict[str, Any]]:
     identity = session_identity(path)
     markers: list[dict[str, Any]] = []
+    if session_agent(path) == "claude":
+        for handoff_file in claude_imported_handoffs(path):
+            markers.append(
+                {
+                    "source_session_id": "",
+                    "handoff_file": handoff_file,
+                    "project": identity["project"],
+                    "handoff_sequence": 0,
+                    "claude_import": True,
+                    "replacement_session_file": str(path),
+                    "replacement_session_id": identity["session_id"],
+                }
+            )
     for _line_no, _raw, record in iter_session_records(path):
         if (
             record.get("type") != "response_item"
@@ -200,6 +225,36 @@ def prompt_markers_for_session(path: Path) -> list[dict[str, Any]]:
         parsed["replacement_session_id"] = identity["session_id"]
         markers.append(parsed)
     return markers
+
+
+def claude_imported_handoffs(path: Path) -> list[str]:
+    """Handoff files a Claude Code session loaded through CLAUDE.local.md at startup."""
+    found: list[str] = []
+    for _line_no, _raw, record in islice(iter_jsonl(path), CLAUDE_ATTACHMENT_SCAN_LINES):
+        if record.get("type") != "attachment":
+            continue
+        for memory_file in _memory_files(record.get("attachment")):
+            memory_path = memory_file.get("path")
+            content = memory_file.get("content")
+            if not isinstance(memory_path, str) or not memory_path.endswith("CLAUDE.local.md"):
+                continue
+            if not isinstance(content, str):
+                continue
+            for match in CLAUDE_HANDOFF_IMPORT.finditer(content):
+                target = Path(match.group(1)).expanduser()
+                if not target.is_absolute():
+                    target = Path(memory_path).parent / target
+                found.append(str(target.resolve()))
+    return found
+
+
+def _memory_files(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, dict):
+        nested = [item for child in value.values() for item in _memory_files(child)]
+        return ([value] if "path" in value else []) + nested
+    if isinstance(value, list):
+        return [item for child in value for item in _memory_files(child)]
+    return []
 
 
 def parse_prompt_marker(text: str) -> dict[str, Any] | None:
@@ -364,6 +419,18 @@ def annotate_result_with_handoff_context(
             and path_key(marker["replacement_session_file"]) == path_key(result["file"])
         )
     ]
+    # A Claude Code session that loaded a recorded handoff through CLAUDE.local.md.
+    for replacement in replacement_markers:
+        if not replacement.get("claude_import"):
+            continue
+        if replacement.get("replacement_session_file") != result["file"]:
+            continue
+        completed_replaces.extend(
+            marker["source_session_id"]
+            for marker in markers
+            if path_key(marker["handoff_file"]) == path_key(replacement["handoff_file"])
+            and marker["source_session_id"] != result.get("session_id")
+        )
     completed_replaces = [value for value in completed_replaces if value]
     prompt_replaces = [value for value in prompt_replaces if value]
     replaces = sorted(set(completed_replaces + prompt_replaces))

@@ -354,3 +354,85 @@ def test_record_handoff_marker_increments_project_sequence(tmp_path: Path) -> No
     assert records[0]["replacement_session_id"] == "replacement-one"
     assert records[0]["replacement_session_file"] == str(replacement_file)
     assert records[1]["handoff_file"] == str(handoff_two)
+
+
+def test_claude_session_loading_a_recorded_handoff_is_its_replacement(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    handoff = project / ".reference" / "handoffs" / "2026-09-24-topic.md"
+    handoff.parent.mkdir(parents=True)
+    handoff.write_text("# Handoff\n", encoding="utf-8")
+    session_root = tmp_path / "projects"
+    project_dir = session_root / "-project"
+    project_dir.mkdir(parents=True)
+
+    def claude_session(session_id: str, attachment: dict | None) -> Path:
+        records = []
+        if attachment:
+            records.append({"type": "attachment", "sessionId": session_id, "attachment": attachment})
+        records.append(
+            {
+                "type": "user",
+                "cwd": str(project),
+                "sessionId": session_id,
+                "timestamp": "2026-09-24T10:00:00.000Z",
+                "message": {"role": "user", "content": "continue"},
+            }
+        )
+        path = project_dir / f"{session_id}.jsonl"
+        path.write_text("".join(json.dumps(item) + "\n" for item in records), encoding="utf-8")
+        return path
+
+    source = claude_session("old-session", None)
+    os.utime(source, (1_000, 1_000))
+    claude_session(
+        "new-session",
+        {
+            "type": "nested_memory",
+            "files": [
+                {
+                    "path": str(project / "CLAUDE.local.md"),
+                    "type": "Local",
+                    "content": "Latest handoff: @.reference/handoffs/2026-09-24-topic.md\n",
+                }
+            ],
+        },
+    )
+    marker_file = tmp_path / "markers.jsonl"
+    marker_file.write_text(
+        json.dumps(
+            {
+                "type": "handoff_completed",
+                "created_at": "2026-09-24T09:00:00Z",
+                "project": str(project),
+                "source_session_id": "old-session",
+                "source_session_file": str(source),
+                "handoff_file": str(handoff),
+                "handoff_sequence": 1,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "tools" / "codex-thread-health.py"),
+            "projects",
+            "--session-root",
+            str(session_root),
+            "--handoff-marker-file",
+            str(marker_file),
+            "--json",
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode in {0, 2, 3}, result.stderr
+    [entry] = json.loads(result.stdout)["projects"]
+    assert entry["session_id"] == "new-session"
+    assert entry["handoff_lineage"]["status"] == "replacement-active"
+    assert entry["handoff_lineage"]["source_session_ids"] == ["old-session"]
