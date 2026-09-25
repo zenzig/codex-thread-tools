@@ -4,7 +4,7 @@
 
 # agent-thread-tools
 
-**Keep one project going across many Claude Code sessions, without replaying old transcripts.**
+**Keep one project going across many Claude Code and OpenAI Codex sessions, without replaying old transcripts.**
 
 Health checks · Handoffs · Reference archive · Screenshot archive · Remote health · Recovery
 
