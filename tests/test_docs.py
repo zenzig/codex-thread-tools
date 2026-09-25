@@ -62,12 +62,12 @@ def test_health_docs_capture_state_first_reporting_model() -> None:
     assert "Turn state and continuation risk are separate" in text
     assert "active turn" in text
     assert "continuation risk" in text.lower()
-    assert "codex-thread-tools health --mode standard" in text
-    assert "codex-thread-tools health remote --host" in text
+    assert "agent-thread-tools health --mode standard" in text
+    assert "agent-thread-tools health remote --host" in text
     assert "older remote host" in text.lower()
     assert "| Any | Any | `source-retired` |" in text
     assert "| `retired` | Any |" not in text
-    assert "upgrade codex-thread-tools to version 1.3.0 or newer" in text
+    assert "upgrade agent-thread-tools to version 1.3.0 or newer" in text
     assert "upgrade the remote host to protocol 1" not in text
 
 
@@ -96,11 +96,11 @@ def test_readme_is_a_concise_open_source_project_overview() -> None:
         "docs/handoff.md",
         "SECURITY.md",
         "LICENSE",
-        "https://github.com/zenzig/codex-thread-tools/issues",
+        "https://github.com/zenzig/agent-thread-tools/issues",
     ):
         assert link in text
-    assert "npm install -g codex-thread-tools" in text
-    assert "codex-thread-tools health remote" in text
+    assert "npm install -g agent-thread-tools" in text
+    assert "agent-thread-tools health remote" in text
     assert "user@example-host" in text
     assert "/srv/project" in text
     assert "user@remote-host" not in text
@@ -161,8 +161,8 @@ def test_handoff_documentation_distinguishes_monitor_from_handoff_now() -> None:
 def test_recovery_documentation_leads_with_safe_diagnosis_and_bundle() -> None:
     text = (DOCS / "recovery.md").read_text(encoding="utf-8")
 
-    assert "codex-thread-tools recover diagnose" in text
-    assert "codex-thread-tools recover bundle" in text
+    assert "agent-thread-tools recover diagnose" in text
+    assert "agent-thread-tools recover bundle" in text
     assert "does not modify the source session" in text.lower()
     assert "outside `~/.codex/sessions`" in text
     assert "legacy" in text.lower()

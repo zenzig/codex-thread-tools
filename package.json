@@ -1,16 +1,17 @@
 {
-  "name": "codex-thread-tools",
-  "version": "1.4.0",
+  "name": "agent-thread-tools",
+  "version": "2.0.0",
   "description": "CLI health checks, handoffs, session archives, visual archives, and recovery tools for OpenAI Codex and Claude Code session threads.",
   "license": "MIT",
   "author": "Rich Olson",
   "type": "commonjs",
   "bin": {
-    "codex-thread-tools": "bin/codex-thread-tools.js"
+    "agent-thread-tools": "bin/agent-thread-tools.js",
+    "codex-thread-tools": "bin/agent-thread-tools.js"
   },
   "files": [
-    "bin/codex-thread-tools.js",
-    "codex_thread_tools/*.py",
+    "bin/agent-thread-tools.js",
+    "agent_thread_tools/*.py",
     "tools/*.py",
     "docs/README.md",
     "docs/installation.md",
@@ -28,7 +29,7 @@
     "skills/codex-thread-handoff/references/*.md",
     "skills/thread-handoff/SKILL.md",
     "skills/thread-handoff/references/*.md",
-    "assets/codex-thread-tools-header.png",
+    "assets/agent-thread-tools-header.png",
     "README.md",
     "CHANGELOG.md",
     "SECURITY.md",
@@ -46,6 +47,8 @@
     "openai-codex",
     "openai",
     "codex-thread",
+    "agent-thread",
+    "coding-agent",
     "codex-session",
     "session-health",
     "thread-health",
@@ -57,13 +60,13 @@
     "developer-tools",
     "cli"
   ],
-  "homepage": "https://github.com/zenzig/codex-thread-tools#readme",
+  "homepage": "https://github.com/zenzig/agent-thread-tools#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zenzig/codex-thread-tools.git"
+    "url": "git+https://github.com/zenzig/agent-thread-tools.git"
   },
   "bugs": {
-    "url": "https://github.com/zenzig/codex-thread-tools/issues"
+    "url": "https://github.com/zenzig/agent-thread-tools/issues"
   },
   "engines": {
     "node": ">=18"

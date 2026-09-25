@@ -10,7 +10,7 @@ the session history.
 Diagnose the session without modifying it:
 
 ```bash
-codex-thread-tools recover diagnose ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+agent-thread-tools recover diagnose ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 ```
 
 Use `--json` for scripts. A clean report exits `0`, a caution-only report exits
@@ -25,7 +25,7 @@ replay defect.
 When diagnosis recommends a bundle, create a sanitized recovery artifact next:
 
 ```bash
-codex-thread-tools recover bundle \
+agent-thread-tools recover bundle \
   ~/.codex/sessions/YYYY/MM/DD/thread.jsonl \
   --project-root /path/to/project
 ```
@@ -36,7 +36,7 @@ integrity manifest. It never copies the source JSONL into the bundle. Use
 `--output-root /path/to/recovery-bundles` to choose another external location.
 
 If a session contains relevant screenshots or generated assets, review the
-bundle's visual decision and run `codex-thread-tools visual-archive scan` before
+bundle's visual decision and run `agent-thread-tools visual-archive scan` before
 retiring the session.
 
 ## Legacy Operations
@@ -45,13 +45,13 @@ retiring the session.
 for advanced recovery work:
 
 ```bash
-codex-thread-tools recover inspect ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+agent-thread-tools recover inspect ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 ```
 
 Before any repair, make a backup:
 
 ```bash
-codex-thread-tools recover backup ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+agent-thread-tools recover backup ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 ```
 
 `strip-compacted` and `rebuild-window` are legacy write operations. They do not

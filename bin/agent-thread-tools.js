@@ -19,26 +19,26 @@ const PYTHON_TOOLS = new Map([
   ["reference", "thread-reference.py"],
 ]);
 
-const HELP = `codex-thread-tools ${VERSION}
+const HELP = `agent-thread-tools ${VERSION}
 
 Usage:
-  codex-thread-tools health [args...]
-  codex-thread-tools handoff-summary [args...]
-  codex-thread-tools handoff-marker [args...]
-  codex-thread-tools session-archive [args...]
-  codex-thread-tools visual-archive [args...]
-  codex-thread-tools recover [args...]
-  codex-thread-tools reference init|commit [--project DIR] [-m MESSAGE]
-  codex-thread-tools install-skill [--agent codex|claude]
-  codex-thread-tools --version
+  agent-thread-tools health [args...]
+  agent-thread-tools handoff-summary [args...]
+  agent-thread-tools handoff-marker [args...]
+  agent-thread-tools session-archive [args...]
+  agent-thread-tools visual-archive [args...]
+  agent-thread-tools recover [args...]
+  agent-thread-tools reference init|commit [--project DIR] [-m MESSAGE]
+  agent-thread-tools install-skill [--agent codex|claude]
+  agent-thread-tools --version
 
 Examples:
-  codex-thread-tools health
-  codex-thread-tools health --agent claude
-  codex-thread-tools health check ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
-  codex-thread-tools handoff-summary ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
-  codex-thread-tools session-archive plan --older-than 30d --min-size 100MiB
-  codex-thread-tools visual-archive scan ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+  agent-thread-tools health
+  agent-thread-tools health --agent claude
+  agent-thread-tools health check ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+  agent-thread-tools handoff-summary ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+  agent-thread-tools session-archive plan --older-than 30d --min-size 100MiB
+  agent-thread-tools visual-archive scan ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 `;
 
 const SAFE_SKILL_INVOCATION = [
@@ -131,7 +131,7 @@ function installClaudeSkill() {
     process.stdout.write(
       `Installed thread-handoff to ${target}\n\n` +
         "Invoke it in Claude Code with: /thread-handoff\n" +
-        "Check session health with: codex-thread-tools health --agent claude\n"
+        "Check session health with: agent-thread-tools health --agent claude\n"
     );
     return 0;
   } catch (error) {
@@ -171,7 +171,7 @@ function installSkill() {
       `Installed codex-thread-handoff to ${target}\n\n` +
         "Invoke it with:\n" +
         `${SAFE_SKILL_INVOCATION}\n\n` +
-        "After upgrading codex-thread-tools, rerun `codex-thread-tools install-skill` to refresh the copied skill.\n" +
+        "After upgrading agent-thread-tools, rerun `agent-thread-tools install-skill` to refresh the copied skill.\n" +
         "If the updated skill is not visible, reload Codex or start a new task.\n"
     );
     return 0;

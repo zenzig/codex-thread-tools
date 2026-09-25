@@ -12,9 +12,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from codex_thread_tools.handoff_summary import build_handoff_summary, format_handoff_summary
-from codex_thread_tools.sessionlib import die, expand_path
-from codex_thread_tools.thread_health import (
+from agent_thread_tools.handoff_summary import build_handoff_summary, format_handoff_summary
+from agent_thread_tools.sessionlib import die, expand_path
+from agent_thread_tools.thread_health import (
     HealthThresholds,
     assert_safe_test_root,
     exit_code_for_status,

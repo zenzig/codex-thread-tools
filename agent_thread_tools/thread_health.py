@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from codex_thread_tools.sessionlib import (
+from agent_thread_tools.sessionlib import (
     iter_jsonl,
     iter_session_records,
     payload_role,
@@ -17,9 +17,9 @@ from codex_thread_tools.sessionlib import (
     record_text,
     record_timestamp,
 )
-from codex_thread_tools.sessionpaths import default_session_root, iter_session_paths
-from codex_thread_tools.session_integrity import SessionIntegrityAccumulator
-from codex_thread_tools.visual_artifacts import scan_record_visual_metrics
+from agent_thread_tools.sessionpaths import default_session_root, iter_session_paths
+from agent_thread_tools.session_integrity import SessionIntegrityAccumulator
+from agent_thread_tools.visual_artifacts import scan_record_visual_metrics
 
 
 DEFAULT_WARN_BYTES = 500 * 1024 * 1024

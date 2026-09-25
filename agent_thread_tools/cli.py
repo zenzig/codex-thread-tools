@@ -1,4 +1,4 @@
-"""Argparse helpers shared by codex-thread-tools command-line tools."""
+"""Argparse helpers shared by agent-thread-tools command-line tools."""
 
 from __future__ import annotations
 

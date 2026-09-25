@@ -1,7 +1,11 @@
 # Installation
 
-`codex-thread-tools` is for local OpenAI Codex session files under
-`~/.codex/sessions/`.
+`agent-thread-tools` is for local OpenAI Codex session files under
+`~/.codex/sessions/` and Claude Code session files under `~/.claude/projects/`.
+
+It was published as `codex-thread-tools` before 2.0.0. To switch, run
+`npm uninstall -g codex-thread-tools && npm install -g agent-thread-tools`; the
+`codex-thread-tools` command keeps working as an alias.
 
 The npm package is a command wrapper around bundled Python tools. `npx` and
 `npm install -g` make the commands easier to run, but Python 3 must still be
@@ -11,30 +15,30 @@ available on your `PATH`.
 
 | Path | Best for | Command |
 | --- | --- | --- |
-| `npx` | Trying the tools once without cloning the repo. | `npx codex-thread-tools health` |
-| Global npm install | Regular use from any terminal. | `npm install -g codex-thread-tools` |
-| Source checkout | Development, tests, fixtures, and local edits. | `git clone https://github.com/zenzig/codex-thread-tools.git` |
+| `npx` | Trying the tools once without cloning the repo. | `npx agent-thread-tools health` |
+| Global npm install | Regular use from any terminal. | `npm install -g agent-thread-tools` |
+| Source checkout | Development, tests, fixtures, and local edits. | `git clone https://github.com/zenzig/agent-thread-tools.git` |
 
 ## Run A Health Check
 
 Without installing:
 
 ```bash
-npx codex-thread-tools health
+npx agent-thread-tools health
 ```
 
 After a global install:
 
 ```bash
-npm install -g codex-thread-tools
-codex-thread-tools health
+npm install -g agent-thread-tools
+agent-thread-tools health
 ```
 
 From a source checkout:
 
 ```bash
-git clone https://github.com/zenzig/codex-thread-tools.git
-cd codex-thread-tools
+git clone https://github.com/zenzig/agent-thread-tools.git
+cd agent-thread-tools
 python3 tools/codex-thread-health.py
 ```
 
@@ -47,13 +51,13 @@ Codex skills live in `~/.codex/skills/`. Only the `skills` subfolder may need to
 be created.
 
 ```bash
-codex-thread-tools install-skill
+agent-thread-tools install-skill
 ```
 
 Or run it once without a global install:
 
 ```bash
-npx codex-thread-tools install-skill
+npx agent-thread-tools install-skill
 ```
 
 From a source checkout, you can copy the skill manually:
@@ -68,8 +72,8 @@ cp -R skills/codex-thread-handoff ~/.codex/skills/
 ```
 
 A copied installation is a snapshot. If you copy it from this repository, npm
-upgrades to `codex-thread-tools` do not refresh that copy, so run
-`codex-thread-tools install-skill` after each upgrade to refresh the snapshot.
+upgrades to `agent-thread-tools` do not refresh that copy, so run
+`agent-thread-tools install-skill` after each upgrade to refresh the snapshot.
 
 For local development, a symlink is better because updates in this repository are
 used immediately by Codex:
@@ -92,6 +96,6 @@ If the skill is unavailable, stop and report that it must be installed.
 ```
 
 If you copied `codex-thread-handoff` rather than using the symlink method, that
-snapshot can lag behind repo changes until you rerun `codex-thread-tools
+snapshot can lag behind repo changes until you rerun `agent-thread-tools
 install-skill`. If Codex still doesn't show the updated skill, reload Codex or
 start a new task.

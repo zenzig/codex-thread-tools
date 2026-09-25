@@ -1,4 +1,4 @@
-"""Session JSONL primitives shared by codex-thread-tools tools."""
+"""Session JSONL primitives shared by agent-thread-tools tools."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def iter_session_records(path: Path) -> Iterable[tuple[int, bytes, dict[str, Any
     Codex records pass through unchanged. A Claude Code line can become several
     Codex records; only the first carries the raw line so byte totals stay exact.
     """
-    from codex_thread_tools.claude_sessions import ClaudeTranslator, is_claude_record
+    from agent_thread_tools.claude_sessions import ClaudeTranslator, is_claude_record
 
     translator: ClaudeTranslator | None = None
     for line_no, raw, record in iter_jsonl(path):

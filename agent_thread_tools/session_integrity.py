@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from codex_thread_tools.sessionlib import iter_jsonl
+from agent_thread_tools.sessionlib import iter_jsonl
 
 INPUT_IMAGE_TYPES = frozenset({"input_image", "InputImage", "inputImage"})
 INPUT_IMAGE_URL_KEY_BY_TYPE = {

@@ -12,13 +12,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from codex_thread_tools.handoff_markers import (
+from agent_thread_tools.handoff_markers import (
     append_handoff_marker,
     default_marker_file,
     marker_prompt_block,
     session_identity,
 )
-from codex_thread_tools.sessionlib import die, expand_path
+from agent_thread_tools.sessionlib import die, expand_path
 
 
 def record_command(args: argparse.Namespace) -> int:

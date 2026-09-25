@@ -147,7 +147,7 @@ def test_install_skill_for_claude_code(tmp_path: Path) -> None:
     env = {**os.environ, "HOME": str(tmp_path)}
 
     result = subprocess.run(
-        ["node", str(ROOT / "bin" / "codex-thread-tools.js"), "install-skill", "--agent", "claude"],
+        ["node", str(ROOT / "bin" / "agent-thread-tools.js"), "install-skill", "--agent", "claude"],
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -169,7 +169,7 @@ def test_reference_init_and_commit_stay_local(tmp_path: Path) -> None:
         "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
         "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
     }
-    cli = ["node", str(ROOT / "bin" / "codex-thread-tools.js"), "reference"]
+    cli = ["node", str(ROOT / "bin" / "agent-thread-tools.js"), "reference"]
 
     init = subprocess.run([*cli, "init"], cwd=project, env=env, text=True, capture_output=True)
     (project / ".reference" / "docs" / "spec.md").write_text("# Spec\n")

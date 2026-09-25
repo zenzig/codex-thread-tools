@@ -1,4 +1,4 @@
-"""Shared helpers for codex-thread-tools tools."""
+"""Shared helpers for agent-thread-tools tools."""
 
 from pathlib import Path
 
@@ -14,7 +14,7 @@ def _read_version() -> str:
 
 __version__ = _read_version()
 
-from codex_thread_tools.sessionlib import (
+from agent_thread_tools.sessionlib import (
     KEEP_EVENT_TYPES,
     die,
     expand_path,
@@ -27,8 +27,8 @@ from codex_thread_tools.sessionlib import (
     payload_type,
     record_timestamp,
 )
-from codex_thread_tools.thread_health import HealthThresholds, analyze_session_file
-from codex_thread_tools.visual_artifacts import archive_visuals, scan_session_visuals, verify_manifest
+from agent_thread_tools.thread_health import HealthThresholds, analyze_session_file
+from agent_thread_tools.visual_artifacts import archive_visuals, scan_session_visuals, verify_manifest
 
 __all__ = [
     "HealthThresholds",

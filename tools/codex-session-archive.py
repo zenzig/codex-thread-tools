@@ -13,15 +13,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import codex_thread_tools.session_archive as session_archive
-from codex_thread_tools.session_archive import (
+import agent_thread_tools.session_archive as session_archive
+from agent_thread_tools.session_archive import (
     format_archive,
     format_plan,
     format_prune,
     format_verify,
 )
-from codex_thread_tools.sessionlib import expand_path, is_codex_running
-from codex_thread_tools.sessionpaths import default_session_root
+from agent_thread_tools.sessionlib import expand_path, is_codex_running
+from agent_thread_tools.sessionpaths import default_session_root
 
 
 def main(argv: list[str] | None = None) -> int:

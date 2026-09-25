@@ -3,13 +3,13 @@
 Publishing is handled through GitHub Actions and npm Trusted Publishing so
 GitHub and npm releases stay in sync without a long-lived npm token.
 
-Configure the `codex-thread-tools` package on npm with this trusted publisher:
+Configure the `agent-thread-tools` package on npm with this trusted publisher:
 
 | Field | Value |
 | --- | --- |
 | Publisher | GitHub Actions |
 | Organization/user | `zenzig` |
-| Repository | `codex-thread-tools` |
+| Repository | `agent-thread-tools` |
 | Workflow filename | `publish-npm.yml` |
 
 Then publish a GitHub release whose tag matches the package version, for example

@@ -29,7 +29,7 @@ resume the project.
 
 ## Quick Flow
 
-1. Run `codex-thread-tools health`.
+1. Run `agent-thread-tools health`.
 2. If health is `WARN`, monitor the thread and reassess it as work continues.
 3. If health is `DANGER`, finish the active turn and paste the exact repository-backed
    request shown below into your next task handoff.
@@ -50,7 +50,7 @@ If the skill is unavailable, stop and report that it must be installed.
 To generate a read-only, redacted summary draft for one session:
 
 ```bash
-codex-thread-tools handoff-summary ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+agent-thread-tools handoff-summary ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 ```
 
 The draft includes health, pre-handoff safety, compaction state, visual counts,
@@ -81,7 +81,7 @@ include the running total of completed handoffs per project.
 To record a completed handoff marker manually:
 
 ```bash
-codex-thread-tools handoff-marker record \
+agent-thread-tools handoff-marker record \
   --source-session-file ~/.codex/sessions/YYYY/MM/DD/thread.jsonl \
   --replacement-session-file ~/.codex/sessions/YYYY/MM/DD/new-thread.jsonl \
   --handoff-file /path/to/project/handoffs/YYYY-MM-DD-topic.md
@@ -112,5 +112,5 @@ archive decisions, and gives you the prompt and markers needed to start a fresh
 thread with the right project context.
 
 You can use both together. Use Codex remote handoff for host placement. Use
-`codex-thread-tools` for thread health, repo-backed continuity, and safer thread
+`agent-thread-tools` for thread health, repo-backed continuity, and safer thread
 rotation.

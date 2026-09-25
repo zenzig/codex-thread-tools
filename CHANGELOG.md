@@ -1,7 +1,12 @@
 # Changelog
 
-## 1.4.0 - Unreleased
+## 2.0.0 - Unreleased
 
+- Rename the project to `agent-thread-tools` (npm package, GitHub repository, command,
+  and Python package `agent_thread_tools`). The `codex-thread-tools` command remains
+  as an alias, and the `codex-thread-tools` npm package is deprecated.
+- Remote health still invokes `codex-thread-tools` on the remote host and accepts
+  1.x remotes, since the remote protocol is unchanged.
 - Add Claude Code support: health, handoff summaries, handoff markers, and visual
   archives read `~/.claude/projects` sessions; `--agent claude` selects the root.
 - Add the `thread-handoff` Claude Code skill (`install-skill --agent claude`), which

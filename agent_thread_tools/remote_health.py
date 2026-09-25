@@ -10,7 +10,7 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Any, Callable
 
-from codex_thread_tools.thread_health import (
+from agent_thread_tools.thread_health import (
     ACTIVE_TURN_DIAGNOSTIC,
     COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC,
     INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC,
@@ -39,6 +39,11 @@ UTC_TIMESTAMP_PATTERN = re.compile(
     r"(?:\.[0-9]{1,6})?Z$"
 )
 REMOTE_HEALTH_PROTOCOL = 1
+# The pre-rename command name. agent-thread-tools installs it as an alias, so it
+# reaches remote hosts running either package.
+REMOTE_COMMAND = "codex-thread-tools"
+# 2.0.0 renamed the package without changing the remote protocol.
+COMPATIBLE_MAJORS = {2: {1, 2}}
 MONITOR_ACTION_REASON = (
     "warning signals should be monitored before deciding on a handoff"
 )
@@ -196,7 +201,7 @@ def _version_tuple(value: str) -> tuple[int, int, int]:
 def ensure_compatible_versions(local_version: str, remote_version: str) -> str | None:
     local = _version_tuple(local_version)
     remote = _version_tuple(remote_version)
-    if local[0] != remote[0]:
+    if remote[0] not in COMPATIBLE_MAJORS.get(local[0], {local[0]}):
         raise RemoteHealthError(
             "incompatible remote version: "
             f"local {local_version}, remote {remote_version}; install matching major versions"
@@ -209,7 +214,7 @@ def ensure_compatible_versions(local_version: str, remote_version: str) -> str |
 def _privacy_protocol_error() -> RemoteHealthError:
     return RemoteHealthError(
         "remote host does not support privacy-safe remote health protocol 1; "
-        "upgrade codex-thread-tools on the remote host to the same version as local"
+        "upgrade agent-thread-tools on the remote host to the same version as local"
     )
 
 
@@ -767,7 +772,7 @@ def _login_shell_args(remote_args: list[str]) -> list[str]:
         "sh",
         "-c",
         'exec "${SHELL:-/bin/sh}" -lc "$1"',
-        "codex-thread-tools-login",
+        "agent-thread-tools-login",
         shlex.join(remote_args),
     ]
 
@@ -784,7 +789,7 @@ def _raise_remote_command_error(
         )
     if result.returncode == 127:
         raise RemoteHealthError(
-            "remote codex-thread-tools is not installed or not available to "
+            "remote agent-thread-tools is not installed or not available to "
             f"non-interactive SSH on {host}"
         )
     raise RemoteHealthError(
@@ -802,7 +807,7 @@ def run_remote_health(
     runner: Runner = subprocess.run,
 ) -> tuple[dict[str, Any], int, str | None]:
     use_login_shell = False
-    version_args = ["codex-thread-tools", "--version"]
+    version_args = [REMOTE_COMMAND, "--version"]
     version_result = _run_ssh(
         host,
         version_args,
@@ -830,7 +835,7 @@ def run_remote_health(
 
     health_args = deepcopy(remote_args)
     health_args.extend(("--remote-safe-json", "--progress", "never"))
-    health_command = ["codex-thread-tools", *health_args]
+    health_command = [REMOTE_COMMAND, *health_args]
     health_result = _run_ssh(
         host,
         _login_shell_args(health_command) if use_login_shell else health_command,

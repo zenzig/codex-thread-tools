@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from codex_thread_tools.remote_health import (
+from agent_thread_tools.remote_health import (
     RemoteHealthError,
     add_remote_metadata,
     build_remote_safe_report,
@@ -21,7 +21,7 @@ from codex_thread_tools.remote_health import (
     select_remote_project,
     validate_projects_report,
 )
-from codex_thread_tools.thread_health import (
+from agent_thread_tools.thread_health import (
     COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC,
     COMPACTION_FAILURE_DIAGNOSTIC,
     INSTALLED_COMPACTION_PRESSURE_DIAGNOSTIC,
@@ -482,6 +482,14 @@ def test_minor_mismatch_returns_warning() -> None:
 def test_major_version_mismatch_is_rejected() -> None:
     with pytest.raises(RemoteHealthError, match="incompatible remote version"):
         ensure_compatible_versions("1.1.0", "2.0.0")
+    with pytest.raises(RemoteHealthError, match="incompatible remote version"):
+        ensure_compatible_versions("2.0.0", "3.0.0")
+
+
+def test_renamed_2x_accepts_1x_remote_with_warning() -> None:
+    assert ensure_compatible_versions("2.0.0", "1.3.1") == (
+        "remote version differs: local 2.0.0, remote 1.3.1"
+    )
 
 
 @pytest.mark.parametrize("value", ["", "latest", "1", "1.2", "v1.2.3"])
@@ -962,14 +970,14 @@ def test_run_remote_health_retries_through_remote_login_shell() -> None:
         "sh",
         "-c",
         'exec "${SHELL:-/bin/sh}" -lc "$1"',
-        "codex-thread-tools-login",
+        "agent-thread-tools-login",
         "codex-thread-tools --version",
     ]
     assert shlex.split(calls[2][0][-1]) == [
         "sh",
         "-c",
         'exec "${SHELL:-/bin/sh}" -lc "$1"',
-        "codex-thread-tools-login",
+        "agent-thread-tools-login",
         "codex-thread-tools health projects --remote-safe-json --progress never",
     ]
 
@@ -1005,7 +1013,7 @@ def test_run_remote_health_fails_closed_when_remote_lacks_safe_protocol() -> Non
         (
             127,
             "codex-thread-tools: command not found\n",
-            "remote codex-thread-tools is not installed or not available to "
+            "remote agent-thread-tools is not installed or not available to "
             "non-interactive SSH on node1.atomicfalls.com",
         ),
     ],

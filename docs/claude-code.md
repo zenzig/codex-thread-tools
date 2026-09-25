@@ -1,6 +1,6 @@
 # Claude Code
 
-`codex-thread-tools` reads Claude Code sessions as well as Codex sessions. Each
+`agent-thread-tools` reads Claude Code sessions as well as Codex sessions. Each
 session file is checked on its own: Codex records carry a `payload`, and Claude
 Code records are translated into the same shape before analysis.
 
@@ -14,8 +14,8 @@ project path with separators replaced by `-`. Subagent transcripts live under
 ## Health
 
 ```bash
-codex-thread-tools health --agent claude
-codex-thread-tools health check ~/.claude/projects/<project-dir>/<session-id>.jsonl
+agent-thread-tools health --agent claude
+agent-thread-tools health check ~/.claude/projects/<project-dir>/<session-id>.jsonl
 ```
 
 Without `--agent`, the tools use `~/.codex/sessions` when it exists and
@@ -37,7 +37,7 @@ exceeds it, in which case 1,000,000 is assumed. Set `CLAUDE_CONTEXT_WINDOW` to f
 ## Handoff skill
 
 ```bash
-codex-thread-tools install-skill --agent claude
+agent-thread-tools install-skill --agent claude
 ```
 
 This installs `~/.claude/skills/thread-handoff`. Running `/thread-handoff` in a
@@ -55,8 +55,8 @@ repository ignores both without any tracked file changing, and each handoff is c
 it is pushed. You can run the same steps yourself:
 
 ```bash
-codex-thread-tools reference init                    # create .reference/ and hide it
-codex-thread-tools reference commit -m "Add spec"    # commit everything in it
+agent-thread-tools reference init                    # create .reference/ and hide it
+agent-thread-tools reference commit -m "Add spec"    # commit everything in it
 ```
 
 Then run `/clear` or start a new session: it starts from `CLAUDE.md`, the handoff,

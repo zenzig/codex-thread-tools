@@ -1,17 +1,19 @@
 <div align="center">
 
-# codex-thread-tools
+# agent-thread-tools
 
-**Your Codex session is a black box that only gets heavier. This is the toolkit that opens it up.**
+**Your Codex or Claude Code session is a black box that only gets heavier. This is the toolkit that opens it up.**
 
-[![npm version](https://img.shields.io/npm/v/codex-thread-tools.svg)](https://www.npmjs.com/package/codex-thread-tools)
-[![npm downloads](https://img.shields.io/npm/dm/codex-thread-tools.svg)](https://www.npmjs.com/package/codex-thread-tools)
+[![npm version](https://img.shields.io/npm/v/agent-thread-tools.svg)](https://www.npmjs.com/package/agent-thread-tools)
+[![npm downloads](https://img.shields.io/npm/dm/agent-thread-tools.svg)](https://www.npmjs.com/package/agent-thread-tools)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-project_guides-brightgreen.svg)](docs/README.md)
 
-<img src="assets/codex-thread-tools-header.png" alt="A tangled Codex thread being organized onto a spool" width="100%">
+<img src="assets/agent-thread-tools-header.png" alt="A tangled Codex thread being organized onto a spool" width="100%">
 
 </div>
+
+Formerly `codex-thread-tools`. The old command name still works as an alias.
 
 ## The problem
 
@@ -19,7 +21,7 @@ Every long Codex task ends the same way: a JSONL file on disk quietly ballooning
 
 Compaction trims what Codex keeps *in context*. It does nothing for the file sitting on disk, and it doesn't leave you anything durable to carry into a fresh task. So you're stuck choosing between grinding forward in a degraded session or starting over and losing everything you'd learned.
 
-`codex-thread-tools` is the toolkit for that moment in between: spot the risk before it bites, pull out what's actually worth keeping, and get the rest out of your way — without ever treating raw transcripts as documentation.
+`agent-thread-tools` is the toolkit for that moment in between: spot the risk before it bites, pull out what's actually worth keeping, and get the rest out of your way — without ever treating raw transcripts as documentation.
 
 Read the background: [The Thread That Ate Itself: What Happens When Your Codex Session Gets Too Big to Open](https://medium.com/@atomicfalls/the-thread-that-ate-itself-what-happens-when-your-codex-session-gets-too-big-to-open-5ee559f263f3).
 
@@ -50,14 +52,14 @@ Everything defaults to read-only. Anything that copies or prunes files needs an 
 Try it with no install:
 
 ```bash
-npx codex-thread-tools health
+npx agent-thread-tools health
 ```
 
 Living with it day to day:
 
 ```bash
-npm install -g codex-thread-tools
-codex-thread-tools health
+npm install -g agent-thread-tools
+agent-thread-tools health
 ```
 
 (The npm package wraps bundled Python tools — you'll need Node.js 18+ and Python 3 on `PATH`.)
@@ -65,7 +67,7 @@ codex-thread-tools health
 Want Codex to prepare a handoff when you ask? Install the skill:
 
 ```bash
-codex-thread-tools install-skill
+agent-thread-tools install-skill
 ```
 
 When the active task needs rotation, use this exact request from any Codex thread:
@@ -83,8 +85,8 @@ sessions (`~/.claude/projects/<project>/<session>.jsonl`). The format is detecte
 file; subagent transcripts are skipped when scanning.
 
 ```bash
-codex-thread-tools health --agent claude          # every Claude Code project
-codex-thread-tools install-skill --agent claude   # adds /thread-handoff
+agent-thread-tools health --agent claude          # every Claude Code project
+agent-thread-tools install-skill --agent claude   # adds /thread-handoff
 ```
 
 In Claude Code, run `/thread-handoff` when health says to, then `/clear`. The handoff
@@ -101,10 +103,10 @@ is wired into `CLAUDE.local.md`, so the fresh session starts with it loaded. See
 ### Local health
 
 ```bash
-codex-thread-tools health
-codex-thread-tools health --mode standard
-codex-thread-tools health --mode verbose --size-format both
-codex-thread-tools health --json
+agent-thread-tools health
+agent-thread-tools health --mode standard
+agent-thread-tools health --mode verbose --size-format both
+agent-thread-tools health --json
 ```
 
 The human-readable output is for your terminal. `--json` is the stable interface if you're scripting against it.
@@ -116,7 +118,7 @@ Health separates the latest turn from continuation risk. `WARN` means monitor th
 Install the same package on both ends, then:
 
 ```bash
-codex-thread-tools health remote --host user@example-host \
+agent-thread-tools health remote --host user@example-host \
   --project /srv/project
 ```
 
@@ -139,8 +141,8 @@ Start at [Documentation](docs/README.md), or jump straight to:
 ## Project
 
 - **Status:** Production
-- **Version:** `1.4.0`
-- **Issues:** [Report a bug or request a feature](https://github.com/zenzig/codex-thread-tools/issues)
+- **Version:** `2.0.0`
+- **Issues:** [Report a bug or request a feature](https://github.com/zenzig/agent-thread-tools/issues)
 - **Security:** Read the [security policy](SECURITY.md) before reporting a vulnerability.
 - **[Changelog](CHANGELOG.md):** Release history and notable changes.
 - **Development:** See the [development guide](docs/development.md) for tests and package checks.

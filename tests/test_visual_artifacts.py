@@ -9,8 +9,8 @@ from time import perf_counter
 import importlib.util
 from pathlib import Path
 
-from codex_thread_tools.visual_artifacts import scan_record_visual_metrics
-from codex_thread_tools import visual_artifacts
+from agent_thread_tools.visual_artifacts import scan_record_visual_metrics
+from agent_thread_tools import visual_artifacts
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -950,6 +950,6 @@ def test_archive_visuals_rolls_back_on_manifest_write_failure(
 
 
 def test_archive_visuals_and_session_archives_use_shared_staged_directory() -> None:
-    from codex_thread_tools import session_archive
+    from agent_thread_tools import session_archive
 
     assert visual_artifacts.staged_directory is session_archive.staged_directory

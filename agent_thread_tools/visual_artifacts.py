@@ -12,16 +12,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from codex_thread_tools.atomic_directory import staged_directory
-from codex_thread_tools.sessionlib import (
+from agent_thread_tools.atomic_directory import staged_directory
+from agent_thread_tools.sessionlib import (
     iter_jsonl,
     iter_session_records,
     now_iso,
     record_timestamp,
     sha256_file,
 )
-from codex_thread_tools.archive_paths import ArchivePathError, resolve_archive_member
-from codex_thread_tools.sessionpaths import default_session_root
+from agent_thread_tools.archive_paths import ArchivePathError, resolve_archive_member
+from agent_thread_tools.sessionpaths import default_session_root
 
 
 LOCAL_MEDIA_EXTENSIONS = {

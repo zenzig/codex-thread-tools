@@ -67,8 +67,8 @@ jobs:
         run: |
           set -euo pipefail
           package_version="$(node -p "require('./package.json').version")"
-          if npm view "codex-thread-tools@$package_version" version >/dev/null 2>&1; then
-            echo "codex-thread-tools@$package_version is already published" >&2
+          if npm view "agent-thread-tools@$package_version" version >/dev/null 2>&1; then
+            echo "agent-thread-tools@$package_version is already published" >&2
             exit 1
           fi
 

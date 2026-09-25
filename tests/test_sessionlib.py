@@ -4,15 +4,15 @@ import hashlib
 import subprocess
 from pathlib import Path
 
-import codex_thread_tools
-from codex_thread_tools import sessionlib
+import agent_thread_tools
+from agent_thread_tools import sessionlib
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_package_version_matches_version_file() -> None:
-    assert codex_thread_tools.__version__ == (ROOT / "VERSION").read_text(
+    assert agent_thread_tools.__version__ == (ROOT / "VERSION").read_text(
         encoding="utf-8"
     ).strip()
 
@@ -34,7 +34,7 @@ def test_process_line_looks_like_codex_matches_process_names_only() -> None:
         "python tools/recover-codex-thread-starter.py"
     )
     assert not sessionlib.process_line_looks_like_codex(
-        "/Users/example/code/codex-thread-tools"
+        "/Users/example/code/agent-thread-tools"
     )
 
 
@@ -76,5 +76,5 @@ def test_record_text_extracts_direct_and_content_text() -> None:
 
 def test_sha256_file_hashes_file_contents(tmp_path: Path) -> None:
     path = tmp_path / "payload.bin"
-    path.write_bytes(b"codex-thread-tools")
-    assert sessionlib.sha256_file(path) == hashlib.sha256(b"codex-thread-tools").hexdigest()
+    path.write_bytes(b"agent-thread-tools")
+    assert sessionlib.sha256_file(path) == hashlib.sha256(b"agent-thread-tools").hexdigest()

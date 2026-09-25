@@ -5,7 +5,7 @@ from dataclasses import asdict
 from pathlib import Path
 import pytest
 
-from codex_thread_tools.session_integrity import (
+from agent_thread_tools.session_integrity import (
     INVALID_INLINE_IMAGE_CODE,
     REMOTE_IMAGE_CODE,
     SessionIntegrityFinding,

@@ -1,6 +1,6 @@
-# codex-thread-tools Documentation
+# agent-thread-tools Documentation
 
-This documentation is the detailed reference for `codex-thread-tools`.
+This documentation is the detailed reference for `agent-thread-tools`.
 
 Start with the root [README](../README.md) if you only need the quick path.
 Use the pages below when you want the exact command flow, safety model, or

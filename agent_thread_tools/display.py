@@ -1,4 +1,4 @@
-"""Text formatting helpers for codex-thread-tools CLI output."""
+"""Text formatting helpers for agent-thread-tools CLI output."""
 
 from __future__ import annotations
 

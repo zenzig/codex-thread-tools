@@ -10,17 +10,17 @@ from pathlib import Path
 from uuid import uuid4
 from typing import Any
 
-from codex_thread_tools.display import format_bytes, format_count
-from codex_thread_tools.sessionlib import (
+from agent_thread_tools.display import format_bytes, format_count
+from agent_thread_tools.sessionlib import (
     iter_jsonl,
     now_iso,
     now_stamp,
     record_timestamp,
     sha256_file,
 )
-from codex_thread_tools.archive_paths import ArchivePathError, resolve_archive_member
-from codex_thread_tools.atomic_directory import staged_directory, target_reservation
-from codex_thread_tools.thread_health import extract_project, extract_session_id
+from agent_thread_tools.archive_paths import ArchivePathError, resolve_archive_member
+from agent_thread_tools.atomic_directory import staged_directory, target_reservation
+from agent_thread_tools.thread_health import extract_project, extract_session_id
 
 
 MANIFEST_TYPE = "codex_session_archive_manifest"

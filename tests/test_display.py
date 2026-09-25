@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from codex_thread_tools.display import (
+from agent_thread_tools.display import (
     format_bytes,
     format_count,
     format_project,

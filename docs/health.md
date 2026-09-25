@@ -3,7 +3,7 @@
 The main command is:
 
 ```bash
-codex-thread-tools health
+agent-thread-tools health
 ```
 
 It scans your Codex session folder, selects the newest non-retired
@@ -52,19 +52,19 @@ The default human report is table-first and uses exact byte counts.
 Compact dashboard:
 
 ```bash
-codex-thread-tools health --mode compact
+agent-thread-tools health --mode compact
 ```
 
 Standard table output:
 
 ```bash
-codex-thread-tools health --mode standard
+agent-thread-tools health --mode standard
 ```
 
 Full diagnostic output:
 
 ```bash
-codex-thread-tools health --mode verbose --size-format both
+agent-thread-tools health --mode verbose --size-format both
 ```
 
 `--size-format` accepts `bytes`, `human`, or `both`.
@@ -84,7 +84,7 @@ environment defaults.
 For machine-readable output:
 
 ```bash
-codex-thread-tools health --json
+agent-thread-tools health --json
 ```
 
 JSON output ignores pretty display options and is the stable scripting
@@ -97,9 +97,9 @@ Remote project health analyzes the session root on an SSH host. Install the
 same package on both machines and verify both versions before running a report:
 
 ```bash
-npm install -g codex-thread-tools@latest
-codex-thread-tools --version
-ssh user@example-host codex-thread-tools --version
+npm install -g agent-thread-tools@latest
+agent-thread-tools --version
+ssh user@example-host agent-thread-tools --version
 ```
 
 The command first looks for the remote package in non-interactive SSH. If it is
@@ -112,29 +112,29 @@ token.
 Run an all-project report on the SSH host:
 
 ```bash
-codex-thread-tools health remote --host user@example-host
+agent-thread-tools health remote --host user@example-host
 ```
 
 Select one project by its exact recorded path:
 
 ```bash
-codex-thread-tools health remote --host user@example-host \
+agent-thread-tools health remote --host user@example-host \
   --project /srv/project
 ```
 
 Use verbose output with human-readable sizes:
 
 ```bash
-codex-thread-tools health remote --host user@example-host \
+agent-thread-tools health remote --host user@example-host \
   --mode verbose --size-format human
 ```
 
-Older remote hosts continue to return legacy health output for now; upgrade codex-thread-tools to version 1.3.0 or newer to receive the state-first fields.
+Older remote hosts continue to return legacy health output for now; upgrade agent-thread-tools to version 1.3.0 or newer to receive the state-first fields.
 
 Use JSON for scripts or other tooling:
 
 ```bash
-codex-thread-tools health remote --host user@example-host --json
+agent-thread-tools health remote --host user@example-host --json
 ```
 
 Analysis occurs remotely against the SSH host's session root. Before
@@ -150,7 +150,7 @@ treated as the same project.
 The remote command requires privacy-safe protocol support on the SSH host. A
 remote minor version without that protocol fails closed with an upgrade error;
 the local command never falls back to ordinary, unsanitized health JSON. Install
-the same `codex-thread-tools` version on both machines before retrying.
+the same `agent-thread-tools` version on both machines before retrying.
 
 This command is read-only and limited to remote project health. Remote token,
 archive, recovery, visual, and handoff operations are excluded.
@@ -179,7 +179,7 @@ report.
   key, agent, host alias, or server account in your normal OpenSSH setup.
 - **Package not found:** The tool checks both non-interactive SSH and the
   account's login shell. Confirm the package is installed for that account with
-  `ssh user@example-host "bash -lc 'command -v codex-thread-tools && codex-thread-tools --version'"`.
+  `ssh user@example-host "bash -lc 'command -v agent-thread-tools && agent-thread-tools --version'"`.
 - **Incompatible or protocol-missing versions:** Install the same version on
   both machines. A differing major version fails with exit code `1`. A minor or
   patch difference is normally a warning, but a remote version without the
@@ -196,7 +196,7 @@ terminal, progress is printed on stderr. If your terminal or editor hides
 stderr, force progress output:
 
 ```bash
-codex-thread-tools health --progress always
+agent-thread-tools health --progress always
 ```
 
 ## What Health Checks Inspect
@@ -237,7 +237,7 @@ as clean yet.
 To check one specific session file:
 
 ```bash
-codex-thread-tools health check ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+agent-thread-tools health check ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 ```
 
 ## Token Usage
@@ -245,13 +245,13 @@ codex-thread-tools health check ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 To estimate Codex-persisted lifetime token usage by project:
 
 ```bash
-codex-thread-tools health tokens
+agent-thread-tools health tokens
 ```
 
 You can choose the same display modes for token reports:
 
 ```bash
-codex-thread-tools health tokens --mode standard
+agent-thread-tools health tokens --mode standard
 ```
 
 The token report scans session JSONL files under `~/.codex/sessions/`, groups
@@ -262,7 +262,7 @@ context percentage for each project.
 Use JSON when you want the per-session source records behind each project total:
 
 ```bash
-codex-thread-tools health tokens --json
+agent-thread-tools health tokens --json
 ```
 
 Treat this as a Codex session-scale report, not a billing ledger. Older

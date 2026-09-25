@@ -184,8 +184,8 @@ def test_health_streams_integrity_without_file_level_rescan(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from codex_thread_tools import thread_health
-    from codex_thread_tools.session_integrity import SessionIntegrityAccumulator
+    from agent_thread_tools import thread_health
+    from agent_thread_tools.session_integrity import SessionIntegrityAccumulator
 
     session = tmp_path / "streamed-integrity.jsonl"
     write_session(
@@ -695,7 +695,7 @@ def test_remote_pretty_empty_protocol_without_state_axes_is_still_renderable(
     assert standard.returncode == 0, standard.stderr
     assert "Projects: 0" in standard.stdout
     assert "Project Summary" in standard.stdout
-    assert "Update the remote codex-thread-tools installation for state-first details." not in standard.stdout
+    assert "Update the remote agent-thread-tools installation for state-first details." not in standard.stdout
 
     compact = run_health_with_env(
         env,
@@ -708,7 +708,7 @@ def test_remote_pretty_empty_protocol_without_state_axes_is_still_renderable(
     assert compact.returncode == 0, compact.stderr
     assert "Projects: 0" in compact.stdout
     assert "Project Summary" in compact.stdout
-    assert "Update the remote codex-thread-tools installation for state-first details." not in compact.stdout
+    assert "Update the remote agent-thread-tools installation for state-first details." not in compact.stdout
 
     remote_json = run_health_with_env(
         env,
@@ -855,7 +855,7 @@ def test_remote_danger_with_zeroed_summary_is_protocol_error(tmp_path: Path) -> 
             "not installed or not available to non-interactive SSH",
         ),
         (
-            {"FAKE_SSH_VERSION": "2.0.0"},
+            {"FAKE_SSH_VERSION": "3.0.0"},
             (),
             "incompatible remote version",
         ),
@@ -2102,7 +2102,7 @@ def test_check_pretty_state_first_standard_vs_verbose(tmp_path: Path) -> None:
 
 
 def test_check_pretty_scale_shows_measurements_and_effective_thresholds() -> None:
-    from codex_thread_tools.thread_health import HealthThresholds
+    from agent_thread_tools.thread_health import HealthThresholds
 
     item = state_project(
         "/work/scale-details",
@@ -2243,7 +2243,7 @@ def test_projects_pretty_marks_missing_axes_per_remote_project() -> None:
     unavailable = codex_thread_health.REMOTE_STATE_UNAVAILABLE
     project_two_row = next(line for line in rendered.splitlines() if "project-2" in line)
     assert project_two_row.count(unavailable) == 5
-    assert "Update the remote codex-thread-tools installation for state-first details." in rendered
+    assert "Update the remote agent-thread-tools installation for state-first details." in rendered
 
 
 def test_projects_pretty_empty_updated_remote_report_has_no_upgrade_guidance() -> None:
@@ -2263,7 +2263,7 @@ def test_projects_pretty_empty_updated_remote_report_has_no_upgrade_guidance() -
         size_format="bytes",
     )
 
-    assert "Update the remote codex-thread-tools installation for state-first details." not in rendered
+    assert "Update the remote agent-thread-tools installation for state-first details." not in rendered
 
 
 def test_projects_pretty_state_first_table_shape_and_action_summary() -> None:
@@ -2995,8 +2995,8 @@ def test_check_response_items_warning_scale_is_monitored_without_handoff(
 
 
 def test_check_visual_embedded_warning_scale_marks_watch() -> None:
-    from codex_thread_tools import thread_health
-    from codex_thread_tools.thread_health import HealthThresholds, analyze_session_file
+    from agent_thread_tools import thread_health
+    from agent_thread_tools.thread_health import HealthThresholds, analyze_session_file
 
     def visual_metrics_stub(record: dict[str, object]) -> dict[str, int | float]:
         return {
@@ -3104,8 +3104,8 @@ def test_visual_health_estimates_large_embedded_payload_without_hashing(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    from codex_thread_tools import visual_artifacts
-    from codex_thread_tools.thread_health import HealthThresholds, analyze_session_file
+    from agent_thread_tools import visual_artifacts
+    from agent_thread_tools.thread_health import HealthThresholds, analyze_session_file
 
     huge = base64.b64encode(b"x" * 1024).decode("ascii")
     session = tmp_path / "large-visual.jsonl"

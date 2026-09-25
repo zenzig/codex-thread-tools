@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from codex_thread_tools.sessionlib import (
+from agent_thread_tools.sessionlib import (
     iter_jsonl,
     iter_session_records,
     now_iso,
@@ -15,8 +15,8 @@ from codex_thread_tools.sessionlib import (
     payload_type,
     record_text,
 )
-from codex_thread_tools.thread_health import action_for_state
-from codex_thread_tools.sessionpaths import iter_session_paths
+from agent_thread_tools.thread_health import action_for_state
+from agent_thread_tools.sessionpaths import iter_session_paths
 
 
 MARKER_TYPE = "handoff_completed"

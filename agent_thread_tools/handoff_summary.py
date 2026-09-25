@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from codex_thread_tools.display import format_count
-from codex_thread_tools.redaction import redact_sensitive_text
-from codex_thread_tools.sessionlib import (
+from agent_thread_tools.display import format_count
+from agent_thread_tools.redaction import redact_sensitive_text
+from agent_thread_tools.sessionlib import (
     iter_jsonl,
     iter_session_records,
     payload_role,
@@ -15,7 +15,7 @@ from codex_thread_tools.sessionlib import (
     record_text,
     record_timestamp,
 )
-from codex_thread_tools.thread_health import (
+from agent_thread_tools.thread_health import (
     HealthThresholds,
     analyze_session_file,
 )

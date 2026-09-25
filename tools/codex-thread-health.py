@@ -14,31 +14,31 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from codex_thread_tools import __version__
-from codex_thread_tools.remote_health import (
+from agent_thread_tools import __version__
+from agent_thread_tools.remote_health import (
     RemoteHealthError,
     add_remote_metadata,
     build_remote_safe_report,
     run_remote_health,
     select_remote_project,
 )
-from codex_thread_tools.sessionlib import die, expand_path
-from codex_thread_tools.sessionpaths import AGENTS, default_session_root
-from codex_thread_tools.display import (
+from agent_thread_tools.sessionlib import die, expand_path
+from agent_thread_tools.sessionpaths import AGENTS, default_session_root
+from agent_thread_tools.display import (
     format_bytes,
     format_count,
     format_project,
     render_table,
     truncate_middle,
 )
-from codex_thread_tools.handoff_markers import (
+from agent_thread_tools.handoff_markers import (
     annotate_result_with_handoff_context,
     default_marker_file,
     load_handoff_markers,
     marker_aware_active_sessions_by_project,
     replacement_prompt_markers,
 )
-from codex_thread_tools.thread_health import (
+from agent_thread_tools.thread_health import (
     HealthThresholds,
     aggregate_project_results,
     analyze_session_file,
@@ -93,7 +93,7 @@ def handoff_label(value: str) -> str:
 
 REMOTE_STATE_UNAVAILABLE = "Unavailable from this remote host"
 REMOTE_STATE_UPDATE_MESSAGE = (
-    "Update the remote codex-thread-tools installation for state-first details."
+    "Update the remote agent-thread-tools installation for state-first details."
 )
 
 

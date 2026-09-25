@@ -30,16 +30,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from codex_thread_tools.cli import add_common_args
-from codex_thread_tools.atomic_directory import staged_directory
-from codex_thread_tools.handoff_summary import (
+from agent_thread_tools.cli import add_common_args
+from agent_thread_tools.atomic_directory import staged_directory
+from agent_thread_tools.handoff_summary import (
     build_handoff_summary,
     format_handoff_summary,
     pre_handoff_safety,
 )
-from codex_thread_tools.sessionpaths import default_session_root
-from codex_thread_tools.session_integrity import scan_session_integrity
-from codex_thread_tools.sessionlib import (
+from agent_thread_tools.sessionpaths import default_session_root
+from agent_thread_tools.session_integrity import scan_session_integrity
+from agent_thread_tools.sessionlib import (
     KEEP_EVENT_TYPES,
     die,
     expand_path,
@@ -52,7 +52,7 @@ from codex_thread_tools.sessionlib import (
     sha256_file,
     record_timestamp,
 )
-from codex_thread_tools.thread_health import HealthThresholds, analyze_session_file
+from agent_thread_tools.thread_health import HealthThresholds, analyze_session_file
 
 
 def require_codex_closed(allow_running: bool) -> None:

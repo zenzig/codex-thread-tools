@@ -23,16 +23,16 @@ def single_pack_result(payload: object) -> dict:
 
 
 def test_single_pack_result_accepts_npm_11_and_npm_12_shapes() -> None:
-    package = {"name": "codex-thread-tools", "files": []}
+    package = {"name": "agent-thread-tools", "files": []}
 
     assert single_pack_result([package]) == package
-    assert single_pack_result({"codex-thread-tools": package}) == package
+    assert single_pack_result({"agent-thread-tools": package}) == package
 
 
 def test_package_metadata_is_publish_ready() -> None:
     package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
 
-    assert package["name"] == "codex-thread-tools"
+    assert package["name"] == "agent-thread-tools"
     assert package["version"] == (ROOT / "VERSION").read_text(
         encoding="utf-8"
     ).strip()
@@ -41,7 +41,7 @@ def test_package_metadata_is_publish_ready() -> None:
         == "CLI health checks, handoffs, session archives, visual archives, and recovery tools for OpenAI Codex and Claude Code session threads."
     )
     assert package["author"] == "Rich Olson"
-    assert package["bin"]["codex-thread-tools"] == "bin/codex-thread-tools.js"
+    assert package["bin"]["agent-thread-tools"] == "bin/agent-thread-tools.js"
     assert package["license"] == "MIT"
     assert "codex" in package["keywords"]
     assert "openai-codex" in package["keywords"]
@@ -51,7 +51,7 @@ def test_package_metadata_is_publish_ready() -> None:
 
 def test_npm_cli_help_and_version() -> None:
     help_result = subprocess.run(
-        ["node", str(ROOT / "bin" / "codex-thread-tools.js"), "--help"],
+        ["node", str(ROOT / "bin" / "agent-thread-tools.js"), "--help"],
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
@@ -59,7 +59,7 @@ def test_npm_cli_help_and_version() -> None:
         check=False,
     )
     version_result = subprocess.run(
-        ["node", str(ROOT / "bin" / "codex-thread-tools.js"), "--version"],
+        ["node", str(ROOT / "bin" / "agent-thread-tools.js"), "--version"],
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
@@ -68,7 +68,7 @@ def test_npm_cli_help_and_version() -> None:
     )
 
     assert help_result.returncode == 0, help_result.stderr
-    assert "codex-thread-tools" in help_result.stdout
+    assert "agent-thread-tools" in help_result.stdout
     assert "health [args...]" in help_result.stdout
     assert "session-archive [args...]" in help_result.stdout
     assert "handoff-summary [args...]" in help_result.stdout
@@ -84,7 +84,7 @@ def test_npm_cli_dispatches_health_tool() -> None:
     result = subprocess.run(
         [
             "node",
-            str(ROOT / "bin" / "codex-thread-tools.js"),
+            str(ROOT / "bin" / "agent-thread-tools.js"),
             "health",
             "check",
             "--help",
@@ -105,7 +105,7 @@ def test_npm_cli_dispatches_handoff_summary_tool() -> None:
     result = subprocess.run(
         [
             "node",
-            str(ROOT / "bin" / "codex-thread-tools.js"),
+            str(ROOT / "bin" / "agent-thread-tools.js"),
             "handoff-summary",
             "--help",
         ],
@@ -125,7 +125,7 @@ def test_npm_cli_dispatches_recovery_tool() -> None:
     result = subprocess.run(
         [
             "node",
-            str(ROOT / "bin" / "codex-thread-tools.js"),
+            str(ROOT / "bin" / "agent-thread-tools.js"),
             "recover",
             "diagnose",
             "--help",
@@ -148,7 +148,7 @@ def test_handoff_summary_imports_with_macos_system_python() -> None:
         pytest.skip("macOS system Python is not available")
 
     result = subprocess.run(
-        [str(system_python), "-c", "import codex_thread_tools.handoff_summary"],
+        [str(system_python), "-c", "import agent_thread_tools.handoff_summary"],
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
@@ -163,7 +163,7 @@ def test_npm_cli_dispatches_session_archive_tool() -> None:
     result = subprocess.run(
         [
             "node",
-            str(ROOT / "bin" / "codex-thread-tools.js"),
+            str(ROOT / "bin" / "agent-thread-tools.js"),
             "session-archive",
             "--help",
         ],
@@ -204,7 +204,7 @@ def test_npm_cli_uses_only_first_available_python(tmp_path: Path) -> None:
     env["CALL_LOG"] = str(call_log)
     env["PATH"] = f"{tmp_path}{os.pathsep}{env['PATH']}"
     result = subprocess.run(
-        ["node", str(ROOT / "bin" / "codex-thread-tools.js"), "health"],
+        ["node", str(ROOT / "bin" / "agent-thread-tools.js"), "health"],
         cwd=ROOT,
         env=env,
         text=True,
@@ -234,14 +234,14 @@ def test_npm_pack_excludes_generated_and_local_artifacts() -> None:
     assert all("__pycache__" not in path for path in paths)
     assert all(not path.startswith("tests/") for path in paths)
     assert all(not path.startswith("documentation/") for path in paths)
-    assert "bin/codex-thread-tools.js" in paths
+    assert "bin/agent-thread-tools.js" in paths
     assert "docs/README.md" in paths
     assert "docs/health.md" in paths
     assert "docs/session-archive.md" in paths
-    assert "codex_thread_tools/session_archive.py" in paths
-    assert "codex_thread_tools/thread_health.py" in paths
-    assert "codex_thread_tools/remote_health.py" in paths
-    assert "codex_thread_tools/session_integrity.py" in paths
+    assert "agent_thread_tools/session_archive.py" in paths
+    assert "agent_thread_tools/thread_health.py" in paths
+    assert "agent_thread_tools/remote_health.py" in paths
+    assert "agent_thread_tools/session_integrity.py" in paths
     assert "tools/codex-session-archive.py" in paths
     assert "tools/codex-thread-health.py" in paths
     assert "tools/recover-codex-thread-starter.py" in paths

@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from codex_thread_tools.handoff_markers import (
+from agent_thread_tools.handoff_markers import (
     handoff_lineage_for_result,
     marker_aware_active_sessions_by_project,
     prompt_markers_for_session,

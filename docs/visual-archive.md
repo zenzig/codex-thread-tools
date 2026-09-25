@@ -20,21 +20,21 @@ The visual archive workflow has two phases:
 Start with a read-only scan:
 
 ```bash
-codex-thread-tools visual-archive scan ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+agent-thread-tools visual-archive scan ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 ```
 
 If the scan reports local image paths as skipped, rerun it with the folder that
 contains those files:
 
 ```bash
-codex-thread-tools visual-archive scan ~/.codex/sessions/YYYY/MM/DD/thread.jsonl \
+agent-thread-tools visual-archive scan ~/.codex/sessions/YYYY/MM/DD/thread.jsonl \
   --allow-local-root "/path/to/screenshots"
 ```
 
 If the scan finds visuals you want to keep, use the interactive wizard:
 
 ```bash
-codex-thread-tools visual-archive wizard ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
+agent-thread-tools visual-archive wizard ~/.codex/sessions/YYYY/MM/DD/thread.jsonl
 ```
 
 The wizard asks for:
@@ -49,7 +49,7 @@ The wizard asks for:
 For advanced or repeatable use:
 
 ```bash
-codex-thread-tools visual-archive archive ~/.codex/sessions/YYYY/MM/DD/thread.jsonl \
+agent-thread-tools visual-archive archive ~/.codex/sessions/YYYY/MM/DD/thread.jsonl \
   --archive-root "/Volumes/CodexArchive" \
   --project-name "My Project" \
   --artifact-set "navbar-design-screenshots" \
@@ -78,7 +78,7 @@ of a session file and copying files you did not intend to archive.
 Verify an archive later:
 
 ```bash
-codex-thread-tools visual-archive verify /Volumes/CodexArchive/codex-visual-artifacts/my-project/navbar-design-screenshots/manifest.json
+agent-thread-tools visual-archive verify /Volumes/CodexArchive/codex-visual-artifacts/my-project/navbar-design-screenshots/manifest.json
 ```
 
 Verification checks that archived files still exist and that their byte size and

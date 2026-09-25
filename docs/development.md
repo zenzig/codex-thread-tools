@@ -4,18 +4,18 @@ Use a source checkout when you want to edit the tools, run tests, or contribute
 patches.
 
 ```bash
-git clone https://github.com/zenzig/codex-thread-tools.git
-cd codex-thread-tools
+git clone https://github.com/zenzig/agent-thread-tools.git
+cd agent-thread-tools
 ```
 
 ## Repository Layout
 
 ```text
-codex-thread-tools/
+agent-thread-tools/
 ├── .github/workflows/publish-npm.yml
-├── assets/codex-thread-tools-header.png
-├── bin/codex-thread-tools.js
-├── codex_thread_tools/
+├── assets/agent-thread-tools-header.png
+├── bin/agent-thread-tools.js
+├── agent_thread_tools/
 │   ├── display.py
 │   ├── handoff_markers.py
 │   ├── handoff_summary.py
@@ -43,7 +43,7 @@ If npm tries to write to a root-owned cache in your environment, use a temporary
 cache:
 
 ```bash
-npm_config_cache=/private/tmp/codex-thread-tools-npm-cache python3 -m pytest
+npm_config_cache=/private/tmp/agent-thread-tools-npm-cache python3 -m pytest
 ```
 
 Check the npm package contents without publishing:

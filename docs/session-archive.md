@@ -17,7 +17,7 @@ The session archive workflow has four phases:
 Start with a read-only plan:
 
 ```bash
-codex-thread-tools session-archive plan \
+agent-thread-tools session-archive plan \
   --project "/Users/you/project" \
   --older-than 30d \
   --min-size 100MiB
@@ -29,7 +29,7 @@ Archive matching sessions to a folder outside `~/.codex/sessions/`, such as an
 external drive:
 
 ```bash
-codex-thread-tools session-archive archive \
+agent-thread-tools session-archive archive \
   --project "/Users/you/project" \
   --older-than 30d \
   --min-size 100MiB \
@@ -68,7 +68,7 @@ in recovery storage.
 Verify the archive before deleting anything local:
 
 ```bash
-codex-thread-tools session-archive verify \
+agent-thread-tools session-archive verify \
   --manifest "/Volumes/CodexArchive/codex-session-archives/project-old-threads/manifest.json"
 ```
 
@@ -77,7 +77,7 @@ codex-thread-tools session-archive verify \
 Only after verification passes, prune local copies:
 
 ```bash
-codex-thread-tools session-archive prune-local \
+agent-thread-tools session-archive prune-local \
   --manifest "/Volumes/CodexArchive/codex-session-archives/project-old-threads/manifest.json" \
   --confirm-prune-local
 ```

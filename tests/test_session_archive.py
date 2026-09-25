@@ -9,13 +9,13 @@ import importlib.util
 from pathlib import Path
 import time
 
-from codex_thread_tools.atomic_directory import (
+from agent_thread_tools.atomic_directory import (
     _remove_path,
     _reservation_path,
     staged_directory,
 )
-from codex_thread_tools import atomic_directory
-from codex_thread_tools import session_archive
+from agent_thread_tools import atomic_directory
+from agent_thread_tools import session_archive
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1526,7 +1526,7 @@ def test_active_reservation_cannot_be_stolen_using_stale_metadata(tmp_path: Path
 import sys
 import time
 from pathlib import Path
-from codex_thread_tools.atomic_directory import _reservation_path, target_reservation
+from agent_thread_tools.atomic_directory import _reservation_path, target_reservation
 
 target, ready, stop = map(Path, sys.argv[1:])
 with target_reservation(target):

@@ -30,16 +30,16 @@ hidden from the project repository, never pushed. Step 1 creates it when missing
 
 ## Workflow
 
-1. Set up: run `codex-thread-tools reference init` from the project root. It creates
+1. Set up: run `agent-thread-tools reference init` from the project root. It creates
    `.reference/` as a local git repository and hides it from the project repository.
    Then inspect: `git status --short`, `git log --oneline -8`, relevant diffs.
-2. Health: `codex-thread-tools health check <session-file>`. Exit `2` is WARN and `3`
+2. Health: `agent-thread-tools health check <session-file>`. Exit `2` is WARN and `3`
    is DANGER; both are results, not failures.
-3. Draft: `codex-thread-tools handoff-summary <session-file>` as a redacted aid. Verify
+3. Draft: `agent-thread-tools handoff-summary <session-file>` as a redacted aid. Verify
    every important fact against files, git, tests, or explicit user instructions.
-4. Visuals: if screenshots exist, `codex-thread-tools visual-archive scan <session-file>`,
+4. Visuals: if screenshots exist, `agent-thread-tools visual-archive scan <session-file>`,
    then archive the ones that still matter:
-   `codex-thread-tools visual-archive archive --archive-root .reference --project-name <name> --artifact-set <YYYY-MM-DD-topic> --visual-context "<what they show>" <session-file>`.
+   `agent-thread-tools visual-archive archive --archive-root .reference --project-name <name> --artifact-set <YYYY-MM-DD-topic> --visual-context "<what they show>" <session-file>`.
    Record `Archived:` with the manifest path, or `Not archived:` with the reason.
 5. Reference docs: save large user-provided text or Markdown that later work depends
    on into `.reference/docs/` and update `INDEX.md`.
@@ -49,9 +49,9 @@ hidden from the project repository, never pushed. Step 1 creates it when missing
 7. Wire it in: keep exactly one line in `CLAUDE.local.md` (create it if missing):
    `Latest handoff: @<handoff path>` and `Reference index: @.reference/INDEX.md`.
    Replace the previous line; never accumulate old handoffs there.
-8. Commit: `codex-thread-tools reference commit -m "Handoff: <topic>"`. Do not commit
+8. Commit: `agent-thread-tools reference commit -m "Handoff: <topic>"`. Do not commit
    to the project repository unless the user asks.
-9. Mark: `codex-thread-tools handoff-marker record --source-session-file <session-file> --handoff-file <handoff path>`.
+9. Mark: `agent-thread-tools handoff-marker record --source-session-file <session-file> --handoff-file <handoff path>`.
 10. Report the handoff path and tell the user to run `/clear` (or open a new session).
     The new session loads the handoff through `CLAUDE.local.md` automatically.
 

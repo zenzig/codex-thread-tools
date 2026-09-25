@@ -13,9 +13,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import codex_thread_tools.visual_artifacts as visual_artifacts
-from codex_thread_tools.sessionlib import die, expand_path
-from codex_thread_tools.visual_artifacts import (
+import agent_thread_tools.visual_artifacts as visual_artifacts
+from agent_thread_tools.sessionlib import die, expand_path
+from agent_thread_tools.visual_artifacts import (
     archive_visuals,
     scan_session_visuals,
 )

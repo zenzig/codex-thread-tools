@@ -5,9 +5,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from codex_thread_tools import handoff_summary
-from codex_thread_tools.redaction import redact_sensitive_text
-from codex_thread_tools.thread_health import HealthThresholds, analyze_session_file
+from agent_thread_tools import handoff_summary
+from agent_thread_tools.redaction import redact_sensitive_text
+from agent_thread_tools.thread_health import HealthThresholds, analyze_session_file
 
 ROOT = Path(__file__).resolve().parents[1]
 
