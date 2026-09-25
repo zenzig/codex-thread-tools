@@ -62,6 +62,26 @@ agent-thread-tools reference commit -m "Add spec"    # commit everything in it
 Then run `/clear` or start a new session: it starts from `CLAUDE.md`, the handoff,
 and auto memory instead of the old transcript.
 
-## Not yet supported
+Health then links the two sessions. The session that was handed off shows as
+retired, and a later session that loaded the handoff through `CLAUDE.local.md`
+shows as its replacement ("Replacement active").
 
-`session-archive` and `recover` still target Codex sessions only.
+Handoff markers are kept in `~/.codex/thread-tools/handoff-markers.jsonl` when
+Codex is installed, so one file covers both agents, and in
+`~/.claude/thread-tools/handoff-markers.jsonl` otherwise. Set
+`AGENT_THREAD_HANDOFF_MARKER_FILE` to use another file.
+
+## Archive and recovery
+
+Old sessions can move to external storage with `session-archive --agent claude`.
+Each session's folder (subagents, tool results, workflows) travels with it, the
+project's `memory/` folder is never touched, and sessions open in Claude Code are
+skipped. See [Session archive](session-archive.md#claude-code).
+
+`recover` reads Claude Code sessions too. `diagnose` also reports tool calls
+without results and API errors about images, and `strip-images` removes images
+that Claude Code cannot process. See [Recovery](recovery.md#claude-code).
+
+Commands that write refuse to touch a session that is open in Claude Code. The
+tool reads the open sessions from `~/.claude/sessions/`, where Claude Code
+records each running session.

@@ -41,7 +41,7 @@ that the next session loads automatically.
   <tr>
     <td align="center" width="33%">🖼️<br><strong>Screenshot archive</strong><br><sub>Copies the screenshots that still matter out of a session and verifies the copies.</sub></td>
     <td align="center" width="33%">🛰️<br><strong>Remote health</strong><br><sub>Checks sessions on another machine over SSH. Only a privacy-filtered report comes back.</sub></td>
-    <td align="center" width="33%">🛟<br><strong>Recovery</strong> <sup>Codex</sup><br><sub>Diagnoses a damaged session and builds a redacted recovery bundle.</sub></td>
+    <td align="center" width="33%">🛟<br><strong>Recovery</strong><br><sub>Diagnoses a damaged session, strips images Claude Code cannot process, and builds a redacted recovery bundle.</sub></td>
   </tr>
 </table>
 
@@ -134,8 +134,8 @@ agent-thread-tools health check ~/.claude/projects/<project>/<session>.jsonl
 | 🗂️ `reference init` / `commit` | Creates and commits the local-only `.reference/` repository | ✅ | ✅ |
 | 🖼️ `visual-archive` | Copies screenshots and videos out of a session and verifies the copies | ✅ | ✅ |
 | 🔖 `handoff-marker` | Records which session a handoff came from | ✅ | ✅ |
-| 🧊 `session-archive` | Moves old session files into staged, verified archives, with a recovery quarantine before pruning | ➖ | ✅ |
-| 🛟 `recover` | Diagnoses a damaged session and builds a redacted recovery bundle | ➖ | ✅ |
+| 🧊 `session-archive` | Moves old session files into staged, verified archives, with a recovery quarantine before pruning | ✅ | ✅ |
+| 🛟 `recover` | Diagnoses a damaged session, repairs it, or builds a redacted recovery bundle | ✅ | ✅ |
 
 > [!IMPORTANT]
 > Health checks and summaries only read session files. Commands that copy or delete
@@ -173,7 +173,7 @@ agent-thread-tools health remote --host user@example-host --project /srv/project
 The analysis runs on the remote host, and only a privacy-filtered report comes back: no
 transcript text, tool output, or images cross SSH. If the command isn't found over a
 non-interactive SSH session, it retries through your login shell, which covers NVM
-installs.
+installs. Add `--agent claude` or `--agent codex` to choose which sessions it reads.
 
 ## 📚 Documentation
 
@@ -186,8 +186,8 @@ Start at [Documentation](docs/README.md), or go straight to a guide:
 | 🩺 | [Thread health](docs/health.md) | Report modes, risk domains, remote reports, exit codes |
 | 🌉 | [Handoff workflow](docs/handoff.md) | The Codex handoff skill, summaries, and markers |
 | 🖼️ | [Visual archive](docs/visual-archive.md) | Keeping screenshots and videos outside session history |
-| 🧊 | [Session archive](docs/session-archive.md) | Verified cold storage and pruning for Codex sessions |
-| 🛟 | [Recovery](docs/recovery.md) | Diagnosis and recovery bundles for damaged Codex sessions |
+| 🧊 | [Session archive](docs/session-archive.md) | Verified cold storage and pruning for old sessions |
+| 🛟 | [Recovery](docs/recovery.md) | Diagnosis, repairs, and recovery bundles for damaged sessions |
 | 🗜️ | [Compaction](docs/compaction.md) | How compaction differs from handoffs and archives |
 
 ## 📋 Project

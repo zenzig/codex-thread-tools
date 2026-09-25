@@ -12,6 +12,24 @@ The session archive workflow has four phases:
 3. `verify` checks archived file size and SHA-256 hashes against the manifest.
 4. `prune-local` optionally deletes verified local JSONL files.
 
+## Claude Code
+
+Pass `--agent claude` to archive Claude Code sessions from `~/.claude/projects/`:
+
+```bash
+agent-thread-tools session-archive plan --agent claude --older-than 30d
+```
+
+Claude Code keeps each session as `<session-id>.jsonl` plus a folder of the same
+name that holds subagent transcripts, tool results, and workflow files. The archive
+treats them as one session: every file is copied, hashed in the manifest, verified,
+and pruned together, and `prune-local` removes the emptied folder. The project's
+`memory/` folder is never touched.
+
+Sessions that are open in Claude Code are skipped by `plan` and `archive`, and
+`prune-local` refuses them. Claude Code archives go in `claude-session-archives/`
+under the archive root; Codex archives go in `codex-session-archives/`.
+
 ## Plan
 
 Start with a read-only plan:

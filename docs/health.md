@@ -117,6 +117,10 @@ Run an all-project report on the SSH host:
 agent-thread-tools health remote --host user@example-host
 ```
 
+The remote host reports its default agent's sessions: Codex when installed there,
+otherwise Claude Code. Add `--agent claude` or `--agent codex` to choose; the
+remote host needs 2.0.0 or newer for that flag.
+
 Select one project by its exact recorded path:
 
 ```bash

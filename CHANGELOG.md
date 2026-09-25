@@ -13,6 +13,24 @@
   wires the latest handoff into `CLAUDE.local.md` for the next session.
 - Add `reference init|commit`, which keeps handoffs, screenshots, and reference docs
   in a local-only `.reference/` git repository hidden from the project repository.
+- `session-archive --agent claude` archives, verifies, and prunes Claude Code
+  sessions together with their folders (subagents, tool results, workflows). The
+  project `memory/` folder is never touched, and sessions open in Claude Code are
+  skipped.
+- `recover` reads Claude Code sessions: `inspect`, `diagnose` (also tool calls
+  without results and API errors about images), `backup`, and `bundle`. The new
+  `strip-images` repair removes images Claude Code cannot process. Writes are
+  refused while the session is open; `strip-compacted` and `rebuild-window` stay
+  Codex-only.
+- `recover diagnose` now checks images inside tool results and in Claude Code
+  sessions, which it previously skipped.
+- Health links a Claude Code session to the handoff it loaded through
+  `CLAUDE.local.md` ("Replacement active" instead of "Not recorded").
+- Handoff markers go to `~/.claude/thread-tools/` on machines without Codex;
+  `AGENT_THREAD_HANDOFF_MARKER_FILE` overrides the location.
+- `health remote --agent` chooses which agent's sessions the remote host reads.
+- Health reports are titled "Thread Health", and files inside a Claude Code
+  session's folder are no longer counted as sessions.
 
 ## 1.3.2 - 2026-08-04
 

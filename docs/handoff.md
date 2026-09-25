@@ -74,7 +74,7 @@ using a generated summary for a manual handoff.
 ## Handoff Markers
 
 Completed handoffs are tracked in a local sidecar marker file under
-`~/.codex/thread-tools/`. Project health reports use those markers to retire old
+`~/.codex/thread-tools/` (or `~/.claude/thread-tools/` on machines without Codex). Project health reports use those markers to retire old
 source sessions and prioritize the new active replacement thread. Reports also
 include the running total of completed handoffs per project.
 

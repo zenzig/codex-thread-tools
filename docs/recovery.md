@@ -39,6 +39,36 @@ If a session contains relevant screenshots or generated assets, review the
 bundle's visual decision and run `agent-thread-tools visual-archive scan` before
 retiring the session.
 
+## Claude Code
+
+The same commands read Claude Code sessions; the tool detects the format from the
+file:
+
+```bash
+agent-thread-tools recover diagnose ~/.claude/projects/<project>/<session>.jsonl
+```
+
+For Claude Code, diagnosis also reports tool calls that never got a result and API
+errors about images. When Claude Code cannot process an image in a session, the
+request fails, and Claude Code drops the image and continues, but only in memory,
+so every resume repeats the failed request. `strip-images` removes such images
+from the file for good:
+
+```bash
+agent-thread-tools recover strip-images <session>.jsonl --output /tmp/repaired.jsonl
+agent-thread-tools recover strip-images <session>.jsonl --replace-live \
+  --confirm-replace-live <session>.jsonl
+```
+
+Each broken image becomes a short text note and every other line stays unchanged.
+`--all` replaces every image, for example after an API error about image size.
+Exit the session (or run `/clear` in it) first: writes are refused while it is
+open. Backups go to `~/.claude/thread-tools/session-backups/` and bundles to
+`~/.claude/thread-tools/recovery-bundles/` unless you choose other folders.
+
+`strip-compacted` and `rebuild-window` rewrite Codex records and refuse Claude
+Code sessions. For Claude Code, a handoff followed by `/clear` does the same job.
+
 ## Legacy Operations
 
 `inspect`, `backup`, `strip-compacted`, and `rebuild-window` remain available
@@ -63,10 +93,11 @@ safe continuation.
 
 The recovery tool is intentionally conservative:
 
-- repair output cannot be written into `~/.codex/sessions/`
+- repair output cannot be written into `~/.codex/sessions/` or `~/.claude/projects/`
 - live replacement requires `--replace-live`
 - live replacement also requires `--confirm-replace-live` with the exact resolved path
-- write operations refuse to run while Codex appears to be open
+- write operations refuse to run while Codex appears to be open, or while the
+  Claude Code session is open
 
 Treat legacy repair commands as last-resort tools. Back up before any write and
 prefer writing repaired output to a scratch path before replacing a live session
