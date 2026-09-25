@@ -23,8 +23,8 @@ Health checks · Handoffs · Reference archive · Screenshot archive · Remote h
 </div>
 
 > [!NOTE]
-> **Formerly `codex-thread-tools`.** Version 2.0.0 renamed the package, and the old
-> command still works. To switch: `npm uninstall -g codex-thread-tools && npm install -g agent-thread-tools`.
+> **Formerly `codex-thread-tools`.** Version 2.0.0 added support for Claude Code and
+> renamed the package. The old `codex-thread-tools` commands still work. To switch: `npm uninstall -g codex-thread-tools && npm install -g agent-thread-tools`.
 
 agent-thread-tools checks how healthy your coding-agent sessions are and tells you when
 a session should end. It then turns what the session learned into a short handoff file
