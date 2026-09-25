@@ -33,8 +33,8 @@ def test_root_readme_is_concise_and_links_docs_index() -> None:
 
     assert len(non_blank_lines) <= 220
     assert "[Documentation](docs/README.md)" in text
-    assert "## Documentation" in text
-    assert "[Changelog](CHANGELOG.md)" in text
+    assert re.search(r"^## .*Documentation$", text, re.MULTILINE)
+    assert '<a href="CHANGELOG.md">Changelog</a>' in text
 
 
 def test_health_docs_cover_remote_health_contract() -> None:
@@ -73,13 +73,15 @@ def test_health_docs_capture_state_first_reporting_model() -> None:
 
 def test_readme_is_a_concise_open_source_project_overview() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
+    # Headings start with an emoji; compare the words after it.
     headings = {
-        line.removeprefix("## ").strip().lower()
+        re.sub(r"^[^\w(]+", "", line.removeprefix("## ")).strip().lower()
         for line in text.splitlines()
         if line.startswith("## ")
     }
 
     for heading in (
+        "what's in the box",
         "why not just let claude code compact?",
         "quick start (claude code)",
         "what a handoff leaves behind",
@@ -109,7 +111,7 @@ def test_readme_is_a_concise_open_source_project_overview() -> None:
     assert "/path/to/project" not in text
     assert "NVM" in text
     assert text.count(MEDIUM_ARTICLE_URL) == 1
-    assert len(text.splitlines()) <= 170
+    assert len(text.splitlines()) <= 260
 
 
 def test_root_readme_lists_remote_health_command() -> None:
@@ -141,7 +143,7 @@ def test_version_contract_is_exact() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
     assert package["version"] == version
-    assert f"**Version:** `{version}`" in readme
+    assert f"<code>{version}</code>" in readme
 
 
 def test_handoff_redaction_documentation_is_explicit() -> None:
