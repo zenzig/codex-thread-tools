@@ -936,7 +936,8 @@ def remote_threshold_args(args: argparse.Namespace) -> list[str]:
 def remote_command(args: argparse.Namespace) -> int:
     report, _remote_code, version_warning = run_remote_health(
         args.host,
-        ["health", "projects", *remote_threshold_args(args)],
+        # Only pass --agent when asked, so remote hosts older than 2.0.0 still answer.
+        ["health", "projects", *(["--agent", args.agent] if args.agent else []), *remote_threshold_args(args)],
         local_version=__version__,
         connect_timeout=args.connect_timeout,
     )
@@ -1099,7 +1100,14 @@ def build_parser() -> argparse.ArgumentParser:
     remote.add_argument(
         "--host",
         required=True,
-        help="OpenSSH destination or alias containing the remote Codex sessions",
+        help="OpenSSH destination or alias containing the remote sessions",
+    )
+    remote.add_argument(
+        "--agent",
+        choices=AGENTS,
+        default=None,
+        help="which agent's sessions to read on the remote host (default: the "
+        "remote host's default, codex when present, else claude)",
     )
     remote.add_argument(
         "--project",

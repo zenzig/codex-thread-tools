@@ -724,6 +724,29 @@ def test_remote_pretty_empty_protocol_without_state_axes_is_still_renderable(
     assert payload["projects"] == []
 
 
+def test_remote_forwards_agent_only_when_given(tmp_path: Path) -> None:
+    report = remote_projects_report("ok")
+    env = fake_ssh_env(tmp_path, report)
+
+    result = run_health_with_env(
+        env, "remote", "--host", "node1.atomicfalls.com", "--agent", "claude", "--json"
+    )
+    assert result.returncode == 0, result.stderr
+    assert shlex.split(fake_ssh_commands(env)[1][-1])[:5] == [
+        "codex-thread-tools",
+        "health",
+        "projects",
+        "--agent",
+        "claude",
+    ]
+
+    (tmp_path / "default").mkdir()
+    default_env = fake_ssh_env(tmp_path / "default", report)
+    result = run_health_with_env(default_env, "remote", "--host", "node1.atomicfalls.com", "--json")
+    assert result.returncode == 0, result.stderr
+    assert "--agent" not in shlex.split(fake_ssh_commands(default_env)[1][-1])
+
+
 def test_remote_forwards_explicit_thresholds_only(tmp_path: Path) -> None:
     report = remote_projects_report("ok")
     report["projects"][0]["project"] = "/home/rich/atomic-development"
