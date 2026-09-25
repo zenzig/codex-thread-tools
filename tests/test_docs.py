@@ -80,11 +80,13 @@ def test_readme_is_a_concise_open_source_project_overview() -> None:
     }
 
     for heading in (
-        "the problem",
-        "use it when you want to",
-        "what's in the box",
-        "quick start",
-        "how it works",
+        "why not just let claude code compact?",
+        "quick start (claude code)",
+        "what a handoff leaves behind",
+        "reading the health report",
+        "commands",
+        "codex",
+        "remote health",
         "documentation",
         "project",
     ):

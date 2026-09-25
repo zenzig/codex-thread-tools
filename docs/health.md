@@ -94,12 +94,14 @@ also read new state-first fields such as task lifecycle and continuation risk.
 ## Remote Project Health
 
 Remote project health analyzes the session root on an SSH host. Install the
-same package on both machines and verify both versions before running a report:
+same package on both machines and verify both versions before running a report.
+On the remote host the tool runs the `codex-thread-tools` command, which both
+`agent-thread-tools` and the older `codex-thread-tools` package install:
 
 ```bash
 npm install -g agent-thread-tools@latest
 agent-thread-tools --version
-ssh user@example-host agent-thread-tools --version
+ssh user@example-host codex-thread-tools --version
 ```
 
 The command first looks for the remote package in non-interactive SSH. If it is
@@ -179,9 +181,10 @@ report.
   key, agent, host alias, or server account in your normal OpenSSH setup.
 - **Package not found:** The tool checks both non-interactive SSH and the
   account's login shell. Confirm the package is installed for that account with
-  `ssh user@example-host "bash -lc 'command -v agent-thread-tools && agent-thread-tools --version'"`.
+  `ssh user@example-host "bash -lc 'command -v codex-thread-tools && codex-thread-tools --version'"`.
 - **Incompatible or protocol-missing versions:** Install the same version on
-  both machines. A differing major version fails with exit code `1`. A minor or
+  both machines. A differing major version fails with exit code `1`, except that
+  2.x accepts a 1.x remote with a warning (2.0.0 only renamed the package). A minor or
   patch difference is normally a warning, but a remote version without the
   privacy-safe protocol fails closed with exit code `1` instead of requesting
   ordinary health JSON.
