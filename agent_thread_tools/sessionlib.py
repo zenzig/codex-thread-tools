@@ -109,6 +109,21 @@ def _process_alive(pid: Any, proc_start: Any) -> bool:
     return True
 
 
+def session_agent(path: Path) -> str:
+    """``claude`` or ``codex``, from the first record in a session file."""
+    from agent_thread_tools.claude_sessions import is_claude_record
+
+    with path.open("rb") as handle:
+        for raw in handle:
+            try:
+                record = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(record, dict):
+                return "claude" if is_claude_record(record) else "codex"
+    return "codex"
+
+
 def iter_jsonl(path: Path) -> Iterable[tuple[int, bytes, dict[str, Any]]]:
     with path.open("rb") as handle:
         for line_no, raw in enumerate(handle, 1):

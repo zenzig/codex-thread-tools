@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
-Starter recovery utility for oversized Codex session JSONL files.
+Recovery utility for damaged or oversized Codex and Claude Code session files.
 
 This script is intentionally conservative:
-- it refuses to run write operations while Codex appears to be open
+- it refuses to write while Codex is open, or while the Claude Code session is open
 - it creates a backup before replacing a live session file
 - it writes repaired output to a separate file unless --replace-live is used
 - it validates that essential records are preserved before writing
 
 Typical flow:
   1. inspect          - understand the size and record mix
-  2. backup           - preserve the raw session file
-  3. strip-compacted  - remove huge compaction records
-  4. rebuild-window   - optional last-resort rebuild from a recent real window
+  2. diagnose         - find problems that stop the session from resuming
+  3. backup           - preserve the raw session file
+  4. strip-images     - Claude Code: replace broken images with a short note
+     strip-compacted  - Codex: remove huge compaction records
+     rebuild-window   - Codex: last-resort rebuild from a recent real window
 """
 
 from __future__ import annotations
@@ -37,7 +39,8 @@ from agent_thread_tools.handoff_summary import (
     format_handoff_summary,
     pre_handoff_safety,
 )
-from agent_thread_tools.sessionpaths import default_session_root
+from agent_thread_tools.claude_recovery import claude_findings, inspect_claude, strip_images
+from agent_thread_tools.sessionpaths import claude_session_root, codex_session_root
 from agent_thread_tools.session_integrity import scan_session_integrity
 from agent_thread_tools.sessionlib import (
     KEEP_EVENT_TYPES,
@@ -45,6 +48,8 @@ from agent_thread_tools.sessionlib import (
     expand_path,
     is_codex_running,
     iter_jsonl,
+    open_claude_sessions,
+    session_agent,
     now_iso,
     now_stamp,
     payload_role,
@@ -53,6 +58,39 @@ from agent_thread_tools.sessionlib import (
     record_timestamp,
 )
 from agent_thread_tools.thread_health import HealthThresholds, analyze_session_file
+
+
+AGENT_NAMES = {"codex": "Codex", "claude": "Claude Code"}
+DEFAULT_BACKUP_DIRS = {
+    "codex": "~/.codex/session_quarantine",
+    "claude": "~/.claude/thread-tools/session-backups",
+}
+DEFAULT_BUNDLE_ROOTS = {
+    "codex": "~/.codex/thread-tools/recovery-bundles",
+    "claude": "~/.claude/thread-tools/recovery-bundles",
+}
+
+
+def require_writable(source: Path, allow_running: bool) -> str:
+    """Refuse to write while the session's agent could still be using the file."""
+    agent = session_agent(source)
+    if agent == "codex":
+        require_codex_closed(allow_running)
+    elif source.stem in open_claude_sessions():
+        die(
+            "this session is open in Claude Code. Exit that session (or run /clear "
+            "in it) before repairing or backing up its file."
+        )
+    return agent
+
+
+def require_codex_only(source: Path, command: str) -> None:
+    if session_agent(source) == "claude":
+        die(
+            f"{command} rewrites Codex compaction records and does not apply to Claude "
+            "Code sessions. Use strip-images to fix broken images, or hand off to a "
+            "fresh session."
+        )
 
 
 def require_codex_closed(allow_running: bool) -> None:
@@ -116,13 +154,13 @@ def require_live_replace_confirmation(source: Path, confirmation: str | None) ->
 
 
 def require_not_live_session_output(target: Path) -> None:
-    session_root = default_session_root()
-    if is_within_directory(target, session_root):
-        die(
-            "refusing to write repair output under ~/.codex/sessions. Write to a "
-            "scratch path outside the live Codex session tree, then inspect it before "
-            "using --replace-live with --confirm-replace-live."
-        )
+    for session_root in (codex_session_root(), claude_session_root()):
+        if is_within_directory(target, session_root):
+            die(
+                f"refusing to write repair output under {session_root}. Write to a "
+                "scratch path outside the live session tree, then inspect it before "
+                "using --replace-live with --confirm-replace-live."
+            )
 
 
 def prepare_write_target(
@@ -164,6 +202,9 @@ def replace_if_requested(temp: Path, live: Path | None) -> None:
 def inspect_session(args: argparse.Namespace) -> None:
     source = expand_path(args.session_file)
     ensure_source(source)
+    if session_agent(source) == "claude":
+        print(json.dumps(inspect_claude(source, largest_lines=args.largest_lines), indent=2))
+        return
 
     summary: dict[str, Any] = {
         "file": str(source),
@@ -243,7 +284,8 @@ def format_diagnosis(diagnosis: dict[str, Any]) -> str:
     safety = diagnosis["pre_handoff_safety"]
     integrity = diagnosis["integrity"]
     lines = [
-        "Codex Session Integrity Diagnosis",
+        "Session Integrity Diagnosis",
+        f"Agent: {AGENT_NAMES[diagnosis['agent']]}",
         f"File: {diagnosis['file']}",
         f"Project: {diagnosis['project'] or 'not recorded'}",
         f"Session: {diagnosis['session_id'] or 'not recorded'}",
@@ -257,6 +299,14 @@ def format_diagnosis(diagnosis: dict[str, Any]) -> str:
         f"Remote image URLs: {integrity['remote_image_urls']}",
         f"History base present: {'yes' if integrity['history_base_present'] else 'no'}",
     ]
+    claude = diagnosis.get("claude")
+    if claude:
+        lines.extend(
+            [
+                f"Tool calls without results: {claude['tool_calls_without_results']}",
+                f"API errors about images: {claude['image_api_errors']}",
+            ]
+        )
     if integrity["findings"]:
         lines.append("Findings")
         for finding in integrity["findings"]:
@@ -300,13 +350,24 @@ def collect_diagnosis_with_health(
     *,
     max_findings: int = 20,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    agent = session_agent(source)
     health = analyze_session_file(source, HealthThresholds())
     integrity = scan_session_integrity(source, max_findings=max_findings)
     safety = pre_handoff_safety(health["metrics"], health)
+    claude = claude_findings(source) if agent == "claude" else None
 
-    if integrity.invalid_image_urls or integrity.remote_image_urls:
+    if agent == "claude" and (integrity.invalid_image_urls or claude["image_api_errors"]):
+        # Claude Code accepts remote image URLs, but a broken image fails every request.
+        status = "danger"
+        recommended_action = (
+            "strip-images" if integrity.invalid_image_urls else "strip-images --all"
+        )
+    elif agent == "codex" and (integrity.invalid_image_urls or integrity.remote_image_urls):
         status = "danger"
         recommended_action = "create-recovery-bundle"
+    elif claude and claude["tool_calls_without_results"]:
+        status = "caution"
+        recommended_action = "review-before-handoff"
     elif safety["status"] != "clean" or health["status"] != "ok":
         status = "caution"
         recommended_action = "review-before-handoff"
@@ -316,6 +377,7 @@ def collect_diagnosis_with_health(
 
     diagnosis = {
         "report_type": "codex_session_integrity_diagnosis",
+        "agent": agent,
         "file": str(source),
         "project": health["project"],
         "session_id": health["session_id"],
@@ -335,6 +397,8 @@ def collect_diagnosis_with_health(
             "findings": [asdict(finding) for finding in integrity.findings],
         },
     }
+    if claude is not None:
+        diagnosis["claude"] = claude
     return diagnosis, health
 
 
@@ -448,9 +512,8 @@ def run_bundle(args: argparse.Namespace) -> int:
     if not project_root.is_dir():
         die(f"project root is not a directory: {project_root}")
 
-    output_root = expand_path(
-        args.output_root or "~/.codex/thread-tools/recovery-bundles"
-    )
+    agent = session_agent(source)
+    output_root = expand_path(args.output_root or DEFAULT_BUNDLE_ROOTS[agent])
     require_not_live_session_output(output_root)
     output_root_identity = capture_directory_identity(output_root)
 
@@ -504,7 +567,7 @@ def run_bundle(args: argparse.Namespace) -> int:
                     f"- History base declared: {'yes' if diagnosis['integrity']['history_base_present'] else 'no'}",
                     "",
                     "Decision",
-                    "- Create a fresh task instead of resuming or forking this session.",
+                    "- Start a fresh session instead of resuming or forking this one.",
                 ]
             )
             + "\n",
@@ -536,7 +599,7 @@ def run_bundle(args: argparse.Namespace) -> int:
             staging_dir / "fresh-task-prompt.md",
             "\n".join(
                 [
-                    "Start a new Codex task from this redacted summary.",
+                    f"Start a new {AGENT_NAMES[agent]} session from this redacted summary.",
                     "",
                     "Do not resume, fork, or trust the broken live transcript. "
                     "Use this bundle to bootstrap context, then continue from a clean state.",
@@ -578,20 +641,56 @@ def run_bundle(args: argparse.Namespace) -> int:
 
 
 def backup_command(args: argparse.Namespace) -> None:
-    require_codex_closed(args.allow_codex_running)
-    source = expand_path(args.session_file)
-    backup_session(source, expand_path(args.backup_dir))
-
-
-def strip_compacted(args: argparse.Namespace) -> None:
-    require_codex_closed(args.allow_codex_running)
     source = expand_path(args.session_file)
     ensure_source(source)
+    agent = require_writable(source, args.allow_codex_running)
+    backup_session(source, expand_path(args.backup_dir or DEFAULT_BACKUP_DIRS[agent]))
+
+
+def strip_images_command(args: argparse.Namespace) -> None:
+    source = expand_path(args.session_file)
+    ensure_source(source)
+    if session_agent(source) != "claude":
+        die(
+            "strip-images repairs Claude Code sessions. For Codex, use diagnose and "
+            "bundle, or strip-compacted."
+        )
+    require_writable(source, args.allow_codex_running)
     target, live = prepare_write_target(
         source,
         args.output,
         args.replace_live,
-        expand_path(args.backup_dir),
+        expand_path(args.backup_dir or DEFAULT_BACKUP_DIRS["claude"]),
+        args.force,
+        args.confirm_replace_live,
+    )
+    result = strip_images(source, target, all_images=args.all)
+    if result["images_replaced"] == 0:
+        target.unlink(missing_ok=True)
+        die(
+            "no broken images found; repair output removed. Use --all to replace "
+            "every image, for example after an API error about an image."
+        )
+    source_lines = sum(1 for _ in source.open("rb"))
+    if sum(1 for _ in target.open("rb")) != source_lines:
+        target.unlink(missing_ok=True)
+        die("repair output line count differs from the source; repair output removed")
+    replace_if_requested(target, live)
+    print(f"images_replaced: {result['images_replaced']}")
+    print(f"lines_changed: {result['lines_changed']}")
+    print(f"source_bytes: {source.stat().st_size if live is None else 'replaced'}")
+
+
+def strip_compacted(args: argparse.Namespace) -> None:
+    source = expand_path(args.session_file)
+    ensure_source(source)
+    require_codex_only(source, "strip-compacted")
+    require_codex_closed(args.allow_codex_running)
+    target, live = prepare_write_target(
+        source,
+        args.output,
+        args.replace_live,
+        expand_path(args.backup_dir or DEFAULT_BACKUP_DIRS["codex"]),
         args.force,
         args.confirm_replace_live,
     )
@@ -655,14 +754,15 @@ def make_resume_records(resume_text: str) -> list[dict[str, Any]]:
 
 
 def rebuild_window(args: argparse.Namespace) -> None:
-    require_codex_closed(args.allow_codex_running)
     source = expand_path(args.session_file)
     ensure_source(source)
+    require_codex_only(source, "rebuild-window")
+    require_codex_closed(args.allow_codex_running)
     target, live = prepare_write_target(
         source,
         args.output,
         args.replace_live,
-        expand_path(args.backup_dir),
+        expand_path(args.backup_dir or DEFAULT_BACKUP_DIRS["codex"]),
         args.force,
         args.confirm_replace_live,
     )
@@ -734,7 +834,7 @@ def rebuild_window(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Inspect and repair oversized Codex session JSONL files."
+        description="Inspect and repair damaged or oversized Codex and Claude Code session files."
     )
     add_common_args(parser, allow_codex_running=True)
 
@@ -748,7 +848,7 @@ def build_parser() -> argparse.ArgumentParser:
     diagnose_parser = subparsers.add_parser(
         "diagnose",
         help="read-only integrity diagnosis for a session file",
-        description="Read-only integrity diagnosis for a Codex session file.",
+        description="Read-only integrity diagnosis for a Codex or Claude Code session file.",
     )
     diagnose_parser.add_argument("session_file")
     diagnose_parser.add_argument("--json", action="store_true")
@@ -760,8 +860,27 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_args(backup_parser, backup_dir=True)
     backup_parser.set_defaults(func=backup_command)
 
+    images_parser = subparsers.add_parser(
+        "strip-images",
+        help="Claude Code: write a copy with broken images replaced by a short note",
+    )
+    images_parser.add_argument("session_file")
+    images_parser.add_argument("--output")
+    images_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="replace every image, not only ones that fail to decode",
+    )
+    images_parser.add_argument("--replace-live", action="store_true")
+    images_parser.add_argument(
+        "--confirm-replace-live",
+        help="exact resolved session path required with --replace-live",
+    )
+    add_common_args(images_parser, backup_dir=True, force=True)
+    images_parser.set_defaults(func=strip_images_command)
+
     strip_parser = subparsers.add_parser(
-        "strip-compacted", help="write a copy with compacted records removed"
+        "strip-compacted", help="Codex: write a copy with compacted records removed"
     )
     strip_parser.add_argument("session_file")
     strip_parser.add_argument("--output")
@@ -774,7 +893,7 @@ def build_parser() -> argparse.ArgumentParser:
     strip_parser.set_defaults(func=strip_compacted)
 
     rebuild_parser = subparsers.add_parser(
-        "rebuild-window", help="rebuild a small live thread from a recent time window"
+        "rebuild-window", help="Codex: rebuild a small live thread from a recent time window"
     )
     rebuild_parser.add_argument("session_file")
     rebuild_parser.add_argument("--start", required=True, help="ISO timestamp window start")
@@ -804,7 +923,9 @@ def build_parser() -> argparse.ArgumentParser:
     bundle_parser.add_argument("--project-root", required=True)
     bundle_parser.add_argument(
         "--output-root",
-        default="~/.codex/thread-tools/recovery-bundles",
+        default=None,
+        help="bundle folder (default: ~/.codex/thread-tools/recovery-bundles or "
+        "~/.claude/thread-tools/recovery-bundles)",
     )
     bundle_parser.add_argument("--force", action="store_true")
     bundle_parser.set_defaults(func=run_bundle)

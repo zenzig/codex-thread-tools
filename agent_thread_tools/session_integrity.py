@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from agent_thread_tools.sessionlib import iter_jsonl
+from agent_thread_tools.sessionlib import iter_session_records
 
 INPUT_IMAGE_TYPES = frozenset({"input_image", "InputImage", "inputImage"})
 INPUT_IMAGE_URL_KEY_BY_TYPE = {
@@ -101,7 +101,7 @@ def scan_session_integrity(
 ) -> SessionIntegrityScanResult:
     accumulator = SessionIntegrityAccumulator(max_findings=max_findings)
 
-    for line_no, _raw, record in iter_jsonl(path):
+    for line_no, _raw, record in iter_session_records(path):
         accumulator.scan_record(record, line_no=line_no)
 
     return accumulator.result()
@@ -155,6 +155,17 @@ def _scan_replayable_payload(
         if not isinstance(item, dict):
             continue
         kind = item.get("type")
+        if _is_replayable_tool_output_payload(item):
+            # Claude Code tool results nest their output (and images) one level down.
+            _scan_replayable_payload(
+                item,
+                line_no=line_no,
+                compacted=compacted,
+                state=state,
+                findings=findings,
+                max_findings=max_findings,
+            )
+            continue
         if not isinstance(kind, str) or kind not in INPUT_IMAGE_TYPES:
             continue
         image_url = _extract_image_url(item)

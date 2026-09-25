@@ -109,7 +109,7 @@ def test_diagnose_human_output_is_read_only_and_actionable(tmp_path: Path) -> No
     result = run_recovery("diagnose", str(session))
 
     assert result.returncode == 3, result.stderr
-    assert "Codex Session Integrity Diagnosis" in result.stdout
+    assert "Session Integrity Diagnosis" in result.stdout
     assert "Status: DANGER" in result.stdout
     assert "Recommended action: create-recovery-bundle" in result.stdout
     assert "data:image" not in result.stdout
@@ -287,7 +287,7 @@ def test_bundle_rejects_output_inside_live_session_tree(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 1
-    assert "outside the live Codex session tree" in result.stderr
+    assert "outside the live session tree" in result.stderr
     assert list(session_root.rglob("*.jsonl")) == [session]
 
 
@@ -406,7 +406,7 @@ def test_bundle_rejects_output_root_symlink_swap_before_staging(
     output_root.mkdir()
     live_root.mkdir()
     write_session(session, [session_meta(), invalid_image_message()])
-    monkeypatch.setattr(module, "default_session_root", lambda: live_root)
+    monkeypatch.setattr(module, "codex_session_root", lambda: live_root)
     original_staged_directory = module.staged_directory
 
     @contextmanager
@@ -432,7 +432,7 @@ def test_bundle_rejects_output_root_symlink_swap_before_staging(
 
     with pytest.raises(
         SystemExit,
-        match="(bundle output root is a symlink|live Codex session tree)",
+        match="(bundle output root is a symlink|live session tree)",
     ):
         module.run_bundle(args)
 

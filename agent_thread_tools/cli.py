@@ -19,6 +19,11 @@ def add_common_args(
             help="allow operation while Codex appears to be running; use only for inspect",
         )
     if backup_dir:
-        subparser.add_argument("--backup-dir", default="~/.codex/session_quarantine")
+        subparser.add_argument(
+            "--backup-dir",
+            default=None,
+            help="backup folder (default: ~/.codex/session_quarantine for Codex, "
+            "~/.claude/thread-tools/session-backups for Claude Code)",
+        )
     if force:
         subparser.add_argument("--force", action="store_true")
