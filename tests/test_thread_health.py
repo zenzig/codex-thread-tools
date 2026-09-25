@@ -65,7 +65,7 @@ def write_session(path: Path, records: list[dict]) -> None:
 
 
 def assert_json_stdout(result: subprocess.CompletedProcess[str]) -> dict:
-    assert "Codex Thread Health" not in result.stdout
+    assert "Thread Health" not in result.stdout
     assert "Codex Project Token Usage" not in result.stdout
     return json.loads(result.stdout)
 
@@ -2422,7 +2422,7 @@ def test_projects_default_output_is_human_readable() -> None:
     )
 
     assert result.returncode == 3
-    assert "Codex Thread Health" in result.stdout
+    assert "Thread Health" in result.stdout
     assert "Overall: DANGER (6 ok, 1 warn, 4 danger, 0 retired)" in result.stdout
     assert "Projects: 11" in result.stdout
     assert "Next step:" not in result.stdout
@@ -2608,7 +2608,7 @@ def test_health_output_modes_parse_for_all_commands() -> None:
             mode,
         )
         assert check.returncode == 0, check.stderr
-        assert "Codex Thread Health" in check.stdout
+        assert "Thread Health" in check.stdout
 
         projects = run_health(
             "projects",
@@ -2623,7 +2623,7 @@ def test_health_output_modes_parse_for_all_commands() -> None:
             "40",
         )
         assert projects.returncode == 3, projects.stderr
-        assert "Codex Thread Health" in projects.stdout
+        assert "Thread Health" in projects.stdout
 
         tokens = run_health(
             "tokens",
@@ -2687,7 +2687,7 @@ def test_options_only_defaults_to_projects_scan() -> None:
     )
 
     assert result.returncode == 3
-    assert "Codex Thread Health" in result.stdout
+    assert "Thread Health" in result.stdout
     assert "Session folder:" in result.stdout
 
 

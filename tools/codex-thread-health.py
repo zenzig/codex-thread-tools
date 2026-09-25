@@ -359,7 +359,7 @@ def projects_pretty(
     thresholds: HealthThresholds | None = None,
 ) -> str:
     summary = result["summary"]
-    lines = ["Codex Thread Health"]
+    lines = ["Thread Health"]
     if result.get("source") == "remote":
         lines.extend(["Source: REMOTE", f"Host: {result['host']}"])
     lines.extend(
@@ -443,7 +443,7 @@ def check_pretty(
         )
 
     lines = [
-        "Codex Thread Health",
+        "Thread Health",
         "Current State",
         task_state_line(result),
         continuation_line(result),
@@ -468,7 +468,7 @@ def check_verbose(
     thresholds: HealthThresholds | None = None,
 ) -> str:
     lines = [
-        "Codex Thread Health",
+        "Thread Health",
         f"Overall: {status_label(result['status'])}",
         f"Recommendation: {result['recommendation']}",
         f"Next step: {next_step(result['status'])}",
