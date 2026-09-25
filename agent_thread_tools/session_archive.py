@@ -1,4 +1,4 @@
-"""Archive Codex session JSONL files to external storage with manifests."""
+"""Archive Codex and Claude Code session files to external storage with manifests."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Any
 
 from agent_thread_tools.display import format_bytes, format_count
 from agent_thread_tools.sessionlib import (
-    iter_jsonl,
+    iter_session_records,
     now_iso,
     now_stamp,
     record_timestamp,
@@ -20,6 +20,12 @@ from agent_thread_tools.sessionlib import (
 )
 from agent_thread_tools.archive_paths import ArchivePathError, resolve_archive_member
 from agent_thread_tools.atomic_directory import staged_directory, target_reservation
+from agent_thread_tools.sessionpaths import (
+    claude_session_root,
+    companion_dir,
+    companion_files,
+    iter_session_paths,
+)
 from agent_thread_tools.thread_health import extract_project, extract_session_id
 
 
@@ -34,9 +40,12 @@ def build_archive_plan(
     older_than: str | None,
     min_size: str | None,
     now: str | None = None,
+    open_session_ids: set[str] | None = None,
+    agent: str | None = None,
 ) -> dict[str, Any]:
     resolved_root = session_root.expanduser().resolve()
     require_session_root(resolved_root)
+    open_session_ids = open_session_ids or set()
     now_dt = parse_now(now)
     min_size_bytes = parse_size(min_size or "0")
     cutoff = (
@@ -44,20 +53,26 @@ def build_archive_plan(
         if older_than
         else None
     )
-    candidates = [
-        session_record(path, resolved_root)
-        for path in sorted(resolved_root.rglob("*.jsonl"))
-        if path.is_file()
-    ]
+    candidates = []
+    skipped_open: list[str] = []
+    for path in sorted(iter_session_paths(resolved_root)):
+        if not path.is_file():
+            continue
+        # Claude Code names each session file after its session id.
+        if path.stem in open_session_ids:
+            skipped_open.append(str(path))
+            continue
+        candidates.append(session_record(path, resolved_root))
     candidates = [
         candidate
         for candidate in candidates
         if matches_project(candidate, project)
-        and candidate["size_bytes"] >= min_size_bytes
+        and candidate["total_bytes"] >= min_size_bytes
         and (cutoff is None or parse_timestamp(candidate["activity_at"]) < cutoff)
     ]
     return {
         "report_type": "session_archive_plan",
+        "agent": agent or agent_for_root(resolved_root),
         "session_root": str(resolved_root),
         "project": project or "",
         "selection": {
@@ -68,9 +83,11 @@ def build_archive_plan(
         },
         "summary": {
             "candidate_count": len(candidates),
-            "total_bytes": sum(candidate["size_bytes"] for candidate in candidates),
+            "total_bytes": sum(candidate["total_bytes"] for candidate in candidates),
+            "skipped_open_count": len(skipped_open),
         },
         "candidates": candidates,
+        "skipped_open": skipped_open,
     }
 
 
@@ -84,6 +101,8 @@ def archive_sessions(
     archive_name: str | None,
     now: str | None = None,
     force: bool = False,
+    open_session_ids: set[str] | None = None,
+    agent: str | None = None,
 ) -> dict[str, Any]:
     resolved_session_root = session_root.expanduser().resolve()
     resolved_archive_root = archive_root.expanduser().resolve()
@@ -94,55 +113,34 @@ def archive_sessions(
         older_than=older_than,
         min_size=min_size,
         now=now,
+        open_session_ids=open_session_ids,
+        agent=agent,
     )
+    container_name = f"{plan['agent']}-session-archives"
     if archive_name is None:
         archive_name = default_archive_name(project)
     else:
         archive_name = validate_archive_name(archive_name)
-    archive_container = archive_root.expanduser() / "codex-session-archives"
+    archive_container = archive_root.expanduser() / container_name
     if archive_container.is_symlink():
         raise ValueError("archive container is a symlink")
-    archive_dir = resolved_archive_root / "codex-session-archives" / archive_name
+    archive_dir = resolved_archive_root / container_name / archive_name
 
     with staged_directory(archive_dir, replace=force) as staging_dir:
         archived: list[dict[str, Any]] = []
         for candidate in plan["candidates"]:
-            source = Path(candidate["source_file"])
-            _assert_source_matches_plan(source, candidate, compare_identity=True)
-            relative_path = Path("sessions") / candidate["source_relative_path"]
-            destination = staging_dir / relative_path
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
-            try:
-                _assert_source_matches_plan(source, candidate, compare_identity=True)
-            except RuntimeError as exc:
-                raise RuntimeError(
-                    f"session file changed while copying: {exc}"
-                ) from exc
-            source_size = source.stat().st_size
-            source_sha256 = sha256_file(source)
-            if source_size != destination.stat().st_size:
-                raise RuntimeError(
-                    "session file changed while copying: size mismatch"
-                )
-            archive_sha256 = sha256_file(destination)
-            if source_sha256 != archive_sha256:
-                raise RuntimeError("session file changed while copying: hash mismatch")
-            archive_size = source_size
-            archived.append(
-                {
-                    **candidate,
-                    "source_sha256": candidate["source_sha256"],
-                    "archive_file": str(archive_dir / relative_path),
-                    "archive_relative_path": str(relative_path),
-                    "size_bytes": archive_size,
-                    "sha256": archive_sha256,
-                }
-            )
+            companions = candidate.pop("companions")
+            archived.append(_copy_verified(candidate, staging_dir, archive_dir))
+            # A Claude Code session's folder (subagents, tool results) travels with it.
+            for companion in companions:
+                entry = _copy_verified(companion, staging_dir, archive_dir)
+                entry["companion_of"] = candidate["source_file"]
+                archived.append(entry)
 
         manifest = {
             "type": MANIFEST_TYPE,
             "version": MANIFEST_VERSION,
+            "agent": plan["agent"],
             "created_at": now_iso(),
             "session_root": str(resolved_session_root),
             "archive_root": str(resolved_archive_root),
@@ -151,7 +149,8 @@ def archive_sessions(
             "project": project or "",
             "selection": plan["selection"],
             "summary": {
-                "archived_count": len(archived),
+                "archived_count": sum(1 for item in archived if "companion_of" not in item),
+                "file_count": len(archived),
                 "total_bytes": sum(item["size_bytes"] for item in archived),
             },
             "sessions": archived,
@@ -212,12 +211,14 @@ def prune_local_sessions(
     *,
     manifest_file: Path,
     confirm_prune_local: bool,
+    open_session_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     resolved_manifest = manifest_file.expanduser().resolve()
     with target_reservation(resolved_manifest.parent):
         return _prune_local_sessions_locked(
             manifest_file=resolved_manifest,
             confirm_prune_local=confirm_prune_local,
+            open_session_ids=open_session_ids or set(),
         )
 
 
@@ -225,6 +226,7 @@ def _prune_local_sessions_locked(
     *,
     manifest_file: Path,
     confirm_prune_local: bool,
+    open_session_ids: set[str],
 ) -> dict[str, Any]:
     if not confirm_prune_local:
         raise ValueError("pass --confirm-prune-local to delete verified local session files")
@@ -257,6 +259,9 @@ def _prune_local_sessions_locked(
             require_source_inside_session_root(source, session_root)
             if not source.is_file():
                 raise ValueError("source file is not a regular file")
+            owner = Path(item.get("companion_of") or source)
+            if owner.stem in open_session_ids:
+                raise ValueError("session is open in Claude Code; close it before pruning")
             _assert_source_matches_plan(source, item, compare_identity=False)
             staged_target = staged_path(source)
             staged_target.parent.mkdir(parents=True, exist_ok=True)
@@ -313,6 +318,9 @@ def _prune_local_sessions_locked(
             result["error"] = f"failed to delete quarantined source: {exc}"
             _restore_pruned_source(_source, staged_target, result)
     _remove_empty_directories(quarantine_root)
+    for item in manifest["sessions"]:
+        if "companion_of" not in item:
+            _remove_empty_directories(companion_dir(Path(item["source_file"])))
     return {
         "report_type": "session_archive_prune",
         "manifest_file": str(manifest_file.expanduser().resolve()),
@@ -330,7 +338,7 @@ def session_record(path: Path, session_root: Path) -> dict[str, Any]:
     session_id = ""
     first_timestamp = ""
     last_timestamp = ""
-    for _line_no, _raw, record in iter_jsonl(path):
+    for _line_no, _raw, record in iter_session_records(path):
         ts = record_timestamp(record)
         if ts and not first_timestamp:
             first_timestamp = ts
@@ -341,23 +349,81 @@ def session_record(path: Path, session_root: Path) -> dict[str, Any]:
             session_id = session_id or extract_session_id(record)
         if project and session_id and last_timestamp:
             continue
+    record = file_record(path, session_root)
+    companions = [file_record(companion, session_root) for companion in companion_files(path)]
+    return {
+        **record,
+        "project": project or str(path.parent),
+        "session_id": session_id,
+        "first_timestamp": first_timestamp,
+        "last_timestamp": last_timestamp,
+        "activity_at": last_timestamp or record["mtime"],
+        "companion_count": len(companions),
+        "total_bytes": record["size_bytes"] + sum(item["size_bytes"] for item in companions),
+        "companions": companions,
+    }
+
+
+def file_record(path: Path, session_root: Path) -> dict[str, Any]:
     stat = path.stat()
     mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat().replace("+00:00", "Z")
-    activity_at = last_timestamp or mtime
     return {
         "source_file": str(path.resolve()),
         "source_relative_path": str(path.resolve().relative_to(session_root)),
-        "project": project or str(path.parent),
-        "session_id": session_id,
         "size_bytes": stat.st_size,
         "source_sha256": sha256_file(path),
         "source_dev": stat.st_dev,
         "source_inode": stat.st_ino,
         "source_mtime_ns": stat.st_mtime_ns,
         "mtime": mtime,
-        "first_timestamp": first_timestamp,
-        "last_timestamp": last_timestamp,
-        "activity_at": activity_at,
+    }
+
+
+def agent_for_root(session_root: Path) -> str:
+    """Codex keeps sessions under year folders; Claude Code under project folders."""
+    if session_root == claude_session_root().resolve():
+        return "claude"
+    if not session_root.is_dir():
+        return "codex"
+    folders = [
+        path.name
+        for path in session_root.iterdir()
+        if path.is_dir() and not path.name.startswith(".")
+    ]
+    if folders and not all(name.isdigit() for name in folders):
+        return "claude"
+    return "codex"
+
+
+def _copy_verified(
+    candidate: dict[str, Any],
+    staging_dir: Path,
+    archive_dir: Path,
+) -> dict[str, Any]:
+    source = Path(candidate["source_file"])
+    _assert_source_matches_plan(source, candidate, compare_identity=True)
+    relative_path = Path("sessions") / candidate["source_relative_path"]
+    destination = staging_dir / relative_path
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+    try:
+        _assert_source_matches_plan(source, candidate, compare_identity=True)
+    except RuntimeError as exc:
+        raise RuntimeError(f"session file changed while copying: {exc}") from exc
+    source_size = source.stat().st_size
+    source_sha256 = sha256_file(source)
+    if source_size != destination.stat().st_size:
+        raise RuntimeError("session file changed while copying: size mismatch")
+    archive_sha256 = sha256_file(destination)
+    if source_sha256 != archive_sha256:
+        raise RuntimeError("session file changed while copying: hash mismatch")
+    return {
+        **candidate,
+        "source_sha256": candidate["source_sha256"],
+        "archive_file": str(archive_dir / relative_path),
+        "archive_relative_path": str(relative_path),
+        "size_bytes": source_size,
+        "sha256": archive_sha256,
     }
 
 
@@ -431,11 +497,13 @@ def write_manifest(manifest: dict[str, Any], *, path: Path | None = None) -> Non
 def write_markdown_manifest(manifest: dict[str, Any], *, path: Path | None = None) -> None:
     path = path or Path(manifest["archive_dir"]) / "manifest.md"
     lines = [
-        "# Codex Session Archive",
+        "# Session Archive",
         "",
         f"Project: `{manifest['project'] or 'all projects'}`",
+        f"Agent: {manifest.get('agent', 'codex')}",
         f"Session root: `{manifest['session_root']}`",
         f"Archived sessions: {format_count(manifest['summary']['archived_count'])}",
+        f"Archived files: {format_count(manifest['summary'].get('file_count', manifest['summary']['archived_count']))}",
         f"Archived bytes: {format_bytes(manifest['summary']['total_bytes'], 'both')}",
         "",
         "| Session | Size | Source | Archive |",
@@ -444,7 +512,7 @@ def write_markdown_manifest(manifest: dict[str, Any], *, path: Path | None = Non
     for item in manifest["sessions"]:
         lines.append(
             "| "
-            f"`{item['session_id'] or 'not recorded'}` | "
+            f"`{item.get('session_id') or 'not recorded'}` | "
             f"{format_bytes(item['size_bytes'], 'both')} | "
             f"`{item['source_file']}` | "
             f"`{item['archive_relative_path']}` |"
@@ -525,7 +593,8 @@ def session_archive_slug(value: str) -> str:
 
 def format_plan(result: dict[str, Any]) -> str:
     lines = [
-        "Codex Session Archive Plan",
+        "Session Archive Plan",
+        f"Agent: {result['agent']}",
         f"Session root: {result['session_root']}",
         f"Project: {result['project'] or 'all projects'}",
         (
@@ -534,10 +603,16 @@ def format_plan(result: dict[str, Any]) -> str:
             f"{format_bytes(result['summary']['total_bytes'], 'both')}"
         ),
     ]
-    for item in result["candidates"]:
+    if result["summary"].get("skipped_open_count"):
         lines.append(
-            f"- {format_bytes(item['size_bytes'], 'both')} "
-            f"{item['session_id'] or 'not recorded'} {item['source_file']}"
+            "Skipped (open in Claude Code): "
+            f"{format_count(result['summary']['skipped_open_count'])}"
+        )
+    for item in result["candidates"]:
+        extra = f" (+{format_count(item['companion_count'])} files)" if item.get("companion_count") else ""
+        lines.append(
+            f"- {format_bytes(item['total_bytes'], 'both')} "
+            f"{item['session_id'] or 'not recorded'} {item['source_file']}{extra}"
         )
     return "\n".join(lines)
 
@@ -545,12 +620,13 @@ def format_plan(result: dict[str, Any]) -> str:
 def format_archive(result: dict[str, Any]) -> str:
     return "\n".join(
         [
-            "Codex Session Archive",
+            "Session Archive",
             f"Archive: {result['archive_dir']}",
             f"Manifest: {result['manifest_file']}",
             (
                 "Archived: "
-                f"{format_count(result['summary']['archived_count'])}, "
+                f"{format_count(result['summary']['archived_count'])} sessions, "
+                f"{format_count(result['summary'].get('file_count', result['summary']['archived_count']))} files, "
                 f"{format_bytes(result['summary']['total_bytes'], 'both')}"
             ),
         ]
@@ -559,7 +635,7 @@ def format_archive(result: dict[str, Any]) -> str:
 
 def format_verify(result: dict[str, Any]) -> str:
     lines = [
-        "Codex Session Archive Verification",
+        "Session Archive Verification",
         f"Manifest: {result['manifest_file']}",
         f"OK: {format_count(result['summary']['ok'])}",
         f"Failed: {format_count(result['summary']['failed'])}",
@@ -572,7 +648,7 @@ def format_verify(result: dict[str, Any]) -> str:
 
 def format_prune(result: dict[str, Any]) -> str:
     lines = [
-        "Codex Session Local Prune",
+        "Session Local Prune",
         f"Manifest: {result['manifest_file']}",
         f"Deleted: {format_count(result['summary']['deleted_count'])}",
         f"Failed: {format_count(result['summary'].get('failed_count', 0))}",

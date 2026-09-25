@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 import re
 import subprocess
@@ -66,6 +67,46 @@ def is_codex_running() -> bool:
         process_line_looks_like_codex(line)
         for line in result.stdout.splitlines()
     )
+
+
+def open_claude_sessions(registry: Path | None = None) -> set[str]:
+    """Session ids of Claude Code sessions whose process is still running."""
+    from agent_thread_tools.sessionpaths import claude_session_registry
+
+    registry = registry or claude_session_registry()
+    if not registry.is_dir():
+        return set()
+    open_ids: set[str] = set()
+    for entry in registry.glob("*.json"):
+        try:
+            data = json.loads(entry.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict) or not isinstance(data.get("sessionId"), str):
+            continue
+        if _process_alive(data.get("pid"), data.get("procStart")):
+            open_ids.add(data["sessionId"])
+    return open_ids
+
+
+def _process_alive(pid: Any, proc_start: Any) -> bool:
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    stat = Path(f"/proc/{pid}/stat")
+    if stat.parent.parent.is_dir() and Path("/proc/self").exists():
+        try:
+            fields = stat.read_text().rsplit(")", 1)[1].split()
+        except OSError:
+            return False
+        # A reused pid has a different start time than the one Claude Code recorded.
+        return not isinstance(proc_start, str) or fields[19] == proc_start
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 def iter_jsonl(path: Path) -> Iterable[tuple[int, bytes, dict[str, Any]]]:

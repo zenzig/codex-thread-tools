@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -78,3 +80,17 @@ def test_sha256_file_hashes_file_contents(tmp_path: Path) -> None:
     path = tmp_path / "payload.bin"
     path.write_bytes(b"agent-thread-tools")
     assert sessionlib.sha256_file(path) == hashlib.sha256(b"agent-thread-tools").hexdigest()
+
+
+def test_open_claude_sessions_reads_the_registry(tmp_path: Path) -> None:
+    from agent_thread_tools.sessionlib import open_claude_sessions
+
+    (tmp_path / f"{os.getpid()}.json").write_text(
+        json.dumps({"pid": os.getpid(), "sessionId": "live"}), encoding="utf-8"
+    )
+    (tmp_path / "999999999.json").write_text(
+        json.dumps({"pid": 999999999, "sessionId": "gone"}), encoding="utf-8"
+    )
+    (tmp_path / "broken.json").write_text("not json", encoding="utf-8")
+
+    assert open_claude_sessions(tmp_path) == {"live"}

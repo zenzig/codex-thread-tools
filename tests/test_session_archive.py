@@ -1752,3 +1752,117 @@ def test_session_archive_cli_rejects_malformed_manifests_without_traceback(
     assert result.returncode == 1
     assert result.stderr.startswith("error:")
     assert "Traceback" not in result.stderr
+
+
+def write_claude_session(project_dir: Path, session_id: str) -> Path:
+    """A Claude Code session: <id>.jsonl plus its folder of subagents and tool results."""
+    project_dir.mkdir(parents=True, exist_ok=True)
+    session_file = project_dir / f"{session_id}.jsonl"
+    session_file.write_text(
+        json.dumps(
+            {
+                "type": "user",
+                "cwd": "/work/claude-project",
+                "sessionId": session_id,
+                "timestamp": "2026-01-01T00:00:00.000Z",
+                "message": {"role": "user", "content": "hello"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    folder = project_dir / session_id
+    (folder / "subagents").mkdir(parents=True)
+    (folder / "subagents" / "agent-a1.jsonl").write_text('{"type":"user"}\n', encoding="utf-8")
+    (folder / "tool-results").mkdir()
+    (folder / "tool-results" / "out.txt").write_text("tool output\n", encoding="utf-8")
+    (project_dir / "memory").mkdir(exist_ok=True)
+    (project_dir / "memory" / "MEMORY.md").write_text("- a memory\n", encoding="utf-8")
+    return session_file
+
+
+def test_claude_session_archives_and_prunes_with_its_folder(tmp_path: Path) -> None:
+    root = tmp_path / "projects"
+    session_file = write_claude_session(root / "-work-claude-project", "claude-1")
+    archive_root = tmp_path / "archive"
+
+    plan = session_archive.build_archive_plan(
+        session_root=root, project=None, older_than=None, min_size=None, agent="claude"
+    )
+    assert plan["summary"]["candidate_count"] == 1
+    [candidate] = plan["candidates"]
+    assert candidate["session_id"] == "claude-1"
+    assert candidate["project"] == "/work/claude-project"
+    assert candidate["companion_count"] == 2
+
+    manifest = session_archive.archive_sessions(
+        session_root=root,
+        archive_root=archive_root,
+        project=None,
+        older_than=None,
+        min_size=None,
+        archive_name="claude-test",
+        agent="claude",
+    )
+    assert manifest["agent"] == "claude"
+    assert manifest["summary"]["archived_count"] == 1
+    assert manifest["summary"]["file_count"] == 3
+    archive_dir = archive_root / "claude-session-archives" / "claude-test"
+    assert (archive_dir / "sessions" / "-work-claude-project" / "claude-1" / "tool-results" / "out.txt").is_file()
+
+    manifest_file = archive_dir / "manifest.json"
+    assert session_archive.verify_archive(manifest_file)["summary"] == {"ok": 3, "failed": 0, "checked": 3}
+
+    result = session_archive.prune_local_sessions(
+        manifest_file=manifest_file, confirm_prune_local=True, open_session_ids=set()
+    )
+    assert result["summary"]["deleted_count"] == 3
+    assert not session_file.exists()
+    assert not (root / "-work-claude-project" / "claude-1").exists()
+    assert (root / "-work-claude-project" / "memory" / "MEMORY.md").is_file()
+
+
+def test_open_claude_sessions_are_skipped_and_never_pruned(tmp_path: Path) -> None:
+    root = tmp_path / "projects"
+    session_file = write_claude_session(root / "-work-claude-project", "claude-1")
+
+    plan = session_archive.build_archive_plan(
+        session_root=root,
+        project=None,
+        older_than=None,
+        min_size=None,
+        open_session_ids={"claude-1"},
+        agent="claude",
+    )
+    assert plan["summary"]["candidate_count"] == 0
+    assert plan["skipped_open"] == [str(session_file)]
+
+    session_archive.archive_sessions(
+        session_root=root,
+        archive_root=tmp_path / "archive",
+        project=None,
+        older_than=None,
+        min_size=None,
+        archive_name="claude-test",
+        agent="claude",
+    )
+    manifest_file = tmp_path / "archive" / "claude-session-archives" / "claude-test" / "manifest.json"
+    result = session_archive.prune_local_sessions(
+        manifest_file=manifest_file, confirm_prune_local=True, open_session_ids={"claude-1"}
+    )
+    assert result["summary"]["deleted_count"] == 0
+    assert result["summary"]["failed_count"] >= 1
+    assert session_file.is_file()
+    assert (root / "-work-claude-project" / "claude-1" / "tool-results" / "out.txt").is_file()
+
+
+def test_files_inside_a_session_folder_are_not_sessions(tmp_path: Path) -> None:
+    from agent_thread_tools.sessionpaths import iter_session_paths
+
+    root = tmp_path / "projects"
+    session_file = write_claude_session(root / "-work-claude-project", "claude-1")
+    workflow = root / "-work-claude-project" / "claude-1" / "workflows" / "run.jsonl"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text("{}\n", encoding="utf-8")
+
+    assert list(iter_session_paths(root)) == [session_file]

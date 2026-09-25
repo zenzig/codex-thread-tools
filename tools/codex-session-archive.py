@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Archive Codex session JSONL files to external storage."""
+"""Archive Codex and Claude Code session files to external storage."""
 
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ from agent_thread_tools.session_archive import (
     format_prune,
     format_verify,
 )
-from agent_thread_tools.sessionlib import expand_path, is_codex_running
-from agent_thread_tools.sessionpaths import default_session_root
+from agent_thread_tools.sessionlib import expand_path, is_codex_running, open_claude_sessions
+from agent_thread_tools.sessionpaths import AGENTS, default_agent, default_session_root
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,21 +35,37 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
+def selected_agent(args: argparse.Namespace) -> str:
+    if args.agent:
+        return args.agent
+    if args.session_root:
+        return session_archive.agent_for_root(expand_path(args.session_root))
+    return default_agent()
+
+
+def selected_root(args: argparse.Namespace, agent: str) -> Path:
+    return expand_path(args.session_root or default_session_root(agent))
+
+
 def handle_plan(args: argparse.Namespace) -> int:
+    agent = selected_agent(args)
     result = session_archive.build_archive_plan(
-        session_root=expand_path(args.session_root),
+        session_root=selected_root(args, agent),
         project=args.project,
         older_than=args.older_than,
         min_size=args.min_size,
         now=args.now,
+        open_session_ids=open_claude_sessions() if agent == "claude" else None,
+        agent=agent,
     )
     emit(result, args.json, format_plan)
     return 0
 
 
 def handle_archive(args: argparse.Namespace) -> int:
+    agent = selected_agent(args)
     result = session_archive.archive_sessions(
-        session_root=expand_path(args.session_root),
+        session_root=selected_root(args, agent),
         archive_root=expand_path(args.archive_root),
         project=args.project,
         older_than=args.older_than,
@@ -57,6 +73,8 @@ def handle_archive(args: argparse.Namespace) -> int:
         archive_name=args.archive_name,
         now=args.now,
         force=args.force,
+        open_session_ids=open_claude_sessions() if agent == "claude" else None,
+        agent=agent,
     )
     emit(result, args.json, format_archive)
     return 0
@@ -69,6 +87,16 @@ def handle_verify(args: argparse.Namespace) -> int:
 
 
 def handle_prune(args: argparse.Namespace) -> int:
+    manifest = session_archive.load_manifest(expand_path(args.manifest))
+    if manifest.get("agent") == "claude":
+        # Claude Code records each open session, so only those sessions are refused.
+        result = session_archive.prune_local_sessions(
+            manifest_file=expand_path(args.manifest),
+            confirm_prune_local=args.confirm_prune_local,
+            open_session_ids=open_claude_sessions(),
+        )
+        emit(result, args.json, format_prune)
+        return 3 if result["summary"].get("failed_count", 0) else 0
     if is_codex_running() and not args.allow_codex_running:
         print(
             "error: Codex appears to be running. Quit Codex before pruning local "
@@ -98,7 +126,7 @@ def emit(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Archive old Codex session JSONL files to external storage."
+        description="Archive old Codex and Claude Code session files to external storage."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -118,11 +146,11 @@ def build_parser() -> argparse.ArgumentParser:
     archive.add_argument(
         "--archive-root",
         required=True,
-        help="external archive root outside ~/.codex/sessions",
+        help="external archive root outside the session root",
     )
     archive.add_argument(
         "--archive-name",
-        help="archive folder name under codex-session-archives",
+        help="archive folder name under <agent>-session-archives",
     )
     archive.add_argument(
         "--force",
@@ -164,8 +192,15 @@ def build_parser() -> argparse.ArgumentParser:
 def add_selection_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--session-root",
-        default=str(default_session_root()),
-        help="Codex session root to scan",
+        default=None,
+        help="session root to scan (default: the --agent session root)",
+    )
+    parser.add_argument(
+        "--agent",
+        choices=AGENTS,
+        default=None,
+        help="which agent's sessions to archive: codex (~/.codex/sessions) or "
+        "claude (~/.claude/projects); default: codex when present, else claude",
     )
     parser.add_argument(
         "--project",
