@@ -18,7 +18,7 @@ BROKEN = "not-base64!!"
 
 def run_recover(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "recover-codex-thread-starter.py"), *args],
+        [sys.executable, str(ROOT / "tools" / "agent-thread-recover.py"), *args],
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
@@ -129,7 +129,7 @@ def test_codex_only_repairs_refuse_claude_sessions(tmp_path: Path, command: str)
 
 
 def test_writes_are_refused_while_the_claude_session_is_open(tmp_path: Path, monkeypatch) -> None:
-    spec = spec_from_file_location("recover_claude_test", ROOT / "tools" / "recover-codex-thread-starter.py")
+    spec = spec_from_file_location("recover_claude_test", ROOT / "tools" / "agent-thread-recover.py")
     assert spec is not None and spec.loader is not None
     module = module_from_spec(spec)
     spec.loader.exec_module(module)

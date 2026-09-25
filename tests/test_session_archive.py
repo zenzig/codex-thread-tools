@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def run_archive(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "codex-session-archive.py"), *args],
+        [sys.executable, str(ROOT / "tools" / "agent-thread-session-archive.py"), *args],
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
@@ -781,7 +781,7 @@ def test_format_prune_includes_failed_count_and_file_errors() -> None:
 def _load_session_cli() -> object:
     spec = importlib.util.spec_from_file_location(
         "codex_session_archive_cli",
-        str(ROOT / "tools" / "codex-session-archive.py"),
+        str(ROOT / "tools" / "agent-thread-session-archive.py"),
     )
     if spec is None or spec.loader is None:
         raise RuntimeError("cannot load session cli module")

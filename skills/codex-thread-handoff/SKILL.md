@@ -25,9 +25,9 @@ Load `references/handoff-workflow.md` and `references/handoff-template.md`, then
 ## Required Checks
 
 - Identify the project root and current git state before writing.
-- Run `tools/codex-thread-health.py` when available. Exit code `2` is `WARN`; exit code `3` is `DANGER`; both are reportable health results, not shell failures.
+- Run `tools/agent-thread-health.py` when available. Exit code `2` is `WARN`; exit code `3` is `DANGER`; both are reportable health results, not shell failures.
 - Prefer the health check's recommendation over a simple "compaction happened" rule. A successful compaction alone is not a handoff requirement.
-- When the active session file is known, use `tools/codex-thread-handoff-summary.py` as a redacted draft aid, not as a replacement for repo inspection.
+- When the active session file is known, use `tools/agent-thread-handoff-summary.py` as a redacted draft aid, not as a replacement for repo inspection.
 - If visuals are present or mentioned, record an explicit visual archive decision in the handoff: archived manifest paths, or `Not archived:` with the reason. Do not silently skip visual context.
 - Include exact paths, branch/commit, changed files, decisions, verification commands, risks, and next action.
 - Verify the handoff exists and is readable before responding.

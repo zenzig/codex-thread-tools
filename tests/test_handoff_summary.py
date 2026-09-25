@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def run_summary(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "codex-thread-handoff-summary.py"), *args],
+        [sys.executable, str(ROOT / "tools" / "agent-thread-handoff-summary.py"), *args],
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,

@@ -128,7 +128,7 @@ your-project/
     ├── INDEX.md              one line per saved document or screenshot set
     ├── handoffs/             one dated handoff per session, e.g. 2026-09-24-login-flow.md
     ├── docs/                 long pasted specs worth keeping
-    └── codex-visual-artifacts/<project>/<set>/   archived screenshots and their manifest
+    └── visual-artifacts/<project>/<set>/   archived screenshots and their manifest
 ```
 
 A handoff records the goal and next action, the current state, the decisions made and

@@ -31,6 +31,13 @@
 - `health remote --agent` chooses which agent's sessions the remote host reads.
 - Health reports are titled "Thread Health", and files inside a Claude Code
   session's folder are no longer counted as sessions.
+- Rename the bundled scripts from `codex-*.py` to `agent-thread-*.py` (for example
+  `tools/agent-thread-health.py`), since each serves both agents. The Codex-only
+  `codex-thread-handoff` skill keeps its name. Command help now shows the
+  `agent-thread-tools <command>` form.
+- Visual archives are written to `visual-artifacts/` instead of
+  `codex-visual-artifacts/` under the archive root. Existing archives still verify
+  from their manifest path.
 
 ## 1.3.2 - 2026-08-04
 

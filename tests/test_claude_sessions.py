@@ -94,7 +94,7 @@ def run_tool(*args: str, env: dict[str, str] | None = None) -> subprocess.Comple
 def test_health_check_reads_claude_code_session(tmp_path: Path) -> None:
     session = write_session(tmp_path / "-work-claude-project" / "claude-session-1.jsonl")
 
-    result = run_tool("tools/codex-thread-health.py", "check", str(session), "--json")
+    result = run_tool("tools/agent-thread-health.py", "check", str(session), "--json")
 
     payload = json.loads(result.stdout)
     metrics = payload["metrics"]
@@ -119,7 +119,7 @@ def test_projects_scans_claude_root_and_skips_subagents(tmp_path: Path) -> None:
     )
 
     result = run_tool(
-        "tools/codex-thread-health.py",
+        "tools/agent-thread-health.py",
         "projects",
         "--agent",
         "claude",
@@ -135,7 +135,7 @@ def test_projects_scans_claude_root_and_skips_subagents(tmp_path: Path) -> None:
 def test_visual_scan_finds_claude_screenshots(tmp_path: Path) -> None:
     session = write_session(tmp_path / "s" / "claude-session-1.jsonl")
 
-    result = run_tool("tools/codex-visual-archive.py", "scan", str(session), "--json")
+    result = run_tool("tools/agent-thread-visual-archive.py", "scan", str(session), "--json")
 
     payload = json.loads(result.stdout)
     assert result.returncode == 0

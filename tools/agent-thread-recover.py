@@ -835,6 +835,7 @@ def rebuild_window(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="agent-thread-tools recover",
         description="Inspect and repair damaged or oversized Codex and Claude Code session files."
     )
     add_common_args(parser, allow_codex_running=True)

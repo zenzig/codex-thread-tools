@@ -21,7 +21,7 @@ ASSETS = FIXTURES / "visual_assets"
 
 def run_visual(*args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "codex-visual-archive.py"), *args],
+        [sys.executable, str(ROOT / "tools" / "agent-thread-visual-archive.py"), *args],
         cwd=ROOT,
         input=input_text,
         text=True,
@@ -389,7 +389,7 @@ def test_verify_manifest_rejects_malformed_artifact_entries(
 def _load_visual_cli() -> object:
     spec = importlib.util.spec_from_file_location(
         "codex_visual_archive_cli",
-        str(ROOT / "tools" / "codex-visual-archive.py"),
+        str(ROOT / "tools" / "agent-thread-visual-archive.py"),
     )
     if spec is None or spec.loader is None:
         raise RuntimeError("cannot load visual archive cli module")
@@ -725,7 +725,7 @@ def test_archive_visuals_dry_run_is_side_effect_free(tmp_path: Path) -> None:
     )
 
     assert payload["dry_run"] is True
-    assert not (tmp_path / "codex-visual-artifacts").exists()
+    assert not (tmp_path / "visual-artifacts").exists()
     assert not any(
         path.name.startswith(".codex-thread-tools-staging-")
         for path in tmp_path.rglob("*")
@@ -831,7 +831,7 @@ def test_archive_visuals_refuses_symlinked_archive_container(
     external_root.mkdir()
     sentinel = external_root / "sentinel.txt"
     sentinel.write_text("external", encoding="utf-8")
-    container_path = tmp_path / "codex-visual-artifacts"
+    container_path = tmp_path / "visual-artifacts"
     container_path.symlink_to(external_root, target_is_directory=True)
 
     with pytest.raises(SystemExit) as exc:
@@ -850,7 +850,7 @@ def test_archive_visuals_refuses_symlinked_archive_container(
 def test_archive_visuals_refuses_symlinked_archive_project_directory(
     tmp_path: Path,
 ) -> None:
-    container = tmp_path / "codex-visual-artifacts"
+    container = tmp_path / "visual-artifacts"
     container.mkdir()
     external_project = tmp_path / "external-project"
     external_project.mkdir()

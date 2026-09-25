@@ -97,7 +97,7 @@ def test_npm_cli_dispatches_health_tool() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "codex-thread-health.py check" in result.stdout
+    assert "usage: agent-thread-tools health check" in result.stdout
     assert "session_file" in result.stdout
 
 
@@ -117,7 +117,7 @@ def test_npm_cli_dispatches_handoff_summary_tool() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "codex-thread-handoff-summary.py" in result.stdout
+    assert "usage: agent-thread-tools handoff-summary" in result.stdout
     assert "session_file" in result.stdout
 
 
@@ -175,7 +175,7 @@ def test_npm_cli_dispatches_session_archive_tool() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "codex-session-archive.py" in result.stdout
+    assert "usage: agent-thread-tools session-archive" in result.stdout
     assert "plan" in result.stdout
     assert "archive" in result.stdout
     assert "verify" in result.stdout
@@ -242,7 +242,7 @@ def test_npm_pack_excludes_generated_and_local_artifacts() -> None:
     assert "agent_thread_tools/thread_health.py" in paths
     assert "agent_thread_tools/remote_health.py" in paths
     assert "agent_thread_tools/session_integrity.py" in paths
-    assert "tools/codex-session-archive.py" in paths
-    assert "tools/codex-thread-health.py" in paths
-    assert "tools/recover-codex-thread-starter.py" in paths
+    assert "tools/agent-thread-session-archive.py" in paths
+    assert "tools/agent-thread-health.py" in paths
+    assert "tools/agent-thread-recover.py" in paths
     assert "docs/recovery.md" in paths

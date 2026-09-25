@@ -39,7 +39,7 @@ From a source checkout:
 ```bash
 git clone https://github.com/zenzig/agent-thread-tools.git
 cd agent-thread-tools
-python3 tools/codex-thread-health.py
+python3 tools/agent-thread-health.py
 ```
 
 ## Install The Handoff Skill

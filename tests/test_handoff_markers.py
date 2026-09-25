@@ -269,7 +269,7 @@ def test_assistant_marker_example_does_not_create_handoff_lineage(
 
 def run_marker(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "codex-thread-handoff-marker.py"), *args],
+        [sys.executable, str(ROOT / "tools" / "agent-thread-handoff-marker.py"), *args],
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
@@ -417,7 +417,7 @@ def test_claude_session_loading_a_recorded_handoff_is_its_replacement(tmp_path: 
     result = subprocess.run(
         [
             sys.executable,
-            str(ROOT / "tools" / "codex-thread-health.py"),
+            str(ROOT / "tools" / "agent-thread-health.py"),
             "projects",
             "--session-root",
             str(session_root),

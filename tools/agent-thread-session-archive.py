@@ -126,6 +126,7 @@ def emit(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="agent-thread-tools session-archive",
         description="Archive old Codex and Claude Code session files to external storage."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

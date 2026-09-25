@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def load_recovery_module():
     spec = spec_from_file_location(
         "recover_codex_thread_starter_test",
-        ROOT / "tools" / "recover-codex-thread-starter.py",
+        ROOT / "tools" / "agent-thread-recover.py",
     )
     assert spec is not None and spec.loader is not None
     module = module_from_spec(spec)
@@ -32,7 +32,7 @@ def run_recovery(
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "recover-codex-thread-starter.py"), *args],
+        [sys.executable, str(ROOT / "tools" / "agent-thread-recover.py"), *args],
         cwd=ROOT,
         env=env,
         text=True,

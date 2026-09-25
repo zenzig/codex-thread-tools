@@ -477,7 +477,7 @@ def archive_visuals(
     validate_archive_root(archive_root)
     project_slug = visual_archive_slug(project_name)
     set_slug = visual_archive_slug(artifact_set)
-    archive_dir = archive_root / "codex-visual-artifacts" / project_slug / set_slug
+    archive_dir = archive_root / "visual-artifacts" / project_slug / set_slug
     artifacts = iter_visual_occurrences(session_file, allow_local_roots)
 
     if dry_run:
@@ -546,7 +546,7 @@ def _reject_symlinked_archive_layout(
     archive_root: Path,
     archive_dir: Path,
 ) -> None:
-    container_dir = archive_root / "codex-visual-artifacts"
+    container_dir = archive_root / "visual-artifacts"
     project_dir = archive_dir.parent
     for component in (container_dir, project_dir, archive_dir):
         if component.is_symlink():

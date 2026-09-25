@@ -70,6 +70,7 @@ def commit(reference: Path, message: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
+        prog="agent-thread-tools reference",
         description="Create or commit a project's local-only .reference/ git repository."
     )
     sub = parser.add_subparsers(dest="command", required=True)

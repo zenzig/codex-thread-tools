@@ -1038,6 +1038,7 @@ def progress(args: argparse.Namespace, message: str) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="agent-thread-tools health",
         description="Analyze read-only health of Codex and Claude Code session JSONL files."
     )
     subparsers = parser.add_subparsers(dest="command")

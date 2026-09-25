@@ -78,7 +78,7 @@ of a session file and copying files you did not intend to archive.
 Verify an archive later:
 
 ```bash
-agent-thread-tools visual-archive verify /Volumes/CodexArchive/codex-visual-artifacts/my-project/navbar-design-screenshots/manifest.json
+agent-thread-tools visual-archive verify /Volumes/CodexArchive/visual-artifacts/my-project/navbar-design-screenshots/manifest.json
 ```
 
 Verification checks that archived files still exist and that their byte size and

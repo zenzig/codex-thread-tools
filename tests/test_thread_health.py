@@ -14,11 +14,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "sessions"
-HEALTH_TOOL = ROOT / "tools" / "codex-thread-health.py"
+HEALTH_TOOL = ROOT / "tools" / "agent-thread-health.py"
 
 spec = importlib.util.spec_from_file_location("codex_thread_health_tool", HEALTH_TOOL)
 if spec is None or spec.loader is None:  # pragma: no cover
-    raise RuntimeError("failed to load codex-thread-health.py for output helper tests")
+    raise RuntimeError("failed to load agent-thread-health.py for output helper tests")
 codex_thread_health = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(codex_thread_health)
 
@@ -32,7 +32,7 @@ COMPACTED_VISUAL_REFERENCE_DIAGNOSTIC = (
 
 def run_health(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "codex-thread-health.py"), *args],
+        [sys.executable, str(ROOT / "tools" / "agent-thread-health.py"), *args],
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
@@ -46,7 +46,7 @@ def run_health_with_env(
     *args: str,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "codex-thread-health.py"), *args],
+        [sys.executable, str(ROOT / "tools" / "agent-thread-health.py"), *args],
         cwd=ROOT,
         env=env,
         text=True,

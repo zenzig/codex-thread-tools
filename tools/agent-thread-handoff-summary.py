@@ -69,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="agent-thread-tools handoff-summary",
         description="Generate a redacted handoff summary draft from one Codex session JSONL file."
     )
     parser.add_argument("session_file")

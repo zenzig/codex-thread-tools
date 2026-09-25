@@ -156,6 +156,7 @@ def add_common(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="agent-thread-tools visual-archive",
         description="Archive image and video references from Codex session JSONL files."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

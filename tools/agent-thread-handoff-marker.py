@@ -64,6 +64,7 @@ def record_command(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="agent-thread-tools handoff-marker",
         description="Record completed Codex thread handoffs in a local sidecar file."
     )
     subparsers = parser.add_subparsers(dest="command")

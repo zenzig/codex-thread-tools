@@ -35,7 +35,7 @@ def fixture_projects_report() -> dict:
     result = subprocess.run(
         [
             sys.executable,
-            str(ROOT / "tools" / "codex-thread-health.py"),
+            str(ROOT / "tools" / "agent-thread-health.py"),
             "projects",
             "--session-root",
             str(ROOT / "tests" / "fixtures" / "sessions"),

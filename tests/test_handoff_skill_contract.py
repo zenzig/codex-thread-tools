@@ -34,7 +34,7 @@ def test_handoff_workflow_records_sidecar_marker_and_prompt_marker() -> None:
         encoding="utf-8"
     )
 
-    assert "tools/codex-thread-handoff-marker.py record" in workflow
+    assert "tools/agent-thread-handoff-marker.py record" in workflow
     assert "Codex thread handoff marker:" in workflow
 
 
@@ -43,7 +43,7 @@ def test_handoff_workflow_can_seed_redacted_summary() -> None:
         encoding="utf-8"
     )
 
-    assert "tools/codex-thread-handoff-summary.py" in workflow
+    assert "tools/agent-thread-handoff-summary.py" in workflow
     assert "Do not dump raw transcript or tool payloads" in workflow
 
 

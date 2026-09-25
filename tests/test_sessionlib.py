@@ -33,7 +33,7 @@ def test_process_line_looks_like_codex_matches_process_names_only() -> None:
     )
     assert sessionlib.process_line_looks_like_codex("Codex Helper")
     assert not sessionlib.process_line_looks_like_codex(
-        "python tools/recover-codex-thread-starter.py"
+        "python tools/agent-thread-recover.py"
     )
     assert not sessionlib.process_line_looks_like_codex(
         "/Users/example/code/agent-thread-tools"

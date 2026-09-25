@@ -10,13 +10,13 @@ const ROOT = path.resolve(__dirname, "..");
 const VERSION = fs.readFileSync(path.join(ROOT, "VERSION"), "utf8").trim();
 
 const PYTHON_TOOLS = new Map([
-  ["health", "codex-thread-health.py"],
-  ["handoff-summary", "codex-thread-handoff-summary.py"],
-  ["handoff-marker", "codex-thread-handoff-marker.py"],
-  ["session-archive", "codex-session-archive.py"],
-  ["visual-archive", "codex-visual-archive.py"],
-  ["recover", "recover-codex-thread-starter.py"],
-  ["reference", "thread-reference.py"],
+  ["health", "agent-thread-health.py"],
+  ["handoff-summary", "agent-thread-handoff-summary.py"],
+  ["handoff-marker", "agent-thread-handoff-marker.py"],
+  ["session-archive", "agent-thread-session-archive.py"],
+  ["visual-archive", "agent-thread-visual-archive.py"],
+  ["recover", "agent-thread-recover.py"],
+  ["reference", "agent-thread-reference.py"],
 ]);
 
 const HELP = `agent-thread-tools ${VERSION}
