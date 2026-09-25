@@ -1,4 +1,4 @@
-"""Read-only health analysis for Codex session JSONL files."""
+"""Read-only health analysis for Codex and Claude Code session JSONL files."""
 
 from __future__ import annotations
 
@@ -985,8 +985,8 @@ def project_token_usage_report(results: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "projects": projects,
         "note": (
-            "Token totals come from Codex-persisted token_count events. "
-            "Missing token_count events are reported as null."
+            "Token totals come from the token usage each session records. "
+            "Sessions without token usage are reported as null."
         ),
     }
 

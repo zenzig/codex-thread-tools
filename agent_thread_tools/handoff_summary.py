@@ -1,4 +1,4 @@
-"""Build redacted handoff summary drafts from Codex session JSONL files."""
+"""Build redacted handoff summary drafts from Codex and Claude Code session files."""
 
 from __future__ import annotations
 
@@ -194,7 +194,7 @@ def format_handoff_summary(summary: dict[str, Any]) -> str:
     visuals = summary["visuals"]
     redactions = summary["redactions"]
     lines = [
-        "Codex Thread Handoff Summary",
+        "Handoff Summary",
         f"Project: {summary['project']}",
         f"Session: {summary['session_id'] or 'not recorded'}",
         f"File: {summary['file']}",

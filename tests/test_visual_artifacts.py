@@ -167,12 +167,13 @@ def test_archive_refuses_existing_archive_without_force(tmp_path: Path) -> None:
     assert forced.returncode == 0, forced.stderr
 
 
-def test_archive_refuses_live_session_root_as_archive_root() -> None:
+@pytest.mark.parametrize("live_root", [".codex/sessions", ".claude/projects"])
+def test_archive_refuses_live_session_root_as_archive_root(live_root: str) -> None:
     result = run_visual(
         "archive",
         str(SESSIONS / "visual-embedded-image.jsonl"),
         "--archive-root",
-        str(Path.home() / ".codex" / "sessions"),
+        str(Path.home() / live_root / "archive"),
         "--project-name",
         "Visual Project",
         "--artifact-set",
@@ -183,7 +184,7 @@ def test_archive_refuses_live_session_root_as_archive_root() -> None:
     )
 
     assert result.returncode == 1
-    assert "must not be inside the live Codex session root" in result.stderr
+    assert "must not be inside the live session root" in result.stderr
 
 
 def test_verify_reports_missing_archived_file(tmp_path: Path) -> None:
@@ -336,7 +337,7 @@ def test_verify_manifest_default_output_remains_pretty(tmp_path: Path) -> None:
     result = run_visual("verify", str(manifest_path))
 
     assert result.returncode == 2
-    assert result.stdout.startswith("Codex Visual Archive Verify\n")
+    assert result.stdout.startswith("Visual Archive Verify\n")
 
 
 def test_verify_manifest_rejects_ready_entry_without_archive_metadata(

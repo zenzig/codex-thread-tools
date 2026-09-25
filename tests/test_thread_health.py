@@ -66,7 +66,7 @@ def write_session(path: Path, records: list[dict]) -> None:
 
 def assert_json_stdout(result: subprocess.CompletedProcess[str]) -> dict:
     assert "Thread Health" not in result.stdout
-    assert "Codex Project Token Usage" not in result.stdout
+    assert "Project Token Usage" not in result.stdout
     return json.loads(result.stdout)
 
 
@@ -2657,7 +2657,7 @@ def test_health_output_modes_parse_for_all_commands() -> None:
             mode,
         )
         assert tokens.returncode == 0, tokens.stderr
-        assert "Codex Project Token Usage" in tokens.stdout
+        assert "Project Token Usage" in tokens.stdout
 
 
 def test_size_format_applies_to_health_output() -> None:
@@ -3388,7 +3388,7 @@ def test_tokens_pretty_output_is_human_readable() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "Codex Project Token Usage" in result.stdout
+    assert "Project Token Usage" in result.stdout
     assert "Reported lifetime tokens: 2,353,000" in result.stdout
     assert "Project Token Summary" in result.stdout
     assert "Project" in result.stdout

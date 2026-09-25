@@ -1,4 +1,4 @@
-"""SSH transport for remote Codex thread health reports."""
+"""SSH transport for remote session health reports."""
 
 from __future__ import annotations
 

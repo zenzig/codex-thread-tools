@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scan and archive visual references from Codex session JSONL files."""
+"""Scan and archive visual references from Codex and Claude Code session files."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def json_or_pretty(payload: dict[str, Any], fmt: str) -> str:
     if "artifacts" in payload and "summary" in payload:
         summary = payload["summary"]
         lines = [
-            "Codex Visual Archive Scan",
+            "Visual Archive Scan",
             f"Source session: {payload.get('source_session', payload.get('archive_dir', ''))}",
             (
                 "Visuals: "
@@ -50,14 +50,14 @@ def json_or_pretty(payload: dict[str, Any], fmt: str) -> str:
         return "\n".join(lines)
     if payload.get("manifest_markdown"):
         return (
-            "Codex Visual Archive Written\n"
+            "Visual Archive Written\n"
             f"Manifest: {payload['manifest_markdown']}\n"
             f"JSON: {payload['manifest_json']}\n"
             f"Handoff snippet: {payload['handoff_snippet']}"
         )
     if "checked_files" in payload:
         return (
-            "Codex Visual Archive Verify\n"
+            "Visual Archive Verify\n"
             f"Status: {payload['status'].upper()}\n"
             f"Checked files: {payload['checked_files']}\n"
             f"Missing files: {payload['missing_files']}"
@@ -116,7 +116,7 @@ def wizard_command(args: argparse.Namespace) -> int:
     print(json_or_pretty(scan, "pretty"))
     print("")
     archive_root = input("Archive location (external drive or folder): ").strip()
-    project_name = input("Project name: ").strip() or "Codex project"
+    project_name = input("Project name: ").strip() or "project"
     artifact_set = input("Visual set name: ").strip() or "visual-references"
     visual_context = input("Short note describing these visuals: ").strip()
     extra_root = input("Allowed local visual folder (optional): ").strip()
@@ -157,7 +157,7 @@ def add_common(parser: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agent-thread-tools visual-archive",
-        description="Archive image and video references from Codex session JSONL files."
+        description="Archive image and video references from Codex and Claude Code session files."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

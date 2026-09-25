@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a redacted Codex thread handoff summary draft."""
+"""Generate a redacted handoff summary draft from a session file."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agent-thread-tools handoff-summary",
-        description="Generate a redacted handoff summary draft from one Codex session JSONL file."
+        description="Generate a redacted handoff summary draft from one Codex or Claude Code session file."
     )
     parser.add_argument("session_file")
     parser.add_argument("--warn-bytes", type=int)

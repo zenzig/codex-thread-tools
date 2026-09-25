@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only Codex session health analyzer."""
+"""Read-only health analyzer for Codex and Claude Code sessions."""
 
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ def status_label(status: str) -> str:
 
 def next_step(status: str) -> str:
     if status == "danger":
-        return "Create a handoff and start a fresh Codex thread before continuing."
+        return "Create a handoff and start a fresh session before continuing."
     if status == "warn":
         return "Monitor this session and reassess if its risk increases."
     if status == "retired":
@@ -144,7 +144,7 @@ def action_sentence(status: str) -> str:
             "Finish the current turn and prepare a deliberate handoff."
         ),
         "handoff-now": (
-            "Create a handoff and start a fresh Codex thread before continuing."
+            "Create a handoff and start a fresh session before continuing."
         ),
         "use-replacement": "Use the active replacement thread or the handoff file.",
     }[status]
@@ -755,7 +755,7 @@ def tokens_pretty(
     del size_format
     summary = result["summary"]
     lines = [
-        "Codex Project Token Usage",
+        "Project Token Usage",
         f"Session folder: {result['session_root']}",
         (
             f"Projects: {format_count(summary['projects'])} "
@@ -766,7 +766,7 @@ def tokens_pretty(
             f"({format_count(summary['sessions_with_token_usage'])} with token usage)"
         ),
         f"Reported lifetime tokens: {format_count(summary['reported_lifetime_tokens'])}",
-        "Note: token totals come from Codex-persisted token_count events.",
+        "Note: token totals come from the token usage each session records.",
         "",
     ]
     if mode != "verbose":
@@ -1076,7 +1076,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     tokens = subparsers.add_parser(
         "tokens",
-        help="report Codex-persisted lifetime token usage for each project",
+        help="report lifetime token usage for each project",
     )
     tokens.add_argument(
         "--session-root",

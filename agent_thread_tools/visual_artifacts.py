@@ -1,4 +1,4 @@
-"""Visual artifact detection and archiving for Codex session JSONL files."""
+"""Visual artifact detection and archiving for Codex and Claude Code session files."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from agent_thread_tools.sessionlib import (
     sha256_file,
 )
 from agent_thread_tools.archive_paths import ArchivePathError, resolve_archive_member
-from agent_thread_tools.sessionpaths import default_session_root
+from agent_thread_tools.sessionpaths import claude_session_root, codex_session_root
 
 
 LOCAL_MEDIA_EXTENSIONS = {
@@ -876,18 +876,18 @@ def manifest_to_handoff_snippet(manifest: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "When continuing in a new Codex thread, load the manifest first and use the archived image/video paths as the source of truth for visual design context. Do not rely on the prior thread transcript for visual details.",
+            "When continuing in a new session, load the manifest first and use the archived image/video paths as the source of truth for visual design context. Do not rely on the prior thread transcript for visual details.",
         ]
     )
     return "\n".join(lines).rstrip() + "\n"
 
 
 def validate_archive_root(archive_root: Path) -> None:
-    live_root = default_session_root().resolve()
-    if archive_root == live_root or live_root in archive_root.parents:
-        raise SystemExit(
-            f"error: archive root must not be inside the live Codex session root: {archive_root}"
-        )
+    for live_root in (codex_session_root().resolve(), claude_session_root().resolve()):
+        if archive_root == live_root or live_root in archive_root.parents:
+            raise SystemExit(
+                f"error: archive root must not be inside the live session root {live_root}: {archive_root}"
+            )
     if not archive_root.exists():
         raise SystemExit(f"error: archive root does not exist: {archive_root}")
     if not archive_root.is_dir():

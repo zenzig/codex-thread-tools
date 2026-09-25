@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record local sidecar markers for completed Codex thread handoffs."""
+"""Record local sidecar markers for completed handoffs."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def record_command(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agent-thread-tools handoff-marker",
-        description="Record completed Codex thread handoffs in a local sidecar file."
+        description="Record completed Codex and Claude Code handoffs in a local sidecar file."
     )
     subparsers = parser.add_subparsers(dest="command")
 

@@ -209,7 +209,7 @@ def test_pretty_summary_is_concise_and_human_readable(tmp_path: Path) -> None:
     result = run_summary(str(session))
 
     assert result.returncode == 0, result.stderr
-    assert "Codex Thread Handoff Summary" in result.stdout
+    assert "Handoff Summary" in result.stdout
     assert "Pre-handoff safety: CLEAN" in result.stdout
     assert "- user: Durable fact: keep README concise." in result.stdout
     assert "Tool payloads omitted: 1" in result.stdout
