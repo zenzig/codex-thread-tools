@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 import base64
 from pathlib import Path
 
@@ -434,8 +436,12 @@ def build() -> None:
         "visual-symlink-escape.jsonl": visual_symlink_escape(assets),
         "visual-compacted-image.jsonl": visual_compacted_image(assets),
     }
-    for name, records in fixtures.items():
+    # Health picks each project's newest file by mtime; give every fixture a distinct
+    # one in write order so the choice does not depend on filesystem timestamp ticks.
+    base = time.time() - len(fixtures)
+    for index, (name, records) in enumerate(fixtures.items()):
         write_jsonl(ROOT / name, records)
+        os.utime(ROOT / name, (base + index, base + index))
 
 
 if __name__ == "__main__":
