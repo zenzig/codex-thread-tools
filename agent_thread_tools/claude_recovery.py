@@ -1,8 +1,10 @@
 """Claude Code session checks and repairs used by ``recover``.
 
-Claude Code sends ``message.content`` to the model when a session resumes. A
-broken image there makes every later request fail, so ``strip_images`` rewrites
-only those content blocks and leaves every other line byte-for-byte unchanged.
+Claude Code sends ``message.content`` to the model when a session resumes. When
+an image there cannot be processed, the request fails and Claude Code drops the
+image in memory only, so every resume repeats the failure. ``strip_images``
+removes such images from the file for good, rewriting only those content blocks
+and leaving every other line byte-for-byte unchanged.
 """
 
 from __future__ import annotations

@@ -75,10 +75,10 @@ def test_diagnose_flags_broken_images_and_unanswered_tool_calls(tmp_path: Path) 
 
     result = run_recover("diagnose", "--json", str(session))
 
-    assert result.returncode == 3, result.stderr
+    assert result.returncode == 2, result.stderr
     diagnosis = json.loads(result.stdout)
     assert diagnosis["agent"] == "claude"
-    assert diagnosis["status"] == "danger"
+    assert diagnosis["status"] == "caution"
     assert diagnosis["recommended_action"] == "strip-images"
     assert diagnosis["integrity"]["invalid_image_urls"] == 1
     assert diagnosis["claude"]["tool_calls_without_results"] == 1
@@ -98,7 +98,8 @@ def test_strip_images_replaces_only_broken_images(tmp_path: Path) -> None:
     assert repaired_lines[0] == source_lines[0]
     assert BROKEN not in output.read_text(encoding="utf-8")
     assert GOOD_PNG in output.read_text(encoding="utf-8")
-    assert run_recover("diagnose", "--json", str(output)).returncode != 3
+    repaired = json.loads(run_recover("diagnose", "--json", str(output)).stdout)
+    assert repaired["integrity"]["invalid_image_urls"] == 0
 
 
 def test_strip_images_all_replaces_every_image(tmp_path: Path) -> None:

@@ -357,8 +357,9 @@ def collect_diagnosis_with_health(
     claude = claude_findings(source) if agent == "claude" else None
 
     if agent == "claude" and (integrity.invalid_image_urls or claude["image_api_errors"]):
-        # Claude Code accepts remote image URLs, but a broken image fails every request.
-        status = "danger"
+        # Claude Code drops a broken image after the request fails, but only in memory,
+        # so every resume repeats the failed request until the image is stripped.
+        status = "caution"
         recommended_action = (
             "strip-images" if integrity.invalid_image_urls else "strip-images --all"
         )
