@@ -105,6 +105,11 @@ agent-thread-tools and the skill are installed:
   </tr>
 </table>
 
+<p align="center">
+  <img src="assets/thread-handoff-mobile.png" alt="The Claude mobile app's slash-command menu, with /thread-handoff listed first" width="360"><br>
+  <sub><code>/thread-handoff</code> in the Claude mobile app, controlling a session on a server through Remote Control.</sub>
+</p>
+
 Cloud sessions started from claude.ai/code or the mobile app without Remote Control
 run on Anthropic's machines, where the tool is not installed.
 
