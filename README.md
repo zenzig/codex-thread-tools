@@ -89,6 +89,25 @@ Then, whenever health says `WARN` or `DANGER`, or a piece of work is done:
 Pass `--agent claude` whenever `~/.codex/sessions` also exists on the machine; without
 it, the tools read Codex sessions.
 
+### Where it works
+
+Run the commands yourself in any terminal, or stay inside Claude Code: type
+`/thread-handoff`, or ask Claude to run `agent-thread-tools health` for you. That
+works in every Claude Code app, as long as the session runs on a machine where
+agent-thread-tools and the skill are installed:
+
+<table>
+  <tr>
+    <td align="center" width="25%">🖥️<br><strong>Terminal</strong><br><sub>The <code>claude</code> CLI.</sub></td>
+    <td align="center" width="25%">🧩<br><strong>IDE</strong><br><sub>VS Code and JetBrains extensions.</sub></td>
+    <td align="center" width="25%">💻<br><strong>Desktop app</strong><br><sub>Mac and Windows.</sub></td>
+    <td align="center" width="25%">📱<br><strong>Mobile and web</strong><br><sub>Through Remote Control of a session on your machine.</sub></td>
+  </tr>
+</table>
+
+Cloud sessions started from claude.ai/code or the mobile app without Remote Control
+run on Anthropic's machines, where the tool is not installed.
+
 ## 📦 What a handoff leaves behind
 
 ```text
