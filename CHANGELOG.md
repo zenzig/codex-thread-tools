@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 - Unreleased
+## 2.0.0 - 2026-09-26
 
 - Rename the project to `agent-thread-tools` (npm package, GitHub repository, command,
   and Python package `agent_thread_tools`). The `codex-thread-tools` command remains

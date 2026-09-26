@@ -18,7 +18,8 @@ Then publish a GitHub release whose tag matches the package version, for example
 - verify `VERSION` and `package.json` match
 - verify the GitHub release tag matches the package version
 - run `python3 -m pytest`
-- check that the npm version has not already been published
+- skip publishing when that version is already on npm, for example after a
+  first release published by hand
 - update npm to the latest CLI
 - run `npm pack --dry-run`
 - publish to npm with Trusted Publishing and provenance
